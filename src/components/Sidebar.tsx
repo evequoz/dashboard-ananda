@@ -1,4 +1,4 @@
-import { LayoutDashboard, Mail, Wrench, Users, DollarSign } from 'lucide-react';
+import { LayoutDashboard, Mail, Wrench, Users, DollarSign, Calendar } from 'lucide-react';
 
 interface SidebarProps {
   currentPage: string;
@@ -8,6 +8,7 @@ interface SidebarProps {
 export const Sidebar = ({ currentPage, onPageChange }: SidebarProps) => {
   const menuItems = [
     { id: 'overview', label: 'Aperçu', icon: LayoutDashboard, disabled: false },
+    { id: 'agenda', label: 'Agenda', icon: Calendar, disabled: false }, // Nouvel ajout
     { id: 'poste', label: 'Poste', icon: Mail, disabled: false },
     { id: 'members', label: 'Membres', icon: Users, disabled: true },
     { id: 'finance', label: 'Finance', icon: DollarSign, disabled: false },
@@ -15,7 +16,7 @@ export const Sidebar = ({ currentPage, onPageChange }: SidebarProps) => {
   ];
 
   return (
-    <aside className="w-64 bg-gradient-to-b from-[#0a0a15] to-[#0f0f1a] border-r border-[#22223a] flex flex-col">
+    <aside className="w-64 bg-gradient-to-b from-[#0a0a15] to-[#0f0f1a] border-r border-[#22223a] flex flex-col h-screen sticky top-0">
       <div className="p-6 border-b border-[#22223a]">
         <h1 className="text-2xl font-bold bg-gradient-to-r from-[#c9a84c] to-[#e8c97a] bg-clip-text text-transparent">
           Ananda Admin
