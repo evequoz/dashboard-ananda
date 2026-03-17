@@ -1,79 +1,111 @@
-import React, { useState } from 'react';
-import { LayoutDashboard, Calendar, Mail, GraduationCap, UserCheck, Briefcase, CheckCircle } from 'lucide-react';
-import { Overview } from './components/Overview';
-import { MailCenter } from './components/MailCenter';
-import { useN8nData } from './useData';
+import React from 'react';
+import { Calendar, Mail, GraduationCap, UserCheck, Briefcase, Sparkles, Activity } from 'lucide-react';
+
+// COMPOSANTS INTERNES (Inclus pour éviter les erreurs de fichiers manquants)
+const Card = ({ title, icon: Icon, children, color = "#c9a84c" }: any) => (
+  <div className="bg-[#0f0f1a] border border-[#22223a] rounded-2xl p-6 shadow-xl h-full">
+    <div className="flex items-center gap-3 mb-6">
+      <div className="p-2 rounded-lg bg-[#05050a] border border-[#22223a]">
+        <Icon size={20} style={{ color }} />
+      </div>
+      <h3 className="text-lg font-serif text-[#e8e4d9]">{title}</h3>
+    </div>
+    {children}
+  </div>
+);
 
 export default function App() {
-  const [tab, setTab] = useState('dashboard');
-  const { data: n8nStats } = useN8nData('https://n8n.ananda-communaute.cloud/webhook/stats');
-
   return (
-    <div className="min-h-screen bg-[#05050a] text-[#e8e4d9] p-4 md:p-8 font-sans">
+    <div className="min-h-screen bg-[#05050a] text-[#e8e4d9] p-4 md:p-10 font-sans">
       
-      {/* HEADER : Infos Clés toujours visibles */}
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 pb-6 border-b border-[#22223a] gap-4">
+      {/* HEADER : Tes stats clés */}
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 pb-8 border-b border-[#22223a] gap-6">
         <div>
-          <h1 className="text-3xl font-serif text-[#c9a84c]">Ananda Dashboard</h1>
-          <p className="text-sm text-[#5a587a] italic">Pilotage formation & étudiants</p>
+          <h1 className="text-4xl font-serif text-[#c9a84c] mb-2">Ananda Dashboard</h1>
+          <p className="text-sm text-[#5a587a] italic">Pilotage Intégré • Serge Évéquoz</p>
         </div>
-        
-        <div className="flex gap-6">
-          <div className="text-right">
-            <p className="text-[10px] uppercase tracking-widest text-[#5a587a]">Membres</p>
-            <p className="text-2xl text-[#c9a84c]">{n8nStats?.membres || "247"}</p>
+        <div className="flex gap-4">
+          <div className="bg-[#0f0f1a] px-6 py-3 rounded-xl border border-[#22223a] text-right">
+            <p className="text-[10px] uppercase tracking-widest text-[#5a587a] mb-1">Membres</p>
+            <p className="text-2xl text-[#c9a84c]">247</p>
           </div>
-          <div className="text-right border-l border-[#22223a] pl-6">
-            <p className="text-[10px] uppercase tracking-widest text-[#5a587a]">Revenus</p>
-            <p className="text-2xl text-[#4caf7d]">{n8nStats?.revenus || "3 840€"}</p>
-          </div>
-          <div className="text-right border-l border-[#22223a] pl-6">
-            <p className="text-[10px] uppercase tracking-widest text-[#5a587a]">Système</p>
-            <div className="flex items-center gap-2 justify-end">
-              <div className="w-2 h-2 rounded-full bg-[#4caf7d] animate-pulse" />
-              <p className="text-xs text-white">Online</p>
-            </div>
+          <div className="bg-[#0f0f1a] px-6 py-3 rounded-xl border border-[#22223a] text-right">
+            <p className="text-[10px] uppercase tracking-widest text-[#5a587a] mb-1">Revenus</p>
+            <p className="text-2xl text-[#4caf7d]">3 840€</p>
           </div>
         </div>
       </header>
 
-      {/* NAVIGATION : Simple et claire */}
-      <nav className="flex gap-2 mb-8 bg-[#0f0f1a] p-1 rounded-xl w-fit border border-[#22223a]">
-        <button 
-          onClick={() => setTab('dashboard')} 
-          className={`flex items-center gap-2 px-6 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${tab === 'dashboard' ? 'bg-[#c9a84c] text-black shadow-lg' : 'text-[#5a587a] hover:text-[#e8e4d9]'}`}
-        >
-          <LayoutDashboard size={14} /> Vue d'ensemble
-        </button>
-        <button 
-          onClick={() => setTab('mails')} 
-          className={`flex items-center gap-2 px-6 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${tab === 'mails' ? 'bg-[#c9a84c] text-black shadow-lg' : 'text-[#5a587a] hover:text-[#e8e4d9]'}`}
-        >
-          <Mail size={14} /> Centre de Poste
-        </button>
-      </nav>
-
-      {/* CONTENU : Switcher entre la vue globale et la vue détaillée */}
-      <main className="animate-in fade-in duration-500">
-        {tab === 'dashboard' ? (
-          <div className="space-y-8">
-            {/* On affiche l'Overview qui contient l'agenda et les alertes */}
-            <Overview />
-            
-            {/* Petit aperçu rapide des mails directement sur l'accueil */}
-            <div className="pt-4">
-              <h2 className="text-[#c9a84c] serif text-xl mb-4 flex items-center gap-2">
-                <Mail size={18} /> Flux de communication récent
-              </h2>
-              <MailCenter compact={true} />
+      {/* GRILLE : Tout sur un seul écran */}
+      <main className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        {/* AGENDA & IA (Colonne de gauche) */}
+        <div className="lg:col-span-5 space-y-8">
+          <Card title="Agenda du jour" icon={Calendar}>
+            <div className="space-y-4">
+              <div className="p-4 bg-[#141425]/40 border-l-2 border-[#c9a84c] rounded-r-xl">
+                <p className="text-[11px] text-[#c9a84c] font-bold">09:00</p>
+                <p className="text-sm">Kriya Yoga & Méditation</p>
+              </div>
+              <div className="p-4 bg-[#141425]/40 border-l-2 border-[#4a90e2] rounded-r-xl opacity-50">
+                <p className="text-[11px] text-[#4a90e2] font-bold">14:30</p>
+                <p className="text-sm">Accompagnement EHME</p>
+              </div>
             </div>
+          </Card>
+
+          <div className="bg-[#c9a84c]/5 border border-[#c9a84c]/20 rounded-2xl p-6">
+            <div className="flex items-center gap-3 text-[#c9a84c] mb-3">
+              <Sparkles size={18} />
+              <h3 className="text-xs font-bold uppercase tracking-widest">Analyse IA (Dify)</h3>
+            </div>
+            <p className="text-sm text-[#e8e4d9]/80 italic">"Priorité : 3 questions sur le module Méditation."</p>
           </div>
-        ) : (
-          /* Vue détaillée de la poste uniquement */
-          <MailCenter compact={false} />
-        )}
+        </div>
+
+        {/* POSTE (Colonne de droite) */}
+        <div className="lg:col-span-7">
+          <Card title="Flux de Communication (3 Adresses)" icon={Mail}>
+            <div className="space-y-4">
+              {[
+                { label: 'Formation', email: 'serge@eh-me.com', icon: GraduationCap, color: '#c9a84c' },
+                { label: 'Étudiants', email: 'info@eh-me.com', icon: UserCheck, color: '#4a90e2' },
+                { label: 'Gestion', email: 'serge@seme.ch', icon: Briefcase, color: '#94a3b8' }
+              ].map((box) => (
+                <div key={box.email} className="flex items-center justify-between p-4 bg-[#05050a] border border-[#22223a] rounded-xl">
+                  <div className="flex items-center gap-4">
+                    <box.icon size={18} style={{ color: box.color }} />
+                    <div>
+                      <p className="text-xs font-bold">{box.label}</p>
+                      <p className="text-[10px] text-[#5a587a]">{box.email}</p>
+                    </div>
+                  </div>
+                  <button className="text-[9px] font-bold uppercase tracking-tighter border border-[#22223a] px-4 py-2 rounded-lg hover:border-[#c9a84c] transition-all">
+                    Ouvrir
+                  </button>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+
       </main>
 
+      {/* FOOTER : État du serveur */}
+      <footer className="mt-12 flex items-center justify-between text-[#5a587a] text-[10px] uppercase tracking-[0.2em]">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-[#4caf7d]" />
+            <span>VPS Online</span>
+          </div>
+          <div className="w-px h-3 bg-[#22223a]" />
+          <span>Dernière synchro : Juste maintenant</span>
+        </div>
+        <div className="flex gap-4">
+          <a href="https://n8n.ananda-communaute.cloud" target="_blank" className="hover:text-[#c9a84c]">n8n</a>
+          <a href="https://dify.ananda-communaute.cloud" target="_blank" className="hover:text-[#c9a84c]">Dify</a>
+        </div>
+      </footer>
     </div>
   );
 }
