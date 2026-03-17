@@ -14,7 +14,7 @@ export const Overview = () => {
     ));
   };
 
-  // RÉCUPÉRATION DES 7 PROCHAINS RDV VIA N8N
+// RÉCUPÉRATION DES 7 PROCHAINS RDV VIA N8N
   useEffect(() => {
     const fetchAgenda = async () => {
       try {
@@ -24,14 +24,22 @@ export const Overview = () => {
         if (Array.isArray(data)) {
           const now = new Date();
           const upcoming = data
-            // 1. On ne garde que les événements dont l'heure de FIN n'est pas encore passée
             .filter(item => {
-              const endTime = new Date(item.end?.dateTime || item.end?.date || item.start?.date);
-              return endTime > now;
+              // 1. Si c'est un RDV avec une heure de fin précise (ex: 15h00)
+              if (item.end?.dateTime) {
+                return new Date(item.end.dateTime) > now;
+              }
+              // 2. Si c'est un événement "Toute la journée" (disparaît à minuit)
+              if (item.end?.date) {
+                return new Date(item.end.date) > now;
+              }
+              return false;
             })
-            // 2. On les trie chronologiquement (le plus proche en premier)
-            .sort((a, b) => new Date(a.start?.dateTime || a.start?.date).getTime() - new Date(b.start?.dateTime || b.start?.date).getTime())
-            // 3. On ne garde que les 7 premiers
+            .sort((a, b) => {
+              const timeA = new Date(a.start?.dateTime || a.start?.date).getTime();
+              const timeB = new Date(b.start?.dateTime || b.start?.date).getTime();
+              return timeA - timeB;
+            })
             .slice(0, 7);
             
           setLiveEvents(upcoming);
@@ -40,7 +48,13 @@ export const Overview = () => {
         console.error("Erreur de récupération de l'agenda :", error);
       }
     };
+
+    // On lance la fonction au démarrage
     fetchAgenda();
+
+    // LE RADAR : Vérifie et nettoie les RDV passés toutes les minutes (60000 millisecondes)
+    const intervalId = setInterval(fetchAgenda, 60000);
+    return () => clearInterval(intervalId); // Nettoyage propre si tu changes de page
   }, []);
 
   const statCards = [
