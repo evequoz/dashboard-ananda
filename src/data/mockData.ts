@@ -177,6 +177,60 @@ export const mockEmails: Email[] = [
     read: false,
     priority: 'urgent',
   },
+  {
+    id: '6',
+    account: 'serge@eh-me.com',
+    from: 'Marc Dubois',
+    subject: 'Inscription Formation Avancée',
+    preview: 'Je souhaite m\'inscrire à la formation avancée qui commence le mois prochain...',
+    date: '2024-03-16 14:20',
+    read: true,
+    priority: 'normal',
+  },
+  {
+    id: '7',
+    account: 'info@eh-me.com',
+    from: 'Support n8n',
+    subject: 'Workflow automatisé activé',
+    preview: 'Votre workflow d\'automatisation des emails a été activé avec succès...',
+    date: '2024-03-16 11:45',
+    read: true,
+    priority: 'normal',
+  },
+  {
+    id: '8',
+    account: 'serge@seme.ch',
+    from: 'Christine Lefebvre',
+    subject: 'Demande de consultation',
+    preview: 'Je recherche un accompagnement personnalisé pour mon entreprise...',
+    date: '2024-03-15 18:30',
+    read: true,
+    priority: 'normal',
+  },
+  {
+    id: '9',
+    account: 'serge@seme.ch',
+    from: 'Pierre Conseil',
+    subject: 'Proposition collaboration',
+    preview: 'Nous organisons un événement et aimerions vous inviter comme intervenant...',
+    date: '2024-03-15 10:15',
+    read: false,
+    priority: 'normal',
+  },
+];
+
+export interface Objective {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
+export const mockObjectives: Objective[] = [
+  { id: '1', text: 'Publier newsletter hebdomadaire', completed: false },
+  { id: '2', text: 'Répondre aux emails prioritaires', completed: false },
+  { id: '3', text: 'Préparer Live Communauté', completed: false },
+  { id: '4', text: 'Réviser contenu Module 4', completed: false },
+  { id: '5', text: 'Session coaching avec Marie', completed: false },
 ];
 
 export const mockTransactions: Transaction[] = [

@@ -7,11 +7,11 @@ interface SidebarProps {
 
 export const Sidebar = ({ currentPage, onPageChange }: SidebarProps) => {
   const menuItems = [
-    { id: 'overview', label: 'Aperçu', icon: LayoutDashboard },
-    { id: 'poste', label: 'Poste', icon: Mail },
-    { id: 'members', label: 'Membres', icon: Users },
-    { id: 'finance', label: 'Finance', icon: DollarSign },
-    { id: 'tools', label: 'Outils', icon: Wrench },
+    { id: 'overview', label: 'Aperçu', icon: LayoutDashboard, disabled: false },
+    { id: 'poste', label: 'Poste', icon: Mail, disabled: false },
+    { id: 'members', label: 'Membres', icon: Users, disabled: true },
+    { id: 'finance', label: 'Finance', icon: DollarSign, disabled: false },
+    { id: 'tools', label: 'Outils', icon: Wrench, disabled: false },
   ];
 
   return (
@@ -31,9 +31,12 @@ export const Sidebar = ({ currentPage, onPageChange }: SidebarProps) => {
           return (
             <button
               key={item.id}
-              onClick={() => onPageChange(item.id)}
+              onClick={() => !item.disabled && onPageChange(item.id)}
+              disabled={item.disabled}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                isActive
+                item.disabled
+                  ? 'opacity-30 cursor-not-allowed'
+                  : isActive
                   ? 'bg-gradient-to-r from-[#c9a84c]/20 to-[#e8c97a]/20 border border-[#c9a84c]/40 text-[#e8c97a]'
                   : 'text-[#5a587a] hover:bg-[#22223a] hover:text-[#e8e4d9]'
               }`}
