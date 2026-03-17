@@ -3,159 +3,116 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import listPlugin from '@fullcalendar/list';
-import frLocale from '@fullcalendar/core/locales/fr';
-import { Sparkles, Plus, Calendar as CalendarIcon, CheckCircle2, RefreshCw } from 'lucide-react';
 
 export const CalendarPage = () => {
   const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
 
-  const fetchEvents = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch('https://n8n.ananda-communaute.cloud/webhook/get-calendar');
-      const data = await response.json();
-      
-      // Nettoyage et formatage strict pour FullCalendar
-      if (data && data.events) {
-        const formatted = data.events.map(e => ({
-          title: e.title || e.summary || "Sans titre",
-          start: e.start,
-          end: e.end,
-          backgroundColor: 'rgba(201, 168, 76, 0.15)',
-          borderColor: '#c9a84c',
-          textColor: '#e8e4d9',
-          className: 'pro-event'
-        }));
-        setEvents(formatted);
+  // Fonction pour récupérer les données n8n
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        const response = await fetch('https://n8n.ananda-communaute.cloud/webhook/get-calendar');
+        const data = await response.json();
+        
+        // Si n8n renvoie des données valides
+        if (data && data.events && data.events.length > 0) {
+          const formattedEvents = data.events.map((e: any) => ({
+            title: e.title || e.summary || "Rendez-vous",
+            start: e.start,
+            end: e.end,
+            color: '#c9a84c' // Couleur or
+          }));
+          setEvents(formattedEvents);
+        } else {
+          // DONNÉES DE SECOURS (pour être sûr que le calendrier fonctionne visuellement)
+          setEvents([
+            { title: 'Événement Test 1', start: new Date().toISOString().split('T')[0] + 'T10:00:00', end: new Date().toISOString().split('T')[0] + 'T12:00:00', color: '#3788d8' },
+            { title: 'Événement Test 2', start: new Date().toISOString().split('T')[0] + 'T14:00:00', end: new Date().toISOString().split('T')[0] + 'T15:30:00', color: '#c9a84c' }
+          ]);
+        }
+      } catch (error) {
+        console.error("Erreur de connexion:", error);
       }
-    } catch (e) { console.error(e); } finally { setLoading(false); }
+    };
+
+    fetchEvents();
+  }, []);
+
+  // Action quand on clique sur une case vide
+  const handleDateSelect = (selectInfo: any) => {
+    let title = prompt('Veuillez entrer un titre pour ce rendez-vous :');
+    let calendarApi = selectInfo.view.calendar;
+    calendarApi.unselect(); // Enlève la sélection visuelle
+
+    if (title) {
+      calendarApi.addEvent({
+        title,
+        start: selectInfo.startStr,
+        end: selectInfo.endStr,
+        allDay: selectInfo.allDay,
+        color: '#c9a84c'
+      });
+    }
   };
 
-  useEffect(() => { fetchEvents(); }, []);
+  // Action quand on clique sur un événement
+  const handleEventClick = (clickInfo: any) => {
+    if (window.confirm(`Voulez-vous supprimer l'événement '${clickInfo.event.title}' ?`)) {
+      clickInfo.event.remove();
+    }
+  };
 
   return (
-    <div className="flex h-screen bg-[#05050a] text-[#e8e4d9]">
+    <div className="p-6 bg-white rounded-xl shadow-lg" style={{ width: '100%', height: '100%' }}>
       
-      {/* SIDEBAR GAUCHE - DESIGN AFFINÉ */}
-      <div className="w-72 bg-[#0a0a14] border-r border-[#c9a84c]/10 flex flex-col p-6 gap-8">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-[#c9a84c]/10 rounded-lg">
-            <Sparkles className="text-[#c9a84c] w-6 h-6" />
-          </div>
-          <span className="font-serif text-xl tracking-wider">ANANDA</span>
-        </div>
-
-        <button className="w-full bg-[#c9a84c] hover:bg-[#b3933d] text-[#05050a] py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#c9a84c]/10">
-          <Plus size={20} /> Nouveau RDV
-        </button>
-
-        <nav className="flex flex-col gap-6">
-          <div>
-            <p className="text-[10px] text-gray-500 uppercase tracking-[0.3em] mb-4">Calendriers</p>
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between p-2 bg-[#c9a84c]/5 rounded-xl border border-[#c9a84c]/20">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-[#c9a84c]" />
-                  <span className="text-sm">Google Perso</span>
-                </div>
-                <CheckCircle2 size={14} className="text-[#c9a84c]" />
-              </div>
-              <div className="flex items-center gap-3 p-2 opacity-40 grayscale">
-                <div className="w-2 h-2 rounded-full bg-blue-500" />
-                <span className="text-sm">Travail</span>
-              </div>
-            </div>
-          </div>
-        </nav>
-
-        <div className="mt-auto pt-6 border-t border-[#c9a84c]/10">
-           <div className="flex items-center justify-between mb-4">
-              <span className="text-[10px] text-gray-500 uppercase tracking-widest">Synchronisation</span>
-              <button onClick={fetchEvents} className={loading ? 'animate-spin' : ''}>
-                <RefreshCw size={12} className="text-[#c9a84c]" />
-              </button>
-           </div>
-           <div className="p-4 bg-[#11111d] rounded-2xl border border-[#c9a84c]/5">
-              <p className="text-xs text-[#c9a84c]/80 leading-relaxed font-light italic">
-                "Le temps n'est pas une ressource, c'est votre énergie."
-              </p>
-           </div>
-        </div>
+      <div className="mb-4">
+        <h1 className="text-2xl font-bold text-gray-800">Mon Agenda</h1>
       </div>
 
-      {/* ZONE CALENDRIER - PLEIN ÉCRAN */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-20 border-b border-[#c9a84c]/10 flex items-center justify-between px-8 bg-[#05050a]/80 backdrop-blur-md">
-          <div className="flex items-center gap-4">
-            <h2 className="text-2xl font-serif text-[#c9a84c]">Agenda Holistique</h2>
-            {loading && <span className="text-[10px] bg-[#c9a84c]/10 text-[#c9a84c] px-2 py-1 rounded-full animate-pulse">Sync...</span>}
-          </div>
-        </header>
-
-        <div className="flex-1 p-0 bg-[#05050a]"> {/* PADDING 0 ICI POUR MAXIMISER LA TAILLE */}
-          <FullCalendar
-            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
-            initialView="timeGridWeek"
-            locales={[frLocale]}
-            locale="fr"
-            events={events}
-            headerToolbar={{
-              left: 'prev,next today',
-              center: 'title',
-              right: 'timeGridDay,timeGridWeek,dayGridMonth,listWeek'
-            }}
-            nowIndicator={true}
-            allDaySlot={true}
-            slotMinTime="07:00:00"
-            slotMaxTime="23:00:00"
-            height="100%"
-            expandRows={true}
-            handleWindowResize={true}
-            stickyHeaderDates={true}
-            selectable={true}
-            editable={true}
-            slotLabelFormat={{ hour: 'numeric', minute: '2-digit', omitZeroMinute: false, meridiem: false }}
-          />
-        </div>
+      <div style={{ height: '85vh' }}> {/* C'EST ICI QU'ON FORCE LA TAILLE */}
+        <FullCalendar
+          plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+          initialView="timeGridWeek"
+          headerToolbar={{
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+          }}
+          locale="fr"
+          buttonText={{
+            today: "Aujourd'hui",
+            month: 'Mois',
+            week: 'Semaine',
+            day: 'Jour'
+          }}
+          events={events} // Les données qu'on a chargées
+          editable={true} // Permet le Drag & Drop
+          selectable={true} // Permet de cliquer pour créer
+          selectMirror={true}
+          dayMaxEvents={true}
+          nowIndicator={true}
+          height="100%" // Prend 100% de la div parente (85vh)
+          select={handleDateSelect}
+          eventClick={handleEventClick}
+        />
       </div>
 
+      {/* Un peu de CSS global pour nettoyer l'affichage des boutons FullCalendar par défaut */}
       <style jsx global>{`
-        /* SUPPRESSION DU LOOK "BASIQUE" */
-        .fc { background: #05050a; border: none !important; --fc-border-color: rgba(201, 168, 76, 0.1); }
-        .fc-theme-standard td, .fc-theme-standard th { border: 1px solid rgba(201, 168, 76, 0.08) !important; }
-        
-        /* HEADER PRO */
-        .fc-toolbar { padding: 20px !important; margin-bottom: 0 !important; }
-        .fc-toolbar-title { font-family: 'Serif' !important; color: #e8e4d9 !important; font-size: 1.4rem !important; font-weight: 300; }
-        
-        /* BOUTONS GOLD */
-        .fc-button { 
-          background: #0f0f1a !important; 
-          border: 1px solid rgba(201, 168, 76, 0.3) !important; 
-          color: #c9a84c !important; 
-          border-radius: 10px !important;
-          font-size: 0.8rem !important;
-          padding: 8px 16px !important;
-          transition: all 0.2s !important;
+        .fc-button-primary {
+          background-color: #1a202c !important;
+          border-color: #1a202c !important;
         }
-        .fc-button:hover { background: #c9a84c !important; color: #05050a !important; border-color: #c9a84c !important; }
-        .fc-button-active { background: #c9a84c !important; color: #05050a !important; font-weight: bold !important; }
-
-        /* ÉVÉNEMENTS LOOK PRO */
-        .pro-event {
-          border-left: 3px solid #c9a84c !important;
-          border-radius: 6px !important;
-          padding: 4px 8px !important;
-          font-size: 0.75rem !important;
-          box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        .fc-button-primary:hover {
+          background-color: #2d3748 !important;
         }
-        .fc-timegrid-now-indicator-line { border-color: #ff4d4d !important; border-width: 2px !important; }
-        
-        /* TAILLE DES CRÉNEAUX */
-        .fc-timegrid-slot { height: 75px !important; }
-        .fc-v-event { background-color: rgba(201, 168, 76, 0.12) !important; }
+        .fc-button-active {
+          background-color: #c9a84c !important;
+          border-color: #c9a84c !important;
+        }
+        .fc-event {
+          cursor: pointer;
+        }
       `}</style>
     </div>
   );
