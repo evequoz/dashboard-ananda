@@ -1,37 +1,50 @@
 import React, { useState } from 'react';
 import { 
-  LayoutDashboard, 
   Calendar, 
   Users, 
-  Euro, 
   Mail, 
   Sparkles, 
   ExternalLink,
   CheckCircle2,
-  Clock
+  Clock,
+  ArrowRight
 } from 'lucide-react';
+
+// --- INJECTION DES POLICES ---
+const fontStyles = `
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
+  body { font-family: 'Outfit', sans-serif; background-color: #05050a; }
+  .serif { font-family: 'Playfair Display', serif; }
+`;
 
 // --- COMPOSANTS DE STYLE ---
 
 const Card = ({ title, icon: Icon, children }: any) => (
-  <div className="bg-[#0f0f1a] border border-[#22223a] rounded-xl p-6 shadow-xl">
-    <div className="flex items-center gap-3 mb-6">
-      <div className="p-2 bg-[#c9a84c]/10 rounded-lg">
-        <Icon size={20} className="text-[#c9a84c]" />
+  <div className="bg-[#0f0f1a]/80 backdrop-blur-sm border border-[#22223a] rounded-2xl p-7 shadow-2xl">
+    <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center gap-3">
+        <div className="p-2.5 bg-[#c9a84c]/10 rounded-xl border border-[#c9a84c]/20">
+          <Icon size={18} className="text-[#c9a84c]" />
+        </div>
+        <h3 className="text-lg font-medium text-[#e8e4d9] serif tracking-wide">{title}</h3>
       </div>
-      <h3 className="text-lg font-semibold text-[#e8e4d9] font-serif">{title}</h3>
+      <ArrowRight size={14} className="text-[#5a587a] opacity-50" />
     </div>
     {children}
   </div>
 );
 
 const AgendaItem = ({ time, title, category, color }: any) => (
-  <div className="flex items-center gap-4 p-3 bg-[#141425] rounded-lg mb-3 border-l-4" style={{ borderColor: color }}>
-    <span className="text-[#c9a84c] font-bold text-sm w-12">{time}</span>
-    <div className="flex-1">
-      <p className="text-sm font-medium text-[#e8e4d9]">{title}</p>
+  <div className="group flex items-center gap-5 p-4 bg-[#141425]/40 hover:bg-[#141425] rounded-xl mb-3 border border-[#22223a] transition-all duration-300 cursor-pointer">
+    <div className="flex flex-col items-center border-r border-[#22223a] pr-4">
+      <span className="text-[#c9a84c] font-bold text-sm tracking-tighter">{time}</span>
+      <span className="text-[9px] text-[#5a587a] uppercase tracking-widest">AM</span>
     </div>
-    <span className="text-[10px] px-2 py-1 rounded-full bg-opacity-20 uppercase font-bold" style={{ backgroundColor: color, color: color }}>
+    <div className="flex-1">
+      <p className="text-[14px] font-light text-[#e8e4d9] group-hover:text-white transition-colors">{title}</p>
+    </div>
+    <span className="text-[9px] px-3 py-1 rounded-full border tracking-[0.1em] font-semibold uppercase" 
+          style={{ borderColor: `${color}44`, color: color, backgroundColor: `${color}08` }}>
       {category}
     </span>
   </div>
@@ -44,88 +57,103 @@ function App() {
   const tabs = ['Aperçu', 'Planification', 'Clientèle', 'Finances'];
 
   return (
-    <div className="min-h-screen bg-[#05050a] text-[#e8e4d9] p-4 md:p-8 font-sans">
+    <div className="min-h-screen bg-[#05050a] text-[#e8e4d9] p-6 md:p-12 selection:bg-[#c9a84c]/30">
+      <style>{fontStyles}</style>
       
       {/* Barre de navigation rapide */}
-      <div className="flex gap-3 mb-8 overflow-x-auto pb-2">
-        {['Dify', 'n8n', 'AFFiNE'].map((service) => (
-          <button key={service} className="flex items-center gap-2 px-4 py-2 bg-[#0f0f1a] border border-[#22223a] rounded-full text-xs text-[#5a587a] hover:text-[#c9a84c] transition-colors whitespace-nowrap">
-            <ExternalLink size={14} /> {service}
-          </button>
+      <div className="flex gap-4 mb-12 overflow-x-auto pb-4 no-scrollbar">
+        {[
+          { name: 'Dify', url: 'https://dify.ananda-communaute.cloud' },
+          { name: 'n8n', url: 'https://n8n.ananda-communaute.cloud' },
+          { name: 'AFFiNE', url: 'https://affine.ananda-communaute.cloud' }
+        ].map((s) => (
+          <a key={s.name} href={s.url} target="_blank" rel="noreferrer" 
+             className="flex items-center gap-2 px-5 py-2 bg-[#0f0f1a] border border-[#22223a] rounded-full text-[11px] text-[#5a587a] hover:text-[#c9a84c] hover:border-[#c9a84c]/40 transition-all tracking-widest uppercase">
+            <ExternalLink size={12} /> {s.name}
+          </a>
         ))}
       </div>
 
       {/* Header */}
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-6">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-8 border-b border-[#22223a]/50 pb-12">
         <div>
-          <h1 className="text-4xl font-serif text-[#c9a84c] mb-2">Ananda Communauté</h1>
-          <p className="text-[#5a587a] text-sm italic">"L'espace de gestion sereine pour ton enseignement"</p>
+          <h1 className="text-5xl serif text-[#c9a84c] mb-3 font-normal tracking-tight">Ananda Communauté</h1>
+          <p className="text-[#5a587a] text-sm font-light tracking-[0.05em] italic opacity-80">Dashboard de pilotage sacré</p>
         </div>
-        <div className="flex gap-8">
+        <div className="flex gap-12">
           <div className="text-right">
-            <p className="text-[10px] text-[#5a587a] tracking-widest uppercase mb-1 font-bold">Membres</p>
-            <p className="text-2xl text-[#c9a84c] font-semibold">247</p>
+            <p className="text-[10px] text-[#5a587a] tracking-[0.2em] uppercase mb-2 font-semibold">Membres Actifs</p>
+            <p className="text-3xl text-[#c9a84c] font-light tracking-tight">247</p>
           </div>
-          <div className="text-right">
-            <p className="text-[10px] text-[#5a587a] tracking-widest uppercase mb-1 font-bold">Revenu Mars</p>
-            <p className="text-2xl text-[#4caf7d] font-semibold">3 840€</p>
+          <div className="text-right border-l border-[#22223a] pl-12">
+            <p className="text-[10px] text-[#5a587a] tracking-[0.2em] uppercase mb-2 font-semibold">Revenu Mensuel</p>
+            <p className="text-3xl text-[#4caf7d] font-light tracking-tight">3 840€</p>
           </div>
         </div>
       </header>
 
       {/* Navigation Onglets */}
-      <nav className="flex gap-8 border-b border-[#22223a] mb-8">
+      <nav className="flex gap-10 mb-12">
         {tabs.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`pb-4 text-sm transition-all relative ${
-              activeTab === tab ? 'text-[#e8c97a]' : 'text-[#5a587a]'
+            className={`pb-4 text-[13px] tracking-[0.15em] uppercase transition-all relative font-medium ${
+              activeTab === tab ? 'text-[#e8c97a]' : 'text-[#5a587a] hover:text-[#e8c97a]/50'
             }`}
           >
             {tab}
             {activeTab === tab && (
-              <div className="absolute bottom-0 left-0 w-full h-0.5 bg-[#c9a84c]" />
+              <div className="absolute bottom-0 left-0 w-full h-[1px] bg-[#c9a84c] shadow-[0_0_8px_#c9a84c]" />
             )}
           </button>
         ))}
       </nav>
 
       {/* Contenu */}
-      <main className="max-w-6xl mx-auto">
+      <main className="max-w-7xl mx-auto">
         {activeTab === 'Aperçu' ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
             
-            {/* Colonne Gauche */}
-            <Card title="Agenda du jour" icon={Calendar}>
-              <AgendaItem time="09:00" title="Méditation & Kriya" category="Pratique" color="#7b5ea7" />
-              <AgendaItem time="11:00" title="Enregistrement Vidéo" category="Contenu" color="#c9a84c" />
-              <AgendaItem time="14:30" title="Live Q&A EHME" category="Live" color="#4caf7d" />
-            </Card>
+            {/* Colonne Agenda - Plus large */}
+            <div className="lg:col-span-7">
+              <Card title="Agenda Sacré" icon={Calendar}>
+                <AgendaItem time="09:00" title="Kriya Yoga & Méditation profonde" category="Pratique" color="#7b5ea7" />
+                <AgendaItem time="11:00" title="Production de contenu — Philosophie" category="Studio" color="#c9a84c" />
+                <AgendaItem time="14:30" title="Accompagnement EHME — Groupe" category="Transmission" color="#4caf7d" />
+                <div className="mt-6 pt-6 border-t border-[#22223a] flex justify-center">
+                   <button className="text-[11px] text-[#5a587a] uppercase tracking-widest hover:text-[#c9a84c] transition-colors">Voir l'agenda complet</button>
+                </div>
+              </Card>
+            </div>
 
-            {/* Colonne Droite */}
-            <div className="space-y-8">
-              <Card title="Intelligence Mails" icon={Mail}>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center p-3 bg-[#141425] rounded-lg border border-[#c9a84c]/20">
-                    <div>
-                      <p className="text-sm font-medium">Julie M. - Inscription</p>
-                      <p className="text-xs text-[#5a587a]">Résumé : Demande tarifs stage été</p>
+            {/* Colonne Droite - Plus étroite */}
+            <div className="lg:col-span-5 space-y-10">
+              <Card title="Assistant IA" icon={Mail}>
+                <div className="space-y-5">
+                  <div className="p-4 bg-[#05050a] rounded-xl border border-[#c9a84c]/10 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-100 transition-opacity">
+                      <Sparkles size={14} className="text-[#c9a84c]" />
                     </div>
-                    <Sparkles size={16} className="text-[#c9a84c]" />
+                    <p className="text-[13px] text-[#e8e4d9]/90 leading-relaxed italic font-light">"3 nouveaux messages nécessitent une attention particulière concernant le stage de juin."</p>
                   </div>
-                  <button className="w-full py-2 bg-[#c9a84c] text-black rounded-lg font-bold text-sm hover:bg-[#e8c97a] transition-all">
-                    Générer réponses via Dify
+                  <button className="w-full py-4 bg-[#c9a84c] text-black rounded-xl font-bold text-[11px] uppercase tracking-[0.2em] hover:bg-[#e8c97a] hover:scale-[1.01] active:scale-[0.98] transition-all shadow-lg shadow-[#c9a84c]/10">
+                    Préparer les réponses
                   </button>
                 </div>
               </Card>
 
-              <Card title="Statut Système" icon={CheckCircle2}>
-                <div className="flex justify-between items-center text-xs text-[#5a587a]">
-                  <span>VPS Cloud</span>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-[#4caf7d]" />
-                    <span className="text-[#4caf7d]">Opérationnel</span>
+              <Card title="État du VPS" icon={CheckCircle2}>
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center text-[11px] tracking-widest uppercase">
+                    <span className="text-[#5a587a]">Infrastructure</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#4caf7d] animate-pulse" />
+                      <span className="text-[#4caf7d]">Connecté</span>
+                    </div>
+                  </div>
+                  <div className="w-full bg-[#22223a] h-[2px] rounded-full overflow-hidden">
+                    <div className="bg-[#c9a84c] h-full w-[100%] opacity-50" />
                   </div>
                 </div>
               </Card>
@@ -133,9 +161,9 @@ function App() {
 
           </div>
         ) : (
-          <div className="py-20 text-center text-[#5a587a]">
-            <Clock className="mx-auto mb-4 opacity-20" size={48} />
-            <p>Synchronisation avec n8n en attente...</p>
+          <div className="py-32 text-center text-[#5a587a]">
+            <Clock className="mx-auto mb-6 opacity-10 animate-spin-slow" size={64} />
+            <p className="serif italic text-lg tracking-wide">L'onglet {activeTab} se synchronise avec ton VPS...</p>
           </div>
         )}
       </main>
