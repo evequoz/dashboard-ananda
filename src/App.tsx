@@ -6,6 +6,7 @@ import { Poste } from './pages/Poste';
 import { Members } from './pages/Members';
 import { Finance } from './pages/Finance';
 import { Tools } from './pages/Tools';
+import { CalendarPage } from './pages/CalendarPage'; // Ajout de l'import
 
 function App() {
   const [currentPage, setCurrentPage] = useState('overview');
@@ -14,6 +15,8 @@ function App() {
     switch (currentPage) {
       case 'overview':
         return <Overview />;
+      case 'agenda': // Ajout du cas pour l'agenda
+        return <CalendarPage />;
       case 'poste':
         return <Poste />;
       case 'members':
