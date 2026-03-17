@@ -9,12 +9,15 @@ import {
   Clock,
   ArrowRight
 } from 'lucide-react';
+import { useN8nData } from './useData';
 
 // --- INJECTION DES POLICES ---
 const fontStyles = `
   @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
   body { font-family: 'Outfit', sans-serif; background-color: #05050a; }
   .serif { font-family: 'Playfair Display', serif; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 `;
 
 // --- COMPOSANTS DE STYLE ---
@@ -53,8 +56,17 @@ const AgendaItem = ({ time, title, category, color }: any) => (
 // --- APPLICATION PRINCIPALE ---
 
 function App() {
+  // Connexion au cerveau n8n
+  const { data: n8nStats, loading } = useN8nData('https://n8n.ananda-communaute.cloud/webhook/stats');
+  
   const [activeTab, setActiveTab] = useState('Aperçu');
   const tabs = ['Aperçu', 'Planification', 'Clientèle', 'Finances'];
+
+  // Valeurs dynamiques (utilise n8n ou les valeurs par défaut)
+  const stats = {
+    membres: n8nStats?.membres || 247,
+    revenus: n8nStats?.revenus || "3 840€"
+  };
 
   return (
     <div className="min-h-screen bg-[#05050a] text-[#e8e4d9] p-6 md:p-12 selection:bg-[#c9a84c]/30">
@@ -83,11 +95,11 @@ function App() {
         <div className="flex gap-12">
           <div className="text-right">
             <p className="text-[10px] text-[#5a587a] tracking-[0.2em] uppercase mb-2 font-semibold">Membres Actifs</p>
-            <p className="text-3xl text-[#c9a84c] font-light tracking-tight">247</p>
+            <p className="text-3xl text-[#c9a84c] font-light tracking-tight">{stats.membres}</p>
           </div>
           <div className="text-right border-l border-[#22223a] pl-12">
             <p className="text-[10px] text-[#5a587a] tracking-[0.2em] uppercase mb-2 font-semibold">Revenu Mensuel</p>
-            <p className="text-3xl text-[#4caf7d] font-light tracking-tight">3 840€</p>
+            <p className="text-3xl text-[#4caf7d] font-light tracking-tight">{stats.revenus}</p>
           </div>
         </div>
       </header>
@@ -115,19 +127,14 @@ function App() {
         {activeTab === 'Aperçu' ? (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
             
-            {/* Colonne Agenda - Plus large */}
             <div className="lg:col-span-7">
               <Card title="Agenda Sacré" icon={Calendar}>
                 <AgendaItem time="09:00" title="Kriya Yoga & Méditation profonde" category="Pratique" color="#7b5ea7" />
                 <AgendaItem time="11:00" title="Production de contenu — Philosophie" category="Studio" color="#c9a84c" />
                 <AgendaItem time="14:30" title="Accompagnement EHME — Groupe" category="Transmission" color="#4caf7d" />
-                <div className="mt-6 pt-6 border-t border-[#22223a] flex justify-center">
-                   <button className="text-[11px] text-[#5a587a] uppercase tracking-widest hover:text-[#c9a84c] transition-colors">Voir l'agenda complet</button>
-                </div>
               </Card>
             </div>
 
-            {/* Colonne Droite - Plus étroite */}
             <div className="lg:col-span-5 space-y-10">
               <Card title="Assistant IA" icon={Mail}>
                 <div className="space-y-5">
@@ -135,25 +142,22 @@ function App() {
                     <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-100 transition-opacity">
                       <Sparkles size={14} className="text-[#c9a84c]" />
                     </div>
-                    <p className="text-[13px] text-[#e8e4d9]/90 leading-relaxed italic font-light">"3 nouveaux messages nécessitent une attention particulière concernant le stage de juin."</p>
+                    <p className="text-[13px] text-[#e8e4d9]/90 leading-relaxed italic font-light">
+                      {loading ? "Synchronisation..." : "3 nouveaux messages analysés par Dify."}
+                    </p>
                   </div>
-                  <button className="w-full py-4 bg-[#c9a84c] text-black rounded-xl font-bold text-[11px] uppercase tracking-[0.2em] hover:bg-[#e8c97a] hover:scale-[1.01] active:scale-[0.98] transition-all shadow-lg shadow-[#c9a84c]/10">
+                  <button className="w-full py-4 bg-[#c9a84c] text-black rounded-xl font-bold text-[11px] uppercase tracking-[0.2em] hover:bg-[#e8c97a] hover:scale-[1.01] transition-all">
                     Préparer les réponses
                   </button>
                 </div>
               </Card>
 
               <Card title="État du VPS" icon={CheckCircle2}>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center text-[11px] tracking-widest uppercase">
-                    <span className="text-[#5a587a]">Infrastructure</span>
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-[#4caf7d] animate-pulse" />
-                      <span className="text-[#4caf7d]">Connecté</span>
-                    </div>
-                  </div>
-                  <div className="w-full bg-[#22223a] h-[2px] rounded-full overflow-hidden">
-                    <div className="bg-[#c9a84c] h-full w-[100%] opacity-50" />
+                <div className="flex justify-between items-center text-[11px] tracking-widest uppercase text-[#5a587a]">
+                  <span>Infrastructure</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#4caf7d] animate-pulse" />
+                    <span className="text-[#4caf7d]">Connecté</span>
                   </div>
                 </div>
               </Card>
@@ -163,7 +167,7 @@ function App() {
         ) : (
           <div className="py-32 text-center text-[#5a587a]">
             <Clock className="mx-auto mb-6 opacity-10 animate-spin-slow" size={64} />
-            <p className="serif italic text-lg tracking-wide">L'onglet {activeTab} se synchronise avec ton VPS...</p>
+            <p className="serif italic text-lg tracking-wide">Interface {activeTab} en cours de liaison...</p>
           </div>
         )}
       </main>
