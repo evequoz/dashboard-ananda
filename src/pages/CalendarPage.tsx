@@ -32,12 +32,8 @@ const formatTime = (dateTime: string) =>
 const formatDate = (dateTime: string) =>
   new Date(dateTime).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
-// ── Modal détail événement ────────────────────────────────────
 const EventModal = ({ event, onClose }: { event: any; onClose: () => void }) => {
   const style = getEventStyle(event.title);
-  const start = event.start;
-  const end = event.end;
-
   return (
     <div style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
@@ -48,32 +44,29 @@ const EventModal = ({ event, onClose }: { event: any; onClose: () => void }) => 
         border: `1px solid ${style.color}50`,
         boxShadow: `0 0 40px ${style.color}15`
       }} onClick={e => e.stopPropagation()}>
-
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
           <span style={{
             padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 500,
             background: style.bg, color: style.color, border: `1px solid ${style.color}40`
           }}>Événement</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 4 }}>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}>
             <X size={16} />
           </button>
         </div>
-
         <h2 style={{
           fontFamily: "'Playfair Display', serif", color: C.goldSoft,
           fontSize: 20, marginBottom: 20, lineHeight: 1.3
         }}>{event.title}</h2>
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Calendar size={14} color={C.gold} />
-            <span style={{ fontSize: 13, color: C.text }}>{formatDate(start)}</span>
+            <span style={{ fontSize: 13, color: C.text }}>{formatDate(event.start)}</span>
           </div>
-          {start && (
+          {event.start && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <Clock size={14} color={C.gold} />
               <span style={{ fontSize: 13, color: C.text }}>
-                {formatTime(start)}{end ? ` → ${formatTime(end)}` : ''}
+                {formatTime(event.start)}{event.end ? ` → ${formatTime(event.end)}` : ''}
               </span>
             </div>
           )}
@@ -90,7 +83,6 @@ const EventModal = ({ event, onClose }: { event: any; onClose: () => void }) => 
             }}>{event.extendedProps.description}</div>
           )}
         </div>
-
         <button onClick={onClose} style={{
           width: '100%', marginTop: 24, padding: '10px 0', borderRadius: 8,
           border: `1px solid ${C.border}`, background: 'transparent',
@@ -101,20 +93,16 @@ const EventModal = ({ event, onClose }: { event: any; onClose: () => void }) => 
   );
 };
 
-// ── Modal nouvel événement ────────────────────────────────────
 const NewEventModal = ({ date, onClose, onSave }: { date: string; onClose: () => void; onSave: (e: any) => void }) => {
   const [form, setForm] = useState({
     title: '', date, startTime: '09:00', endTime: '10:00', description: '', location: ''
   });
-
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
-
   const inputStyle = {
     background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8,
     color: C.text, padding: '8px 12px', fontSize: 13, outline: 'none', width: '100%',
     fontFamily: "'Outfit', sans-serif"
   };
-
   return (
     <div style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
@@ -124,7 +112,6 @@ const NewEventModal = ({ date, onClose, onSave }: { date: string; onClose: () =>
         background: C.card, borderRadius: 16, padding: 28, width: 440,
         border: `1px solid ${C.goldDim}`, maxHeight: '90vh', overflowY: 'auto'
       }} onClick={e => e.stopPropagation()}>
-
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
           <h2 style={{ fontFamily: "'Playfair Display', serif", color: C.goldSoft, fontSize: 18 }}>
             Nouvel événement
@@ -133,7 +120,6 @@ const NewEventModal = ({ date, onClose, onSave }: { date: string; onClose: () =>
             <X size={16} />
           </button>
         </div>
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {[
             { label: 'Titre *', key: 'title', type: 'text' },
@@ -143,29 +129,24 @@ const NewEventModal = ({ date, onClose, onSave }: { date: string; onClose: () =>
             <div key={key}>
               <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>{label}</label>
               <input type={type} value={(form as any)[key]}
-                onChange={e => set(key, e.target.value)}
-                style={inputStyle} />
+                onChange={e => set(key, e.target.value)} style={inputStyle} />
             </div>
           ))}
-
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {[['Début', 'startTime'], ['Fin', 'endTime']].map(([label, key]) => (
               <div key={key}>
                 <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>{label}</label>
                 <input type="time" value={(form as any)[key]}
-                  onChange={e => set(key, e.target.value)}
-                  style={inputStyle} />
+                  onChange={e => set(key, e.target.value)} style={inputStyle} />
               </div>
             ))}
           </div>
-
           <div>
             <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Description</label>
             <textarea value={form.description} onChange={e => set('description', e.target.value)}
-              rows={3} style={{ ...inputStyle, resize: 'vertical' }} />
+              rows={3} style={{ ...inputStyle, resize: 'vertical' } as any} />
           </div>
         </div>
-
         <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
           <button onClick={onClose} style={{
             flex: 1, padding: '10px 0', borderRadius: 8,
@@ -197,7 +178,6 @@ const NewEventModal = ({ date, onClose, onSave }: { date: string; onClose: () =>
   );
 };
 
-// ── Page principale ───────────────────────────────────────────
 export const CalendarPage = () => {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -224,7 +204,6 @@ export const CalendarPage = () => {
             extendedProps: {
               description: item.description || '',
               location: item.location || '',
-              creator: item.creator?.email || '',
             }
           };
         });
@@ -244,10 +223,9 @@ export const CalendarPage = () => {
     return () => clearInterval(interval);
   }, [fetchEvents]);
 
-  const todayEvents = events.filter(e => {
-    if (!e.start) return false;
-    return new Date(e.start).toDateString() === new Date().toDateString();
-  });
+  const todayEvents = events.filter(e =>
+    e.start && new Date(e.start).toDateString() === new Date().toDateString()
+  );
 
   const weekEvents = events.filter(e => {
     if (!e.start) return false;
@@ -258,122 +236,119 @@ export const CalendarPage = () => {
     return d >= startWeek && d <= endWeek;
   });
 
-  return (
+  // Rendu custom du header avec stats intégrées
+  const renderHeader = () => (
     <div style={{
-      display: 'flex', flexDirection: 'column', gap: 12,
-      padding: '16px 20px', height: 'calc(100vh - 70px)',
-      background: C.bg, fontFamily: "'Outfit', sans-serif"
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '10px 16px', background: C.surface,
+      borderBottom: `1px solid ${C.border}`,
+      borderRadius: '12px 12px 0 0',
     }}>
-
-      {/* Header */}
-      <div style={{
-        background: C.surface, border: `1px solid ${C.gold}25`,
-        padding: '10px 18px', borderRadius: 12,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Sparkles size={16} color={C.gold} />
-          <span style={{ fontFamily: "'Playfair Display', serif", color: C.goldSoft, fontSize: 17 }}>
-            Cockpit de Planification
+      {/* Gauche — titre + sync */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <Sparkles size={15} color={C.gold} />
+        <span style={{ fontFamily: "'Playfair Display',serif", color: C.goldSoft, fontSize: 15 }}>
+          Cockpit de Planification
+        </span>
+        {loading && <span style={{ fontSize: 11, color: C.muted }}>↻</span>}
+        {lastSync && !loading && (
+          <span style={{ fontSize: 10, color: C.muted }}>
+            {lastSync.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
           </span>
-          {loading && (
-            <span style={{ fontSize: 11, color: C.muted, marginLeft: 4 }}>
-              ↻ Synchronisation...
-            </span>
-          )}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {lastSync && (
-            <span style={{ fontSize: 11, color: C.muted }}>
-              Sync {lastSync.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          )}
-          <button onClick={() => setNewEventDate(new Date().toISOString().split('T')[0])} style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '6px 14px', background: C.gold, border: 'none',
-            borderRadius: 8, color: '#0a0808', cursor: 'pointer',
-            fontSize: 12, fontWeight: 600
-          }}>
-            <Plus size={13} /> Événement
-          </button>
-          <button onClick={fetchEvents} style={{
-            display: 'flex', alignItems: 'center', gap: 5,
-            padding: '6px 12px', background: 'transparent',
-            border: `1px solid ${C.border}`, borderRadius: 8,
-            color: C.muted, cursor: 'pointer', fontSize: 12
-          }}>
-            <RefreshCw size={13} /> Sync
-          </button>
-        </div>
+        )}
       </div>
 
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+      {/* Centre — stats */}
+      <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
         {[
-          { label: "Aujourd'hui", value: todayEvents.length, color: C.gold },
-          { label: 'Cette semaine', value: weekEvents.length, color: C.blue },
+          { label: "Auj.", value: todayEvents.length, color: C.gold },
+          { label: 'Semaine', value: weekEvents.length, color: C.blue },
           { label: 'Lives', value: events.filter(e => e.title?.toLowerCase().includes('live')).length, color: C.green },
           { label: 'Total', value: events.length, color: C.accent },
         ].map((s, i) => (
-          <div key={i} style={{
-            background: C.card, borderRadius: 10, padding: '10px 14px',
-            border: `1px solid ${C.border}`, textAlign: 'center'
-          }}>
-            <div style={{ fontSize: 22, fontFamily: "'Playfair Display'", color: s.color, fontWeight: 700 }}>
+          <div key={i} style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 16, fontFamily: "'Playfair Display'", color: s.color, fontWeight: 700, lineHeight: 1 }}>
               {s.value}
             </div>
-            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{s.label}</div>
+            <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{s.label}</div>
           </div>
         ))}
       </div>
 
-      {/* Calendrier */}
+      {/* Droite — boutons */}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={() => setNewEventDate(new Date().toISOString().split('T')[0])} style={{
+          display: 'flex', alignItems: 'center', gap: 5,
+          padding: '6px 14px', background: C.gold, border: 'none',
+          borderRadius: 8, color: '#0a0808', cursor: 'pointer',
+          fontSize: 12, fontWeight: 600
+        }}>
+          <Plus size={12} /> Événement
+        </button>
+        <button onClick={fetchEvents} style={{
+          display: 'flex', alignItems: 'center', gap: 5,
+          padding: '6px 10px', background: 'transparent',
+          border: `1px solid ${C.border}`, borderRadius: 8,
+          color: C.muted, cursor: 'pointer', fontSize: 12
+        }}>
+          <RefreshCw size={12} />
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column',
+      padding: '12px 16px', height: 'calc(100vh - 70px)',
+      background: C.bg, fontFamily: "'Outfit', sans-serif"
+    }}>
+      {/* Tout dans une seule carte */}
       <div style={{
-        flex: 1, background: '#fff', borderRadius: 14,
-        padding: '14px 16px', overflow: 'hidden',
+        flex: 1, display: 'flex', flexDirection: 'column',
+        borderRadius: 14, overflow: 'hidden',
+        border: `1px solid ${C.border}`,
         boxShadow: '0 8px 40px rgba(0,0,0,0.4)'
       }}>
-        <FullCalendar
-          plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-          initialView="timeGridWeek"
-          locales={[frLocale]}
-          locale="fr"
-          events={events}
-          headerToolbar={{
-            left: 'prev,next today',
-            center: 'title',
-            right: 'dayGridMonth,timeGridWeek,timeGridDay'
-          }}
-          height="100%"
-          slotMinTime="07:00:00"
-          slotMaxTime="22:00:00"
-          nowIndicator={true}
-          selectable={true}
-          editable={true}
-          select={(info) => setNewEventDate(info.startStr.split('T')[0])}
-          eventClick={(info) => setSelectedEvent(info.event)}
-          eventDrop={(info) => {
-            setEvents(prev => prev.map(e =>
-              e.id === info.event.id
-                ? { ...e, start: info.event.startStr, end: info.event.endStr }
-                : e
-            ));
-          }}
-          dayMaxEvents={4}
-          businessHours={{
-            daysOfWeek: [1, 2, 3, 4, 5],
-            startTime: '08:00', endTime: '20:00'
-          }}
-          eventTimeFormat={{
-            hour: '2-digit', minute: '2-digit', hour12: false
-          }}
-        />
+        {/* Header custom */}
+        {renderHeader()}
+
+        {/* Calendrier plein écran */}
+        <div style={{ flex: 1, background: '#fff', padding: '10px 12px', overflow: 'hidden' }}>
+          <FullCalendar
+            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+            initialView="timeGridWeek"
+            locales={[frLocale]}
+            locale="fr"
+            events={events}
+            headerToolbar={{
+              left: 'prev,next today',
+              center: 'title',
+              right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            }}
+            height="100%"
+            slotMinTime="07:00:00"
+            slotMaxTime="22:00:00"
+            nowIndicator={true}
+            selectable={true}
+            editable={true}
+            select={(info) => setNewEventDate(info.startStr.split('T')[0])}
+            eventClick={(info) => setSelectedEvent(info.event)}
+            eventDrop={(info) => {
+              setEvents(prev => prev.map(e =>
+                e.id === info.event.id
+                  ? { ...e, start: info.event.startStr, end: info.event.endStr }
+                  : e
+              ));
+            }}
+            dayMaxEvents={4}
+            businessHours={{ daysOfWeek: [1, 2, 3, 4, 5], startTime: '08:00', endTime: '20:00' }}
+            eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
+          />
+        </div>
       </div>
 
-      {/* Modales */}
-      {selectedEvent && (
-        <EventModal event={selectedEvent} onClose={() => setSelectedEvent(null)} />
-      )}
+      {selectedEvent && <EventModal event={selectedEvent} onClose={() => setSelectedEvent(null)} />}
       {newEventDate && (
         <NewEventModal
           date={newEventDate}
