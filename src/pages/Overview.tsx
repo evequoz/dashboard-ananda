@@ -24,10 +24,10 @@ export const Overview = () => {
         if (Array.isArray(data)) {
           const now = new Date();
           const upcoming = data
-            // 1. On garde les événements futurs ou d'aujourd'hui
+            // 1. On ne garde que les événements dont l'heure de FIN n'est pas encore passée
             .filter(item => {
-              const start = new Date(item.start?.dateTime || item.start?.date);
-              return start >= now || start.toDateString() === now.toDateString();
+              const endTime = new Date(item.end?.dateTime || item.end?.date || item.start?.date);
+              return endTime > now;
             })
             // 2. On les trie chronologiquement (le plus proche en premier)
             .sort((a, b) => new Date(a.start?.dateTime || a.start?.date).getTime() - new Date(b.start?.dateTime || b.start?.date).getTime())
@@ -105,11 +105,10 @@ export const Overview = () => {
           </div>
 
           {view === 'day' ? (
-            <div className="space-y-2"> {/* space-y-2 au lieu de 3 pour tasser un peu */}
+            <div className="space-y-2">
               {liveEvents.length > 0 ? (
                 liveEvents.map((item, index) => {
                   const startTime = new Date(item.start?.dateTime || item.start?.date);
-                  // Formatage de la date (ex: "14 mars") et de l'heure (ex: "10:30")
                   const dateStr = startTime.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
                   const timeStr = item.start?.dateTime ? startTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : 'Jour entier';
 
@@ -120,7 +119,7 @@ export const Overview = () => {
                     >
                       <div className="flex items-center gap-3 flex-1">
                         <div
-                          className="w-1 h-10 rounded-full bg-[#c9a84c]" // Barre plus fine et plus courte
+                          className="w-1 h-10 rounded-full bg-[#c9a84c]"
                         />
                         <div>
                           <div className="flex items-center gap-2 mb-0.5">
