@@ -4,251 +4,235 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import frLocale from '@fullcalendar/core/locales/fr';
-import { Sparkles, RefreshCw, Plus, X, Calendar, Clock, Tag } from 'lucide-react';
+import { Sparkles, RefreshCw, Plus, X, Calendar, Clock, MapPin } from 'lucide-react';
 
 const C = {
   bg: '#080810', surface: '#0f0f1a', card: '#14141f',
   border: '#22223a', gold: '#c9a84c', goldSoft: '#e8c97a',
-  goldGlow: 'rgba(201,168,76,0.12)', text: '#e8e4d9', muted: '#5a587a',
-  accent: '#7b5ea7', green: '#4caf7d', red: '#d95555', blue: '#5588d0', orange: '#d98844',
+  goldDim: '#5a4820', goldGlow: 'rgba(201,168,76,0.12)',
+  text: '#e8e4d9', muted: '#5a587a',
+  accent: '#7b5ea7', green: '#4caf7d', red: '#d95555',
+  blue: '#5588d0', orange: '#d98844',
 };
 
-const CATEGORIES = [
-  { label: 'Pratique', color: C.accent, bg: '#7b5ea720' },
-  { label: 'Contenu', color: C.gold, bg: '#c9a84c20' },
-  { label: 'Live', color: C.green, bg: '#4caf7d20' },
-  { label: 'Admin', color: C.muted, bg: '#5a587a20' },
-  { label: 'Formation', color: C.blue, bg: '#5588d020' },
-  { label: 'Doterra', color: C.orange, bg: '#d9884420' },
-];
-
-const getCategoryColor = (title: string) => {
-  const t = title?.toLowerCase() || '';
-  if (t.includes('live') || t.includes('q&a')) return { color: C.green, bg: '#4caf7d20' };
-  if (t.includes('kriya') || t.includes('méditation') || t.includes('pratique')) return { color: C.accent, bg: '#7b5ea720' };
-  if (t.includes('formation') || t.includes('cours') || t.includes('ehme')) return { color: C.blue, bg: '#5588d020' };
-  if (t.includes('doterra')) return { color: C.orange, bg: '#d9884420' };
-  if (t.includes('vidéo') || t.includes('contenu') || t.includes('post')) return { color: C.gold, bg: '#c9a84c20' };
-  return { color: C.gold, bg: '#c9a84c20' };
+const getEventStyle = (summary: string = '') => {
+  const t = summary.toLowerCase();
+  if (t.includes('live') || t.includes('q&a')) return { color: C.green, bg: '#4caf7d15' };
+  if (t.includes('kriya') || t.includes('méditation') || t.includes('pratique')) return { color: C.accent, bg: '#7b5ea715' };
+  if (t.includes('formation') || t.includes('ehme') || t.includes('mm')) return { color: C.blue, bg: '#5588d015' };
+  if (t.includes('doterra')) return { color: C.orange, bg: '#d9884415' };
+  if (t.includes('vidéo') || t.includes('contenu') || t.includes('enregistrement')) return { color: C.gold, bg: '#c9a84c15' };
+  if (t.includes('kundalini') || t.includes('éveil') || t.includes('transmission')) return { color: C.accent, bg: '#7b5ea715' };
+  return { color: C.gold, bg: '#c9a84c15' };
 };
 
-interface EventModalProps {
-  event: any;
-  onClose: () => void;
-  onDelete: (id: string) => void;
-}
+const formatTime = (dateTime: string) =>
+  new Date(dateTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
-const EventModal = ({ event, onClose, onDelete }: EventModalProps) => {
-  const start = new Date(event.start);
-  const end = event.end ? new Date(event.end) : null;
-  const cat = getCategoryColor(event.title);
+const formatDate = (dateTime: string) =>
+  new Date(dateTime).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+
+// ── Modal détail événement ────────────────────────────────────
+const EventModal = ({ event, onClose }: { event: any; onClose: () => void }) => {
+  const style = getEventStyle(event.title);
+  const start = event.start;
+  const end = event.end;
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
     }} onClick={onClose}>
       <div style={{
-        background: C.card, borderRadius: 16, padding: 24, width: 400,
-        border: `1px solid ${cat.color}40`, boxShadow: `0 0 40px ${cat.color}20`
+        background: C.card, borderRadius: 16, padding: 28, width: 420,
+        border: `1px solid ${style.color}50`,
+        boxShadow: `0 0 40px ${style.color}15`
       }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
           <span style={{
-            padding: '3px 10px', borderRadius: 20, fontSize: 11,
-            background: cat.bg, color: cat.color, border: `1px solid ${cat.color}40`
-          }}>{event.extendedProps?.category || 'Événement'}</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}>
-            <X size={18} />
+            padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 500,
+            background: style.bg, color: style.color, border: `1px solid ${style.color}40`
+          }}>Événement</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 4 }}>
+            <X size={16} />
           </button>
         </div>
 
-        <h2 style={{ fontFamily: "'Playfair Display', serif", color: C.goldSoft, fontSize: 20, marginBottom: 16 }}>
-          {event.title}
-        </h2>
+        <h2 style={{
+          fontFamily: "'Playfair Display', serif", color: C.goldSoft,
+          fontSize: 20, marginBottom: 20, lineHeight: 1.3
+        }}>{event.title}</h2>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: C.muted, fontSize: 13 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Calendar size={14} color={C.gold} />
-            <span>{start.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+            <span style={{ fontSize: 13, color: C.text }}>{formatDate(start)}</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: C.muted, fontSize: 13 }}>
-            <Clock size={14} color={C.gold} />
-            <span>
-              {start.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-              {end && ` → ${end.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`}
-            </span>
-          </div>
-          {event.extendedProps?.description && (
-            <div style={{ padding: '10px 14px', background: C.surface, borderRadius: 8, fontSize: 13, color: C.text }}>
-              {event.extendedProps.description}
+          {start && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Clock size={14} color={C.gold} />
+              <span style={{ fontSize: 13, color: C.text }}>
+                {formatTime(start)}{end ? ` → ${formatTime(end)}` : ''}
+              </span>
             </div>
           )}
           {event.extendedProps?.location && (
-            <div style={{ fontSize: 12, color: C.muted }}>📍 {event.extendedProps.location}</div>
-          )}
-          {event.extendedProps?.calendar && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.muted }}>
-              <Tag size={12} />
-              <span>{event.extendedProps.calendar}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <MapPin size={14} color={C.gold} />
+              <span style={{ fontSize: 13, color: C.text }}>{event.extendedProps.location}</span>
             </div>
+          )}
+          {event.extendedProps?.description && (
+            <div style={{
+              padding: '12px 14px', background: C.surface, borderRadius: 8,
+              fontSize: 13, color: C.muted, lineHeight: 1.6, marginTop: 4
+            }}>{event.extendedProps.description}</div>
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
-          <button onClick={onClose} style={{
-            flex: 1, padding: '8px 0', borderRadius: 8, border: `1px solid ${C.border}`,
-            background: 'transparent', color: C.muted, cursor: 'pointer', fontSize: 13
-          }}>Fermer</button>
-          <button onClick={() => onDelete(event.id)} style={{
-            padding: '8px 16px', borderRadius: 8, border: 'none',
-            background: '#d9555520', color: C.red, cursor: 'pointer', fontSize: 13
-          }}>Supprimer</button>
-        </div>
+        <button onClick={onClose} style={{
+          width: '100%', marginTop: 24, padding: '10px 0', borderRadius: 8,
+          border: `1px solid ${C.border}`, background: 'transparent',
+          color: C.muted, cursor: 'pointer', fontSize: 13
+        }}>Fermer</button>
       </div>
     </div>
   );
 };
 
-interface NewEventModalProps {
-  date: string;
-  onClose: () => void;
-  onSave: (event: any) => void;
-}
-
-const NewEventModal = ({ date, onClose, onSave }: NewEventModalProps) => {
+// ── Modal nouvel événement ────────────────────────────────────
+const NewEventModal = ({ date, onClose, onSave }: { date: string; onClose: () => void; onSave: (e: any) => void }) => {
   const [form, setForm] = useState({
-    title: '', date: date, startTime: '09:00', endTime: '10:00',
-    category: 'Formation', description: '', location: '', calendar: 'Serge'
+    title: '', date, startTime: '09:00', endTime: '10:00', description: '', location: ''
   });
 
-  const handleSave = () => {
-    if (!form.title.trim()) return;
-    const cat = CATEGORIES.find(c => c.label === form.category);
-    onSave({
-      id: Date.now().toString(),
-      title: form.title,
-      start: `${form.date}T${form.startTime}`,
-      end: `${form.date}T${form.endTime}`,
-      backgroundColor: cat?.bg || C.goldGlow,
-      borderColor: cat?.color || C.gold,
-      textColor: cat?.color || C.gold,
-      extendedProps: {
-        category: form.category,
-        description: form.description,
-        location: form.location,
-        calendar: form.calendar,
-      }
-    });
-    onClose();
-  };
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
-  const inp = (label: string, key: string, type = 'text', options?: string[]) => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-      <label style={{ fontSize: 11, color: C.muted }}>{label}</label>
-      {options ? (
-        <select value={(form as any)[key]}
-          onChange={e => setForm({ ...form, [key]: e.target.value })}
-          style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, padding: '6px 10px', fontSize: 13 }}>
-          {options.map(o => <option key={o} value={o}>{o}</option>)}
-        </select>
-      ) : (
-        <input type={type} value={(form as any)[key]}
-          onChange={e => setForm({ ...form, [key]: e.target.value })}
-          style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, padding: '6px 10px', fontSize: 13, outline: 'none' }} />
-      )}
-    </div>
-  );
+  const inputStyle = {
+    background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8,
+    color: C.text, padding: '8px 12px', fontSize: 13, outline: 'none', width: '100%',
+    fontFamily: "'Outfit', sans-serif"
+  };
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
     }} onClick={onClose}>
       <div style={{
-        background: C.card, borderRadius: 16, padding: 24, width: 420,
+        background: C.card, borderRadius: 16, padding: 28, width: 440,
         border: `1px solid ${C.goldDim}`, maxHeight: '90vh', overflowY: 'auto'
       }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
           <h2 style={{ fontFamily: "'Playfair Display', serif", color: C.goldSoft, fontSize: 18 }}>
             Nouvel événement
           </h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}>
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {inp('Titre *', 'title')}
-          {inp('Date', 'date', 'date')}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {inp('Début', 'startTime', 'time')}
-            {inp('Fin', 'endTime', 'time')}
+          {[
+            { label: 'Titre *', key: 'title', type: 'text' },
+            { label: 'Date', key: 'date', type: 'date' },
+            { label: 'Lieu', key: 'location', type: 'text' },
+          ].map(({ label, key, type }) => (
+            <div key={key}>
+              <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>{label}</label>
+              <input type={type} value={(form as any)[key]}
+                onChange={e => set(key, e.target.value)}
+                style={inputStyle} />
+            </div>
+          ))}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {[['Début', 'startTime'], ['Fin', 'endTime']].map(([label, key]) => (
+              <div key={key}>
+                <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>{label}</label>
+                <input type="time" value={(form as any)[key]}
+                  onChange={e => set(key, e.target.value)}
+                  style={inputStyle} />
+              </div>
+            ))}
           </div>
-          {inp('Catégorie', 'category', 'text', CATEGORIES.map(c => c.label))}
-          {inp('Agenda', 'calendar', 'text', ['Serge', 'Ananda', 'Doterra', 'Perso'])}
-          {inp('Lieu', 'location')}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            <label style={{ fontSize: 11, color: C.muted }}>Description</label>
-            <textarea value={form.description}
-              onChange={e => setForm({ ...form, description: e.target.value })}
-              rows={3}
-              style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, color: C.text, padding: '6px 10px', fontSize: 13, outline: 'none', resize: 'vertical' }} />
+
+          <div>
+            <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Description</label>
+            <textarea value={form.description} onChange={e => set('description', e.target.value)}
+              rows={3} style={{ ...inputStyle, resize: 'vertical' }} />
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
+        <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
           <button onClick={onClose} style={{
-            flex: 1, padding: '9px 0', borderRadius: 8, border: `1px solid ${C.border}`,
-            background: 'transparent', color: C.muted, cursor: 'pointer', fontSize: 13
+            flex: 1, padding: '10px 0', borderRadius: 8,
+            border: `1px solid ${C.border}`, background: 'transparent',
+            color: C.muted, cursor: 'pointer', fontSize: 13
           }}>Annuler</button>
-          <button onClick={handleSave} style={{
-            flex: 2, padding: '9px 0', borderRadius: 8, border: 'none',
-            background: C.gold, color: '#0a0808', cursor: 'pointer', fontSize: 13, fontWeight: 600
-          }}>✓ Créer l'événement</button>
+          <button onClick={() => {
+            if (!form.title.trim()) return;
+            const style = getEventStyle(form.title);
+            onSave({
+              id: `local-${Date.now()}`,
+              title: form.title,
+              start: `${form.date}T${form.startTime}:00`,
+              end: `${form.date}T${form.endTime}:00`,
+              backgroundColor: style.bg,
+              borderColor: style.color,
+              textColor: style.color,
+              extendedProps: { description: form.description, location: form.location }
+            });
+            onClose();
+          }} style={{
+            flex: 2, padding: '10px 0', borderRadius: 8,
+            border: 'none', background: C.gold,
+            color: '#0a0808', cursor: 'pointer', fontSize: 13, fontWeight: 600
+          }}>✓ Créer</button>
         </div>
       </div>
     </div>
   );
 };
 
+// ── Page principale ───────────────────────────────────────────
 export const CalendarPage = () => {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [newEventDate, setNewEventDate] = useState<string | null>(null);
-  const [activeCalendars, setActiveCalendars] = useState(['Serge', 'Ananda', 'Doterra', 'Perso']);
-  const [view, setView] = useState('timeGridWeek');
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch('https://n8n.ananda-communaute.cloud/webhook/get-calendar');
-      const data = await response.json();
+      const res = await fetch('https://n8n.ananda-communaute.cloud/webhook/get-calendar');
+      const data = await res.json();
       if (Array.isArray(data)) {
         const formatted = data.map((item: any) => {
-          const cat = getCategoryColor(item.summary || '');
+          const style = getEventStyle(item.summary || item.events || '');
           return {
-            id: item.id || Date.now().toString(),
-            title: item.summary || 'Rendez-vous',
-            start: item.start?.dateTime || item.start?.date,
-            end: item.end?.dateTime || item.end?.date,
-            backgroundColor: cat.bg,
-            borderColor: cat.color,
-            textColor: cat.color,
+            id: item.id || `evt-${Date.now()}-${Math.random()}`,
+            title: item.summary || item.events || 'Événement',
+            start: item.start?.dateTime || item.start?.date || item.start,
+            end: item.end?.dateTime || item.end?.date || item.end,
+            backgroundColor: style.bg,
+            borderColor: style.color,
+            textColor: style.color,
             extendedProps: {
               description: item.description || '',
               location: item.location || '',
-              calendar: item.organizer?.displayName || 'Serge',
-              category: item.extendedProperties?.private?.category || '',
+              creator: item.creator?.email || '',
             }
           };
         });
         setEvents(formatted);
         setLastSync(new Date());
       }
-    } catch (error) {
-      console.error('Erreur synchro calendrier:', error);
+    } catch (e) {
+      console.error('Erreur calendrier:', e);
     } finally {
       setLoading(false);
     }
@@ -260,138 +244,101 @@ export const CalendarPage = () => {
     return () => clearInterval(interval);
   }, [fetchEvents]);
 
-  const handleEventClick = (info: any) => {
-    setSelectedEvent(info.event);
-  };
-
-  const handleDateSelect = (info: any) => {
-    setNewEventDate(info.startStr.split('T')[0]);
-  };
-
-  const handleNewEvent = (event: any) => {
-    setEvents(prev => [...prev, event]);
-    // Envoyer à N8N pour sync Google Calendar
-    fetch('https://n8n.ananda-communaute.cloud/webhook/create-event', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(event)
-    }).catch(console.error);
-  };
-
-  const handleDeleteEvent = (id: string) => {
-    setEvents(prev => prev.filter(e => e.id !== id));
-    setSelectedEvent(null);
-    fetch('https://n8n.ananda-communaute.cloud/webhook/delete-event', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id })
-    }).catch(console.error);
-  };
-
-  const filteredEvents = events.filter(e =>
-    activeCalendars.includes(e.extendedProps?.calendar || 'Serge')
-  );
-
   const todayEvents = events.filter(e => {
-    const today = new Date().toDateString();
-    return new Date(e.start).toDateString() === today;
+    if (!e.start) return false;
+    return new Date(e.start).toDateString() === new Date().toDateString();
+  });
+
+  const weekEvents = events.filter(e => {
+    if (!e.start) return false;
+    const d = new Date(e.start);
+    const now = new Date();
+    const startWeek = new Date(now); startWeek.setDate(now.getDate() - now.getDay() + 1);
+    const endWeek = new Date(startWeek); endWeek.setDate(startWeek.getDate() + 6);
+    return d >= startWeek && d <= endWeek;
   });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 16, height: 'calc(100vh - 80px)', background: C.bg }}>
+    <div style={{
+      display: 'flex', flexDirection: 'column', gap: 12,
+      padding: '16px 20px', height: 'calc(100vh - 70px)',
+      background: C.bg, fontFamily: "'Outfit', sans-serif"
+    }}>
 
       {/* Header */}
       <div style={{
-        background: C.surface, border: `1px solid ${C.gold}30`, padding: '12px 18px',
-        borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+        background: C.surface, border: `1px solid ${C.gold}25`,
+        padding: '10px 18px', borderRadius: 12,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Sparkles size={18} color={C.gold} />
-          <span style={{ fontFamily: "'Playfair Display', serif", color: C.goldSoft, fontSize: 18 }}>
+          <Sparkles size={16} color={C.gold} />
+          <span style={{ fontFamily: "'Playfair Display', serif", color: C.goldSoft, fontSize: 17 }}>
             Cockpit de Planification
           </span>
-          {loading && <span style={{ fontSize: 11, color: C.muted }}>Synchronisation...</span>}
+          {loading && (
+            <span style={{ fontSize: 11, color: C.muted, marginLeft: 4 }}>
+              ↻ Synchronisation...
+            </span>
+          )}
         </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {lastSync && (
             <span style={{ fontSize: 11, color: C.muted }}>
-              ↻ {lastSync.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+              Sync {lastSync.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
           <button onClick={() => setNewEventDate(new Date().toISOString().split('T')[0])} style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px',
-            background: C.gold, border: 'none', borderRadius: 8, color: '#0a0808',
-            cursor: 'pointer', fontSize: 12, fontWeight: 600
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '6px 14px', background: C.gold, border: 'none',
+            borderRadius: 8, color: '#0a0808', cursor: 'pointer',
+            fontSize: 12, fontWeight: 600
           }}>
-            <Plus size={14} /> Événement
+            <Plus size={13} /> Événement
           </button>
           <button onClick={fetchEvents} style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
-            background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 8,
+            display: 'flex', alignItems: 'center', gap: 5,
+            padding: '6px 12px', background: 'transparent',
+            border: `1px solid ${C.border}`, borderRadius: 8,
             color: C.muted, cursor: 'pointer', fontSize: 12
           }}>
-            <RefreshCw size={14} /> Sync
+            <RefreshCw size={13} /> Sync
           </button>
         </div>
       </div>
 
-      {/* Stats du jour */}
+      {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
         {[
           { label: "Aujourd'hui", value: todayEvents.length, color: C.gold },
-          { label: 'Cette semaine', value: events.filter(e => {
-            const d = new Date(e.start);
-            const now = new Date();
-            const start = new Date(now.setDate(now.getDate() - now.getDay()));
-            const end = new Date(now.setDate(now.getDate() + 6));
-            return d >= start && d <= end;
-          }).length, color: C.blue },
-          { label: 'Lives planifiés', value: events.filter(e => e.title?.toLowerCase().includes('live')).length, color: C.green },
-          { label: 'Formations', value: events.filter(e => e.title?.toLowerCase().includes('formation') || e.title?.toLowerCase().includes('ehme')).length, color: C.accent },
+          { label: 'Cette semaine', value: weekEvents.length, color: C.blue },
+          { label: 'Lives', value: events.filter(e => e.title?.toLowerCase().includes('live')).length, color: C.green },
+          { label: 'Total', value: events.length, color: C.accent },
         ].map((s, i) => (
           <div key={i} style={{
-            background: C.card, borderRadius: 10, padding: '12px 16px',
+            background: C.card, borderRadius: 10, padding: '10px 14px',
             border: `1px solid ${C.border}`, textAlign: 'center'
           }}>
-            <div style={{ fontSize: 24, fontFamily: "'Playfair Display'", color: s.color, fontWeight: 700 }}>{s.value}</div>
+            <div style={{ fontSize: 22, fontFamily: "'Playfair Display'", color: s.color, fontWeight: 700 }}>
+              {s.value}
+            </div>
             <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{s.label}</div>
           </div>
         ))}
       </div>
 
-      {/* Filtres calendriers */}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <span style={{ fontSize: 11, color: C.muted }}>Agendas :</span>
-        {['Serge', 'Ananda', 'Doterra', 'Perso'].map(cal => (
-          <button key={cal} onClick={() => setActiveCalendars(prev =>
-            prev.includes(cal) ? prev.filter(c => c !== cal) : [...prev, cal]
-          )} style={{
-            padding: '4px 12px', borderRadius: 20, fontSize: 11, cursor: 'pointer',
-            background: activeCalendars.includes(cal) ? `${C.gold}20` : 'transparent',
-            border: `1px solid ${activeCalendars.includes(cal) ? C.gold : C.border}`,
-            color: activeCalendars.includes(cal) ? C.gold : C.muted,
-            transition: 'all .2s'
-          }}>{cal}</button>
-        ))}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-          {CATEGORIES.map(cat => (
-            <div key={cat.label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: cat.color }} />
-              <span style={{ fontSize: 10, color: C.muted }}>{cat.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* Calendrier */}
-      <div style={{ flex: 1, background: '#ffffff', borderRadius: 14, padding: 12, overflow: 'hidden', boxShadow: `0 0 30px rgba(0,0,0,0.5)` }}>
+      <div style={{
+        flex: 1, background: '#fff', borderRadius: 14,
+        padding: '14px 16px', overflow: 'hidden',
+        boxShadow: '0 8px 40px rgba(0,0,0,0.4)'
+      }}>
         <FullCalendar
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
           initialView="timeGridWeek"
           locales={[frLocale]}
           locale="fr"
-          events={filteredEvents}
+          events={events}
           headerToolbar={{
             left: 'prev,next today',
             center: 'title',
@@ -403,8 +350,8 @@ export const CalendarPage = () => {
           nowIndicator={true}
           selectable={true}
           editable={true}
-          select={handleDateSelect}
-          eventClick={handleEventClick}
+          select={(info) => setNewEventDate(info.startStr.split('T')[0])}
+          eventClick={(info) => setSelectedEvent(info.event)}
           eventDrop={(info) => {
             setEvents(prev => prev.map(e =>
               e.id === info.event.id
@@ -412,44 +359,55 @@ export const CalendarPage = () => {
                 : e
             ));
           }}
-          dayMaxEvents={3}
-          eventDisplay="block"
-          businessHours={{ daysOfWeek: [1, 2, 3, 4, 5], startTime: '08:00', endTime: '20:00' }}
+          dayMaxEvents={4}
+          businessHours={{
+            daysOfWeek: [1, 2, 3, 4, 5],
+            startTime: '08:00', endTime: '20:00'
+          }}
+          eventTimeFormat={{
+            hour: '2-digit', minute: '2-digit', hour12: false
+          }}
         />
       </div>
 
       {/* Modales */}
       {selectedEvent && (
-        <EventModal
-          event={selectedEvent}
-          onClose={() => setSelectedEvent(null)}
-          onDelete={handleDeleteEvent}
-        />
+        <EventModal event={selectedEvent} onClose={() => setSelectedEvent(null)} />
       )}
       {newEventDate && (
         <NewEventModal
           date={newEventDate}
           onClose={() => setNewEventDate(null)}
-          onSave={handleNewEvent}
+          onSave={(e) => {
+            setEvents(prev => [...prev, e]);
+            fetch('https://n8n.ananda-communaute.cloud/webhook/create-event', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(e)
+            }).catch(console.error);
+          }}
         />
       )}
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&display=swap');
-        .fc-button-primary { background-color: #0f0f1a !important; border-color: #22223a !important; color: #e8e4d9 !important; text-transform: capitalize; font-size: 12px !important; padding: 5px 12px !important; }
-        .fc-button-primary:hover { background-color: #c9a84c20 !important; border-color: #c9a84c !important; color: #c9a84c !important; }
-        .fc-button-active, .fc-button-primary:not(:disabled).fc-button-active { background-color: #c9a84c !important; border-color: #c9a84c !important; color: #0a0808 !important; }
-        .fc-toolbar-title { font-family: 'Playfair Display', serif !important; font-size: 16px !important; color: #1a1a2a !important; }
-        .fc-v-event { cursor: pointer; border-width: 2px !important; border-radius: 6px !important; }
-        .fc-event:hover { opacity: 0.85; transform: translateY(-1px); transition: all .15s; }
-        .fc-timegrid-now-indicator-line { border-color: #c9a84c !important; border-width: 2px !important; }
-        .fc-timegrid-now-indicator-arrow { border-top-color: #c9a84c !important; }
-        .fc-day-today { background: rgba(201,168,76,0.04) !important; }
-        .fc-col-header-cell-cushion { color: #1a1a2a !important; font-weight: 500 !important; font-size: 13px !important; }
-        .fc-timegrid-slot-label { font-size: 11px !important; color: #888 !important; }
-        .fc-more-link { color: #c9a84c !important; font-size: 11px !important; }
-        .fc-daygrid-day-number { color: #1a1a2a !important; }
-        .fc-highlight { background: rgba(201,168,76,0.15) !important; }
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Outfit:wght@300;400;500&display=swap');
+        .fc { font-family: 'Outfit', sans-serif !important; }
+        .fc-button-primary { background:#0f0f1a !important; border-color:#22223a !important; color:#e8e4d9 !important; font-size:12px !important; padding:5px 12px !important; text-transform:capitalize !important; border-radius:8px !important; }
+        .fc-button-primary:hover { background:#c9a84c15 !important; border-color:#c9a84c !important; color:#c9a84c !important; }
+        .fc-button-primary:not(:disabled).fc-button-active { background:#c9a84c !important; border-color:#c9a84c !important; color:#0a0808 !important; }
+        .fc-toolbar-title { font-family:'Playfair Display',serif !important; font-size:15px !important; color:#1a1a2a !important; font-weight:600 !important; }
+        .fc-v-event { border-radius:6px !important; border-width:2px !important; cursor:pointer !important; }
+        .fc-event:hover { opacity:0.85 !important; }
+        .fc-timegrid-now-indicator-line { border-color:#c9a84c !important; border-width:2px !important; }
+        .fc-timegrid-now-indicator-arrow { border-top-color:#c9a84c !important; }
+        .fc-day-today { background:rgba(201,168,76,0.05) !important; }
+        .fc-col-header-cell-cushion { color:#333 !important; font-weight:500 !important; font-size:12px !important; text-decoration:none !important; }
+        .fc-timegrid-slot-label { font-size:11px !important; color:#999 !important; }
+        .fc-daygrid-day-number { color:#333 !important; text-decoration:none !important; }
+        .fc-highlight { background:rgba(201,168,76,0.12) !important; }
+        .fc-more-link { color:#c9a84c !important; font-size:11px !important; }
+        .fc-event-title { font-size:12px !important; font-weight:500 !important; }
+        .fc-event-time { font-size:11px !important; }
       `}</style>
     </div>
   );
