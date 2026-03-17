@@ -49,7 +49,7 @@ function App() {
       {/* Barre de navigation rapide */}
       <div className="flex gap-3 mb-8 overflow-x-auto pb-2">
         {['Dify', 'n8n', 'AFFiNE'].map((service) => (
-          <button key={service} className="flex items-center gap-2 px-4 py-2 bg-[#0f0f1a] border border-[#22223a] rounded-full text-xs text-[#5a587a] hover:text-[#c9a84c] transition-colors">
+          <button key={service} className="flex items-center gap-2 px-4 py-2 bg-[#0f0f1a] border border-[#22223a] rounded-full text-xs text-[#5a587a] hover:text-[#c9a84c] transition-colors whitespace-nowrap">
             <ExternalLink size={14} /> {service}
           </button>
         ))}
@@ -63,41 +63,47 @@ function App() {
         </div>
         <div className="flex gap-8">
           <div className="text-right">
-            <p className="text-[10px] text-[#5a587a] tracking-widest uppercase mb-1">Membres</p>
+            <p className="text-[10px] text-[#5a587a] tracking-widest uppercase mb-1 font-bold">Membres</p>
             <p className="text-2xl text-[#c9a84c] font-semibold">247</p>
           </div>
           <div className="text-right">
-            <p className="text-[10px] text-[#5a587a] tracking-widest uppercase mb-1">Revenu Mars</p>
+            <p className="text-[10px] text-[#5a587a] tracking-widest uppercase mb-1 font-bold">Revenu Mars</p>
             <p className="text-2xl text-[#4caf7d] font-semibold">3 840€</p>
           </div>
         </div>
       </header>
 
       {/* Navigation Onglets */}
-      <nav className="flex gap-8 border-bottom border-[#22223a] mb-8 border-b">
+      <nav className="flex gap-8 border-b border-[#22223a] mb-8">
         {tabs.map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`pb-4 text-sm transition-all ${
-              activeTab === tab ? 'border-b-2 border-[#c9a84c] text-[#e8c97a]' : 'text-[#5a587a]'
+            className={`pb-4 text-sm transition-all relative ${
+              activeTab === tab ? 'text-[#e8c97a]' : 'text-[#5a587a]'
             }`}
           >
             {tab}
+            {activeTab === tab && (
+              <div className="absolute bottom-0 left-0 w-full h-0.5 bg-[#c9a84c]" />
+            )}
           </button>
         ))}
       </nav>
 
       {/* Contenu */}
-      <main className="max-w-6xl">
+      <main className="max-w-6xl mx-auto">
         {activeTab === 'Aperçu' ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            
+            {/* Colonne Gauche */}
             <Card title="Agenda du jour" icon={Calendar}>
               <AgendaItem time="09:00" title="Méditation & Kriya" category="Pratique" color="#7b5ea7" />
               <AgendaItem time="11:00" title="Enregistrement Vidéo" category="Contenu" color="#c9a84c" />
               <AgendaItem time="14:30" title="Live Q&A EHME" category="Live" color="#4caf7d" />
             </Card>
 
+            {/* Colonne Droite */}
             <div className="space-y-8">
               <Card title="Intelligence Mails" icon={Mail}>
                 <div className="space-y-4">
@@ -115,12 +121,16 @@ function App() {
               </Card>
 
               <Card title="Statut Système" icon={CheckCircle2}>
-                <div className="flex justify-between text-xs text-[#5a587a]">
+                <div className="flex justify-between items-center text-xs text-[#5a587a]">
                   <span>VPS Cloud</span>
-                  <span className="text-[#4caf7d]">Opérationnel</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-[#4caf7d]" />
+                    <span className="text-[#4caf7d]">Opérationnel</span>
+                  </div>
                 </div>
-              </header>
+              </Card>
             </div>
+
           </div>
         ) : (
           <div className="py-20 text-center text-[#5a587a]">
