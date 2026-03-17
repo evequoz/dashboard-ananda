@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, Clock, Sparkles, TrendingUp, Activity, CheckCircle, Users, DollarSign, Mail, Award } from 'lucide-react';
-import { mockAgenda, mockObjectives, Objective, getStats } from '../data/mockData';
+import { mockObjectives, Objective, getStats } from '../data/mockData';
 
 export const Overview = () => {
   const [view, setView] = useState<'day' | 'week'>('day');
   const [objectives, setObjectives] = useState<Objective[]>(mockObjectives);
+  const [liveEvents, setLiveEvents] = useState<any[]>([]); // Nouvel état pour les vrais RDV
   const stats = getStats();
 
   const toggleObjective = (id: string) => {
@@ -12,6 +13,35 @@ export const Overview = () => {
       obj.id === id ? { ...obj, completed: !obj.completed } : obj
     ));
   };
+
+  // RÉCUPÉRATION DES 7 PROCHAINS RDV VIA N8N
+  useEffect(() => {
+    const fetchAgenda = async () => {
+      try {
+        const res = await fetch('https://n8n.ananda-communaute.cloud/webhook/get-calendar');
+        const data = await res.json();
+        
+        if (Array.isArray(data)) {
+          const now = new Date();
+          const upcoming = data
+            // 1. On garde les événements futurs ou d'aujourd'hui
+            .filter(item => {
+              const start = new Date(item.start?.dateTime || item.start?.date);
+              return start >= now || start.toDateString() === now.toDateString();
+            })
+            // 2. On les trie chronologiquement (le plus proche en premier)
+            .sort((a, b) => new Date(a.start?.dateTime || a.start?.date).getTime() - new Date(b.start?.dateTime || b.start?.date).getTime())
+            // 3. On ne garde que les 7 premiers
+            .slice(0, 7);
+            
+          setLiveEvents(upcoming);
+        }
+      } catch (error) {
+        console.error("Erreur de récupération de l'agenda :", error);
+      }
+    };
+    fetchAgenda();
+  }, []);
 
   const statCards = [
     { label: 'Membres Actifs', value: stats.activeMembers, icon: Users, color: '#4caf7d' },
@@ -56,14 +86,8 @@ export const Overview = () => {
                 <Calendar className="w-5 h-5 text-[#05050a]" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-[#e8e4d9]">Agenda</h2>
-                <p className="text-xs text-[#5a587a]">
-                  {new Date().toLocaleDateString('fr-FR', {
-                    weekday: 'long',
-                    day: 'numeric',
-                    month: 'long',
-                  })}
-                </p>
+                <h2 className="text-xl font-semibold text-[#e8e4d9]">Prochains RDV</h2>
+                <p className="text-xs text-[#5a587a]">Connecté à Google Agenda</p>
               </div>
             </div>
             <div className="flex gap-2">
@@ -75,59 +99,50 @@ export const Overview = () => {
                     : 'bg-[#0a0a15] text-[#5a587a] hover:text-[#e8e4d9] border border-[#22223a]'
                 }`}
               >
-                Jour
-              </button>
-              <button
-                onClick={() => setView('week')}
-                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-                  view === 'week'
-                    ? 'bg-gradient-to-r from-[#c9a84c] to-[#e8c97a] text-[#05050a]'
-                    : 'bg-[#0a0a15] text-[#5a587a] hover:text-[#e8e4d9] border border-[#22223a]'
-                }`}
-              >
-                Semaine
+                Liste
               </button>
             </div>
           </div>
 
           {view === 'day' ? (
-            <div className="space-y-3">
-              {mockAgenda.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center gap-4 p-4 bg-[#0a0a15] rounded-lg border border-[#22223a] hover:border-[#c9a84c]/30 transition-all duration-200"
-                >
-                  <div className="flex items-center gap-3 flex-1">
+            <div className="space-y-2"> {/* space-y-2 au lieu de 3 pour tasser un peu */}
+              {liveEvents.length > 0 ? (
+                liveEvents.map((item, index) => {
+                  const startTime = new Date(item.start?.dateTime || item.start?.date);
+                  // Formatage de la date (ex: "14 mars") et de l'heure (ex: "10:30")
+                  const dateStr = startTime.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+                  const timeStr = item.start?.dateTime ? startTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : 'Jour entier';
+
+                  return (
                     <div
-                      className="w-1 h-12 rounded-full"
-                      style={{ backgroundColor: item.color }}
-                    />
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <Clock className="w-4 h-4 text-[#c9a84c]" />
-                        <span className="text-sm font-semibold text-[#c9a84c]">{item.time}</span>
+                      key={index}
+                      className="flex items-center gap-3 p-3 bg-[#0a0a15] rounded-lg border border-[#22223a] hover:border-[#c9a84c]/30 transition-all duration-200"
+                    >
+                      <div className="flex items-center gap-3 flex-1">
+                        <div
+                          className="w-1 h-10 rounded-full bg-[#c9a84c]" // Barre plus fine et plus courte
+                        />
+                        <div>
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <Clock className="w-3.5 h-3.5 text-[#c9a84c]" />
+                            <span className="text-xs font-semibold text-[#c9a84c]">{dateStr} • {timeStr}</span>
+                          </div>
+                          <h3 className="text-sm text-[#e8e4d9] font-medium leading-tight">{item.summary || "Rendez-vous"}</h3>
+                        </div>
                       </div>
-                      <h3 className="text-[#e8e4d9] font-medium">{item.title}</h3>
-                      <p className="text-xs text-[#5a587a] mt-1">{item.duration}</p>
                     </div>
-                  </div>
-                  <span
-                    className="px-3 py-1 rounded-full text-xs font-semibold"
-                    style={{
-                      backgroundColor: `${item.color}20`,
-                      color: item.color,
-                      border: `1px solid ${item.color}40`,
-                    }}
-                  >
-                    {item.category}
-                  </span>
+                  );
+                })
+              ) : (
+                <div className="p-4 text-center border border-dashed border-[#22223a] rounded-lg">
+                  <span className="text-xs text-[#5a587a]">Synchronisation ou aucun rendez-vous à venir...</span>
                 </div>
-              ))}
+              )}
             </div>
           ) : (
             <div className="space-y-3">
               {['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'].map((day, index) => (
-                <div key={day} className="p-4 bg-[#0a0a15] rounded-lg border border-[#22223a]">
+                <div key={day} className="p-3 bg-[#0a0a15] rounded-lg border border-[#22223a]">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-[#c9a84c]">{day}</h3>
                     <span className="text-xs text-[#5a587a]">
