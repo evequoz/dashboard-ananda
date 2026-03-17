@@ -1,10 +1,15 @@
-import { createClient } from '@supabase/supabase-js';
+// On neutralise Supabase car nous utilisons n8n et le VPS en direct
+export const supabase = {
+  auth: {
+    getSession: () => Promise.resolve({ data: { session: null }, error: null }),
+    onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+  },
+  from: () => ({
+    select: () => ({
+      order: () => Promise.resolve({ data: [], error: null }),
+    }),
+  }),
+};
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// On exporte createClient au cas où un autre fichier l'appelle, mais il ne fait rien
+export const createClient = () => supabase;
