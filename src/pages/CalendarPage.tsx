@@ -274,4 +274,637 @@ const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
               )}
             </div>
             <button onClick={onClose} style={{
-              width: '100%', marginTop: 24
+              width: '100%', marginTop: 24, padding: '10px 0', borderRadius: 8,
+              border: `1px solid ${C.border}`, background: 'transparent',
+              color: C.muted, cursor: 'pointer', fontSize: 13
+            }}>Fermer</button>
+          </>
+        ) : (
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Titre</label>
+                <input value={form.title} onChange={e => set('title', e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Type d'événement</label>
+                <select value={form.eventType} onChange={e => set('eventType', e.target.value)}
+                  style={{ ...inputStyle, cursor: 'pointer' }}>
+                  {eventTypes.map(t => <option key={t.label} value={t.label}>{t.label}</option>)}
+                </select>
+                {selectedType && (
+                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: selectedType.color }} />
+                    <span style={{ fontSize: 11, color: selectedType.color }}>{selectedType.label}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Journée entière */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 14px', background: C.surface, borderRadius: 8,
+                border: `1px solid ${form.allDay ? C.gold : C.border}`,
+                cursor: 'pointer', transition: 'border .2s'
+              }} onClick={() => set('allDay', !form.allDay)}>
+                <input type="checkbox" checked={form.allDay} onChange={() => {}}
+                  style={{ width: 16, height: 16, accentColor: C.gold, cursor: 'pointer' }} />
+                <span style={{ fontSize: 13, color: C.text }}>📅 Journée entière</span>
+              </div>
+
+              {/* Dates */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>
+                    {form.allDay ? 'Date début' : 'Date'}
+                  </label>
+                  <input type="date" value={form.startDate}
+                    onChange={e => set('startDate', e.target.value)} style={inputStyle} />
+                </div>
+                {form.allDay && (
+                  <div>
+                    <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Date fin</label>
+                    <input type="date" value={form.endDate || form.startDate}
+                      onChange={e => set('endDate', e.target.value)} style={inputStyle} />
+                  </div>
+                )}
+              </div>
+
+              {/* Heures */}
+              {!form.allDay && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Début</label>
+                    <input type="time" value={form.startTime}
+                      onChange={e => set('startTime', e.target.value)} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Fin</label>
+                    <input type="time" value={form.endTime}
+                      onChange={e => set('endTime', e.target.value)} style={inputStyle} />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Statut</label>
+                <select value={form.status} onChange={e => set('status', e.target.value)}
+                  style={{ ...inputStyle, cursor: 'pointer' }}>
+                  <option value="busy">🔴 Occupé</option>
+                  <option value="free">🟢 Libre</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Lieu</label>
+                <input value={form.location} onChange={e => set('location', e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Description</label>
+                <textarea value={form.description} onChange={e => set('description', e.target.value)}
+                  rows={3} style={{ ...inputStyle, resize: 'vertical' } as any} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+              <button onClick={() => setEditing(false)} style={{
+                flex: 1, padding: '10px 0', borderRadius: 8,
+                border: `1px solid ${C.border}`, background: 'transparent',
+                color: C.muted, cursor: 'pointer', fontSize: 13
+              }}>Annuler</button>
+              <button onClick={() => { onUpdate(event.id, form); setEditing(false); onClose(); }} style={{
+                flex: 2, padding: '10px 0', borderRadius: 8,
+                border: 'none', background: C.gold,
+                color: '#0a0808', cursor: 'pointer', fontSize: 13, fontWeight: 600
+              }}>✓ Sauvegarder</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ── Modal nouvel événement ────────────────────────────────────
+const NewEventModal = ({ date, onClose, onSave, eventTypes }: {
+  date: string;
+  onClose: () => void;
+  onSave: (e: any) => void;
+  eventTypes: typeof DEFAULT_EVENT_TYPES;
+}) => {
+  const [form, setForm] = useState({
+    title: '', date, endDate: date,
+    allDay: false,
+    startTime: '09:00', endTime: '10:00',
+    description: '', location: '',
+    status: 'busy', recurrence: 'none',
+    calendar: 'Calendrier',
+    eventType: eventTypes[0]?.label || 'Autre',
+  });
+  const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
+  const selectedType = eventTypes.find(t => t.label === form.eventType) || eventTypes[0];
+
+  const RECURRENCE = [
+    { value: 'none', label: 'Pas de récurrence' },
+    { value: 'daily', label: 'Tous les jours' },
+    { value: 'weekly', label: 'Toutes les semaines' },
+    { value: 'biweekly', label: 'Toutes les 2 semaines' },
+    { value: 'monthly', label: 'Tous les mois' },
+  ];
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
+    }} onClick={onClose}>
+      <div style={{
+        background: C.card, borderRadius: 16, padding: 28, width: 480,
+        border: `1px solid ${selectedType?.color || C.goldDim}50`,
+        maxHeight: '90vh', overflowY: 'auto'
+      }} onClick={e => e.stopPropagation()}>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
+          <h2 style={{ fontFamily: "'Playfair Display',serif", color: C.goldSoft, fontSize: 18 }}>
+            Nouvel événement
+          </h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}>
+            <X size={16} />
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Titre *</label>
+            <input value={form.title} onChange={e => set('title', e.target.value)}
+              placeholder="Ex: Live EHME, Formation Kriya..." style={inputStyle} />
+          </div>
+
+          <div>
+            <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Type d'événement</label>
+            <select value={form.eventType} onChange={e => set('eventType', e.target.value)}
+              style={{ ...inputStyle, cursor: 'pointer' }}>
+              {eventTypes.map(t => <option key={t.label} value={t.label}>{t.label}</option>)}
+            </select>
+            {selectedType && (
+              <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: selectedType.color }} />
+                <span style={{ fontSize: 11, color: selectedType.color }}>{selectedType.label}</span>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Agenda</label>
+            <select value={form.calendar} onChange={e => set('calendar', e.target.value)}
+              style={{ ...inputStyle, cursor: 'pointer' }}>
+              <option value="Calendrier">📅 Calendrier (Serge)</option>
+              <option value="Organisation lancement">🚀 Organisation lancement</option>
+            </select>
+          </div>
+
+          {/* Journée entière */}
+          <div style={{
+            display: 'flex', alignItems: 'flex-start', gap: 10,
+            padding: '12px 14px', background: C.surface, borderRadius: 8,
+            border: `1px solid ${form.allDay ? C.gold : C.border}`,
+            cursor: 'pointer', transition: 'border .2s'
+          }} onClick={() => set('allDay', !form.allDay)}>
+            <input type="checkbox" checked={form.allDay} onChange={() => {}}
+              style={{ width: 16, height: 16, accentColor: C.gold, cursor: 'pointer', marginTop: 2 }} />
+            <div>
+              <div style={{ fontSize: 13, color: C.text, fontWeight: 500 }}>📅 Journée entière</div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                Apparaît en haut du calendrier — utile pour les voyages, absences, jours bloqués
+              </div>
+            </div>
+          </div>
+
+          {/* Dates */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>
+                {form.allDay ? 'Date début' : 'Date'}
+              </label>
+              <input type="date" value={form.date}
+                onChange={e => set('date', e.target.value)} style={inputStyle} />
+            </div>
+            {form.allDay && (
+              <div>
+                <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Date fin</label>
+                <input type="date" value={form.endDate}
+                  onChange={e => set('endDate', e.target.value)} style={inputStyle} />
+              </div>
+            )}
+          </div>
+
+          {/* Heures */}
+          {!form.allDay && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div>
+                <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Début</label>
+                <input type="time" value={form.startTime}
+                  onChange={e => set('startTime', e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Fin</label>
+                <input type="time" value={form.endTime}
+                  onChange={e => set('endTime', e.target.value)} style={inputStyle} />
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Statut</label>
+            <select value={form.status} onChange={e => set('status', e.target.value)}
+              style={{ ...inputStyle, cursor: 'pointer' }}>
+              <option value="busy">🔴 Occupé — bloque les disponibilités</option>
+              <option value="free">🟢 Libre — visible mais disponible</option>
+            </select>
+          </div>
+
+          <div>
+            <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Récurrence</label>
+            <select value={form.recurrence} onChange={e => set('recurrence', e.target.value)}
+              style={{ ...inputStyle, cursor: 'pointer' }}>
+              {RECURRENCE.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Lieu</label>
+            <input value={form.location} onChange={e => set('location', e.target.value)}
+              placeholder="En ligne, ville, adresse..." style={inputStyle} />
+          </div>
+
+          <div>
+            <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Description</label>
+            <textarea value={form.description} onChange={e => set('description', e.target.value)}
+              rows={3} placeholder="Notes, lien Zoom, infos complémentaires..."
+              style={{ ...inputStyle, resize: 'vertical' } as any} />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
+          <button onClick={onClose} style={{
+            flex: 1, padding: '10px 0', borderRadius: 8,
+            border: `1px solid ${C.border}`, background: 'transparent',
+            color: C.muted, cursor: 'pointer', fontSize: 13
+          }}>Annuler</button>
+          <button onClick={() => {
+            if (!form.title.trim()) return;
+            const type = eventTypes.find(t => t.label === form.eventType) || eventTypes[0];
+            const newEvent: any = {
+              id: `local-${Date.now()}`,
+              title: form.title,
+              allDay: form.allDay,
+              backgroundColor: type.bg,
+              borderColor: type.color,
+              textColor: type.color,
+              extendedProps: {
+                description: form.description,
+                location: form.location,
+                status: form.status,
+                recurrence: form.recurrence !== 'none' ? form.recurrence : null,
+                calendar: form.calendar,
+                eventType: form.eventType,
+              }
+            };
+            if (form.allDay) {
+              newEvent.start = form.date;
+              const end = new Date(form.endDate);
+              end.setDate(end.getDate() + 1);
+              newEvent.end = end.toISOString().split('T')[0];
+            } else {
+              newEvent.start = `${form.date}T${form.startTime}:00`;
+              newEvent.end = `${form.date}T${form.endTime}:00`;
+            }
+            onSave(newEvent);
+            onClose();
+          }} style={{
+            flex: 2, padding: '10px 0', borderRadius: 8,
+            border: 'none', background: selectedType?.color || C.gold,
+            color: '#0a0808', cursor: 'pointer', fontSize: 13, fontWeight: 600
+          }}>✓ Créer l'événement</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Page principale ───────────────────────────────────────────
+export const CalendarPage = () => {
+  const [events, setEvents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [newEventDate, setNewEventDate] = useState<string | null>(null);
+  const [showTypesManager, setShowTypesManager] = useState(false);
+  const [eventTypes, setEventTypes] = useState<typeof DEFAULT_EVENT_TYPES>(() => {
+    try {
+      const saved = localStorage.getItem('ananda-event-types');
+      return saved ? JSON.parse(saved) : DEFAULT_EVENT_TYPES;
+    } catch { return DEFAULT_EVENT_TYPES; }
+  });
+
+  const saveEventTypes = (types: typeof DEFAULT_EVENT_TYPES) => {
+    setEventTypes(types);
+    try { localStorage.setItem('ananda-event-types', JSON.stringify(types)); } catch {}
+  };
+
+  const fetchEvents = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('https://n8n.ananda-communaute.cloud/webhook/get-calendar');
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        const formatted = data.map((item: any) => {
+          const isAllDay = !item.start?.dateTime;
+          const isFree = item.transparency === 'transparent';
+          const eventType = item.extendedProperties?.private?.eventType || '';
+          const type = eventTypes.find(t => t.label === eventType) || eventTypes[eventTypes.length - 1];
+          return {
+            id: item.id || `evt-${Math.random()}`,
+            title: item.summary || item.events || 'Événement',
+            allDay: isAllDay,
+            start: item.start?.dateTime || item.start?.date,
+            end: item.end?.dateTime || item.end?.date,
+            backgroundColor: isFree ? 'transparent' : type.bg,
+            borderColor: type.color,
+            textColor: type.color,
+            borderStyle: isFree ? 'dashed' : 'solid',
+            extendedProps: {
+              description: item.description || '',
+              location: item.location || '',
+              status: isFree ? 'free' : 'busy',
+              recurrence: item.recurrence || null,
+              calendar: item.organizer?.displayName || '',
+              eventType,
+            }
+          };
+        });
+        setEvents(formatted);
+        setLastSync(new Date());
+      }
+    } catch (e) {
+      console.error('Erreur calendrier:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [eventTypes]);
+
+  useEffect(() => {
+    fetchEvents();
+    const interval = setInterval(fetchEvents, 15 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [fetchEvents]);
+
+  const handleUpdate = (id: string, data: any) => {
+    const type = eventTypes.find(t => t.label === data.eventType) || eventTypes[0];
+    setEvents(prev => prev.map(e =>
+      e.id === id ? {
+        ...e,
+        title: data.title,
+        allDay: data.allDay,
+        start: data.allDay ? data.startDate : `${data.startDate}T${data.startTime}:00`,
+        end: data.allDay ? (() => {
+          const end = new Date(data.endDate);
+          end.setDate(end.getDate() + 1);
+          return end.toISOString().split('T')[0];
+        })() : `${data.startDate}T${data.endTime}:00`,
+        backgroundColor: type.bg,
+        borderColor: type.color,
+        textColor: type.color,
+        extendedProps: {
+          ...e.extendedProps,
+          description: data.description,
+          location: data.location,
+          status: data.status,
+          eventType: data.eventType,
+        }
+      } : e
+    ));
+    fetch('https://n8n.ananda-communaute.cloud/webhook/update-event', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, ...data })
+    }).catch(console.error);
+  };
+
+  const handleDelete = (id: string) => {
+    setEvents(prev => prev.filter(e => e.id !== id));
+    fetch('https://n8n.ananda-communaute.cloud/webhook/delete-event', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    }).catch(console.error);
+  };
+
+  const todayEvents = events.filter(e =>
+    e.start && new Date(e.start).toDateString() === new Date().toDateString()
+  );
+  const weekEvents = events.filter(e => {
+    if (!e.start) return false;
+    const d = new Date(e.start);
+    const now = new Date();
+    const start = new Date(now); start.setDate(now.getDate() - now.getDay() + 1);
+    const end = new Date(start); end.setDate(start.getDate() + 6);
+    return d >= start && d <= end;
+  });
+
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column',
+      padding: '12px 16px', height: 'calc(100vh - 70px)',
+      background: C.bg, fontFamily: "'Outfit', sans-serif"
+    }}>
+      <div style={{
+        flex: 1, display: 'flex', flexDirection: 'column',
+        borderRadius: 14, overflow: 'hidden',
+        border: `1px solid ${C.border}`,
+        boxShadow: '0 8px 40px rgba(0,0,0,0.4)'
+      }}>
+        {/* Header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '10px 18px', background: C.surface,
+          borderBottom: `1px solid ${C.border}`,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Sparkles size={15} color={C.gold} />
+            <span style={{ fontFamily: "'Playfair Display',serif", color: C.goldSoft, fontSize: 15 }}>
+              Cockpit de Planification
+            </span>
+            {loading && <span style={{ fontSize: 11, color: C.muted }}>↻</span>}
+            {lastSync && !loading && (
+              <span style={{ fontSize: 10, color: C.muted }}>
+                {lastSync.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+            {[
+              { label: "Auj.", value: todayEvents.length, color: C.gold },
+              { label: 'Semaine', value: weekEvents.length, color: C.blue },
+              { label: 'Lives', value: events.filter(e => e.title?.toLowerCase().includes('live')).length, color: C.green },
+              { label: 'Total', value: events.length, color: C.accent },
+            ].map((s, i) => (
+              <div key={i} style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 17, fontFamily: "'Playfair Display'", color: s.color, fontWeight: 700, lineHeight: 1 }}>
+                  {s.value}
+                </div>
+                <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => setShowTypesManager(true)} style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '6px 12px', background: 'transparent',
+              border: `1px solid ${C.border}`, borderRadius: 8,
+              color: C.muted, cursor: 'pointer', fontSize: 12
+            }}>
+              <Tag size={12} /> Types
+            </button>
+            <button onClick={() => setNewEventDate(new Date().toISOString().split('T')[0])} style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '6px 14px', background: C.gold, border: 'none',
+              borderRadius: 8, color: '#0a0808', cursor: 'pointer',
+              fontSize: 12, fontWeight: 600
+            }}>
+              <Plus size={12} /> Événement
+            </button>
+            <button onClick={fetchEvents} style={{
+              display: 'flex', alignItems: 'center',
+              padding: '6px 10px', background: 'transparent',
+              border: `1px solid ${C.border}`, borderRadius: 8,
+              color: C.muted, cursor: 'pointer'
+            }}>
+              <RefreshCw size={13} />
+            </button>
+          </div>
+        </div>
+
+        {/* Calendrier */}
+        <div style={{ flex: 1, background: '#fff', padding: '10px 12px', overflow: 'hidden' }}>
+          <FullCalendar
+            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+            initialView="timeGridWeek"
+            locales={[frLocale]}
+            locale="fr"
+            events={events}
+            headerToolbar={{
+              left: 'prev,next today',
+              center: 'title',
+              right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            }}
+            height="100%"
+            slotMinTime="07:00:00"
+            slotMaxTime="22:00:00"
+            nowIndicator={true}
+            selectable={true}
+            editable={true}
+            select={(info) => setNewEventDate(info.startStr.split('T')[0])}
+            eventClick={(info) => setSelectedEvent(info.event)}
+            eventDrop={(info) => {
+              setEvents(prev => prev.map(e =>
+                e.id === info.event.id
+                  ? { ...e, start: info.event.startStr, end: info.event.endStr, allDay: info.event.allDay }
+                  : e
+              ));
+              fetch('https://n8n.ananda-communaute.cloud/webhook/update-event', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: info.event.id, start: info.event.startStr, end: info.event.endStr })
+              }).catch(console.error);
+            }}
+            eventResize={(info) => {
+              setEvents(prev => prev.map(e =>
+                e.id === info.event.id
+                  ? { ...e, start: info.event.startStr, end: info.event.endStr }
+                  : e
+              ));
+            }}
+            dayMaxEvents={4}
+            businessHours={{ daysOfWeek: [1, 2, 3, 4, 5], startTime: '08:00', endTime: '20:00' }}
+            eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
+            eventContent={(arg) => (
+              <div style={{ padding: '2px 5px', overflow: 'hidden' }}>
+                <div style={{ fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {arg.event.extendedProps?.status === 'free' ? '🟢 ' : ''}
+                  {arg.event.allDay ? '📅 ' : ''}
+                  {arg.event.title}
+                </div>
+                {!arg.event.allDay && (
+                  <div style={{ fontSize: 10, opacity: 0.8 }}>
+                    {arg.timeText}
+                    {arg.event.extendedProps?.recurrence && ' 🔁'}
+                    {arg.event.extendedProps?.location && ' 📍'}
+                  </div>
+                )}
+              </div>
+            )}
+          />
+        </div>
+      </div>
+
+      {/* Légende */}
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', padding: '8px 4px' }}>
+        {eventTypes.map((t, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: t.color }} />
+            <span style={{ fontSize: 10, color: C.muted }}>{t.label}</span>
+          </div>
+        ))}
+      </div>
+
+      {selectedEvent && (
+        <EventModal
+          event={selectedEvent}
+          onClose={() => setSelectedEvent(null)}
+          onDelete={handleDelete}
+          onUpdate={handleUpdate}
+          eventTypes={eventTypes}
+        />
+      )}
+      {newEventDate && (
+        <NewEventModal
+          date={newEventDate}
+          onClose={() => setNewEventDate(null)}
+          onSave={(e) => {
+            setEvents(prev => [...prev, e]);
+            fetch('https://n8n.ananda-communaute.cloud/webhook/create-event', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(e)
+            }).catch(console.error);
+          }}
+          eventTypes={eventTypes}
+        />
+      )}
+      {showTypesManager && (
+        <EventTypesManager
+          types={eventTypes}
+          onUpdate={saveEventTypes}
+          onClose={() => setShowTypesManager(false)}
+        />
+      )}
+
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Outfit:wght@300;400;500&display=swap');
+        .fc { font-family: 'Outfit', sans-serif !important; }
+        .fc-button-primary { background:#0f0f1a !important; border-color:#22223a !important; color:#e8e4d9 !important; font-size:12px !important; padding:5px 12px !important; text-transform:capitalize !important; border-radius:8px !important; }
+        .fc-button-primary:hover { background:#c9a84c15 !important; border-color:#c9a84c !important; color:#c9a84c !important; }
+        .fc-button-primary:not(:disabled).fc-button-active { background:#c9a84c !important; border-color:#c9a84c !important; color:#0a0808 !important; }
+        .fc-toolbar-title { font-family:'Playfair Display',serif !important; font-size:15px !important; color:#1a1a2a !important; font-weight:600 !important; }
+        .fc-v-event { border-radius:6px !important; border-width:2px !important; cursor:pointer !important; }
+        .fc-event:hover { opacity:0.85 !important; transform:translateY(-1px); transition:all .15s; }
+        .fc-timegrid-now-indicator-line { border-color:#c9a84c !important; border-width:2px !important; }
+        .fc-timegrid-now-indicator-arrow { border-top-color:#c9a84c !important; }
+        .fc-day-today { background:rgba(201,168,76,0.05) !important; }
+        .fc-col-header-cell-cushion { color:#333 !important; font-weight:500 !important; font-size:12px !important; text-decoration:none !important; }
+        .fc-timegrid-slot-label { font-size:11px !important; color:#999 !important; }
+        .fc-daygrid-day-number { color:#333 !important; text-decoration:none !important; }
+        .fc-highlight { background:rgba(201,168,76,0.12) !important; }
+        .fc-more-link { color:#c9a84c !important; font-size:11px !important; }
+        .fc-daygrid-event { border-radius:6px !important; padding:2px 4px !important; }
+        .fc-daygrid-block-event { border-width:2px !important; }
+      `}</style>
+    </div>
+  );
+};
