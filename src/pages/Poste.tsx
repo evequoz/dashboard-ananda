@@ -54,22 +54,22 @@ const getInitials = (from: string) => {
 
 const cleanContent = (content: string) => {
   if (!content) return '';
-  return content
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&eacute;/g, 'é')
-    .replace(/&agrave;/g, 'à')
-    .replace(/&egrave;/g, 'è')
-    .replace(/&ecirc;/g, 'ê')
-    .replace(/&ocirc;/g, 'ô')
-    .replace(/&ucirc;/g, 'û')
-    .replace(/&ccedil;/g, 'ç')
-    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code)))
-    .replace(/\s+/g, ' ')
-    .trim();
+  try {
+    return decodeURIComponent(escape(content))
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\s+/g, ' ')
+      .trim();
+  } catch {
+    return content
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
 };
 
 interface TaskPopupProps {
