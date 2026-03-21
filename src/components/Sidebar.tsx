@@ -1,4 +1,4 @@
-import { LayoutDashboard, Mail, Wrench, Users, DollarSign, Calendar, LogOut } from 'lucide-react';
+import { LayoutDashboard, Mail, Wrench, Users, DollarSign, Calendar, CheckSquare, LogOut } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface SidebarProps {
@@ -9,25 +9,24 @@ interface SidebarProps {
 export const Sidebar = ({ currentPage, onPageChange }: SidebarProps) => {
   const { user, canAccess, logout } = useAuth();
 
-const menuItems = [
-  { id: 'overview', label: 'Aperçu',  icon: LayoutDashboard, page: 'overview' },
-  { id: 'agenda',   label: 'Agenda',  icon: Calendar,        page: 'agenda'   },
-  { id: 'poste',    label: 'Poste',   icon: Mail,            page: 'poste'    },
-  { id: 'members',  label: 'Membres', icon: Users,           page: 'members'  },
-  { id: 'finance',  label: 'Finance', icon: DollarSign,      page: 'finance'  },
-  { id: 'tools',    label: 'Outils',  icon: Wrench,          page: 'tools'    },
-];;
+  const menuItems = [
+    { id: 'overview', label: 'Aperçu',   icon: LayoutDashboard, page: 'overview' },
+    { id: 'agenda',   label: 'Agenda',   icon: Calendar,        page: 'agenda'   },
+    { id: 'taches',   label: 'Tâches',   icon: CheckSquare,     page: 'taches'   },
+    { id: 'poste',    label: 'Poste',    icon: Mail,            page: 'poste'    },
+    { id: 'members',  label: 'Membres',  icon: Users,           page: 'members'  },
+    { id: 'finance',  label: 'Finance',  icon: DollarSign,      page: 'finance'  },
+    { id: 'tools',    label: 'Outils',   icon: Wrench,          page: 'tools'    },
+  ];
 
-  // Filtrer selon le rôle de l'utilisateur connecté
   const visibleItems = menuItems.filter(item =>
-    item.disabled ? false : canAccess(item.page as any)
+    canAccess(item.page as any)
   );
 
   const roleLabel = user?.role === 'admin' ? 'Administrateur' : 'Assistante';
 
   return (
     <aside className="w-64 bg-gradient-to-b from-[#0a0a15] to-[#0f0f1a] border-r border-[#22223a] flex flex-col h-screen sticky top-0">
-
       {/* Logo */}
       <div className="p-6 border-b border-[#22223a]">
         <h1 className="text-2xl font-bold bg-gradient-to-r from-[#c9a84c] to-[#e8c97a] bg-clip-text text-transparent">
@@ -36,7 +35,7 @@ const menuItems = [
         <p className="text-xs text-[#5a587a] mt-1">Tableau de bord</p>
       </div>
 
-      {/* Navigation filtrée */}
+      {/* Navigation */}
       <nav className="flex-1 p-4 space-y-2">
         {visibleItems.map((item) => {
           const Icon = item.icon;
@@ -69,19 +68,16 @@ const menuItems = [
         </div>
       </div>
 
-      {/* Badge utilisateur connecté */}
+      {/* Badge utilisateur */}
       <div className="p-4 border-t border-[#22223a]">
         <div className="flex items-center gap-3">
-          {/* Avatar */}
           <div className="w-9 h-9 rounded-full bg-[#c9a84c]/15 border border-[#c9a84c]/30 flex items-center justify-center text-[11px] font-semibold text-[#c9a84c] flex-shrink-0">
             {user?.avatar}
           </div>
-          {/* Nom + rôle */}
           <div className="flex-1 min-w-0">
             <p className="text-sm text-[#e8e4d9] truncate font-medium">{user?.name}</p>
             <p className="text-[10px] text-[#c9a84c]/70 tracking-widest uppercase">{roleLabel}</p>
           </div>
-          {/* Bouton déconnexion */}
           <button
             onClick={logout}
             title="Se déconnecter"
@@ -91,7 +87,6 @@ const menuItems = [
           </button>
         </div>
       </div>
-
     </aside>
   );
 };
