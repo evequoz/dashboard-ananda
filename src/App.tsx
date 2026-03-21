@@ -10,19 +10,14 @@ import { Tools } from './pages/Tools';
 import { CalendarPage } from './pages/CalendarPage';
 import LoginPage from './pages/LoginPage';
 
-// ─────────────────────────────────────────────
-// Contenu principal (affiché après login)
-// ─────────────────────────────────────────────
 function AppContent() {
   const { user, canAccess } = useAuth();
   const [currentPage, setCurrentPage] = useState('overview');
 
-  // Non connecté → page de login
   if (!user) {
     return <LoginPage />;
   }
 
-  // Si la page demandée n'est pas accessible → overview
   const safePage = canAccess(currentPage as any) ? currentPage : 'overview';
 
   const renderPage = () => {
@@ -32,11 +27,11 @@ function AppContent() {
       case 'agenda':
         return <CalendarPage />;
       case 'poste':
-        return canAccess('posts') ? <Poste /> : <Overview />;
+        return <Poste />;
       case 'members':
         return <Members />;
       case 'finance':
-        return canAccess('finance') ? <Finance /> : <Overview />;
+        return <Finance />;
       case 'tools':
         return <Tools />;
       default:
@@ -59,9 +54,6 @@ function AppContent() {
   );
 }
 
-// ─────────────────────────────────────────────
-// Root — AuthProvider englobe tout
-// ─────────────────────────────────────────────
 function App() {
   return (
     <AuthProvider>
