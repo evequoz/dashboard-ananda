@@ -27,7 +27,7 @@ function AppContent() {
         return <Overview />;
       case 'agenda':
         return <CalendarPage />;
-      case 'taches':
+      case 'tasks':
         return <Taches />;
       case 'poste':
         return <Poste />;
