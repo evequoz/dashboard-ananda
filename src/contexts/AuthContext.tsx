@@ -25,14 +25,14 @@ const ROLE_PERMISSIONS: Record<Role, PageKey[]> = {
 const USERS: Array<User & { password: string }> = [
   {
     email: "serge@eh-me.com",
-    password: "Ananda2024!", // ← CHANGER
+    password: "Nathananda&babaji1969", // ← CHANGER
     name: "Serge Evequoz",
     role: "admin",
     avatar: "SE",
   },
   {
-    email: "assistante@ananda-communaute.cloud",
-    password: "Assistant2024!", // ← CHANGER
+    email: "admin@eh-me.com",
+    password: "Ananda&babaji1969", // ← CHANGER
     name: "Assistante",
     role: "assistant",
     avatar: "AS",
