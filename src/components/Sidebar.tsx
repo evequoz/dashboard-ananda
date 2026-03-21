@@ -9,14 +9,14 @@ interface SidebarProps {
 export const Sidebar = ({ currentPage, onPageChange }: SidebarProps) => {
   const { user, canAccess, logout } = useAuth();
 
-  const menuItems = [
-    { id: 'overview', label: 'Aperçu',   icon: LayoutDashboard, page: 'overview', disabled: false },
-    { id: 'agenda',   label: 'Agenda',   icon: Calendar,        page: 'calendar', disabled: false },
-    { id: 'poste',    label: 'Poste',    icon: Mail,            page: 'posts',    disabled: false },
-    { id: 'members',  label: 'Membres',  icon: Users,           page: 'overview', disabled: true  },
-    { id: 'finance',  label: 'Finance',  icon: DollarSign,      page: 'finance',  disabled: false },
-    { id: 'tools',    label: 'Outils',   icon: Wrench,          page: 'tools',    disabled: false },
-  ];
+const menuItems = [
+  { id: 'overview', label: 'Aperçu',  icon: LayoutDashboard, page: 'overview' },
+  { id: 'agenda',   label: 'Agenda',  icon: Calendar,        page: 'agenda'   },
+  { id: 'poste',    label: 'Poste',   icon: Mail,            page: 'poste'    },
+  { id: 'members',  label: 'Membres', icon: Users,           page: 'members'  },
+  { id: 'finance',  label: 'Finance', icon: DollarSign,      page: 'finance'  },
+  { id: 'tools',    label: 'Outils',  icon: Wrench,          page: 'tools'    },
+];;
 
   // Filtrer selon le rôle de l'utilisateur connecté
   const visibleItems = menuItems.filter(item =>
