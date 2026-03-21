@@ -3,12 +3,9 @@ import {
   Mail, Inbox, Briefcase, RefreshCw, CheckCircle,
   AlertCircle, Clock, ChevronRight, Send, Plus,
   Eye, EyeOff, Sparkles, X, Paperclip, Trash2,
-  FileText, ExternalLink, Image
+  FileText, ExternalLink
 } from 'lucide-react';
 
-// ─────────────────────────────────────────────
-// CONFIGURATION
-// ─────────────────────────────────────────────
 const BASEROW_URL = 'https://baserow.ananda-communaute.cloud/api';
 const BASEROW_TOKEN = 'GBLdzaCZvQUVXkCqSls3WX3dT3uVg0H8';
 const TABLE_EMAILS = 534;
@@ -20,9 +17,6 @@ const HEADERS = {
   'Content-Type': 'application/json',
 };
 
-// ─────────────────────────────────────────────
-// TYPES
-// ─────────────────────────────────────────────
 interface BaserowFile {
   url: string;
   name: string;
@@ -51,18 +45,12 @@ interface Email {
   'Fichier': BaserowFile[];
 }
 
-// ─────────────────────────────────────────────
-// COMPTES
-// ─────────────────────────────────────────────
 const ACCOUNTS = [
   { email: 'serge@eh-me.com',  label: 'EH-ME',    icon: Mail,      color: '#c9a84c' },
   { email: 'admin@eh-me.com',  label: 'Admin',     icon: Inbox,     color: '#4caf7d' },
   { email: 'serge@seme.ch',    label: 'SEME',      icon: Briefcase, color: '#7b5ea7' },
 ];
 
-// ─────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return '—';
   try {
@@ -72,7 +60,7 @@ const formatDate = (dateStr: string | null) => {
 
 const getInitials = (from: string) => {
   if (!from) return '?';
-  const name = from.replace(/<.*>/, '').trim();
+  const name = from.replace(/<.*>/, '').replace(/"/g, '').trim();
   const parts = name.split(' ');
   return parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : name.slice(0, 2).toUpperCase();
 };
@@ -99,9 +87,6 @@ const formatFileSize = (bytes: number) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-// ─────────────────────────────────────────────
-// POPUP TÂCHE
-// ─────────────────────────────────────────────
 interface TaskPopupProps {
   email: Email;
   onConfirm: (name: string, description: string) => void;
@@ -111,7 +96,7 @@ interface TaskPopupProps {
 const TaskPopup = ({ email, onConfirm, onClose }: TaskPopupProps) => {
   const [taskName, setTaskName] = useState(`Répondre à: ${email.Sujet || 'Sans sujet'}`);
   const [taskDesc, setTaskDesc] = useState(
-    `Email de ${email['Expéditeur']?.replace(/<.*>/, '').trim()}\n\n${email['Résumé IA'] || ''}`
+    `Email de ${email['Expéditeur']?.replace(/<.*>/, '').replace(/"/g, '').trim()}\n\n${email['Résumé IA'] || ''}`
   );
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
@@ -163,9 +148,6 @@ const TaskPopup = ({ email, onConfirm, onClose }: TaskPopupProps) => {
   );
 };
 
-// ─────────────────────────────────────────────
-// COMPOSANT PRINCIPAL
-// ─────────────────────────────────────────────
 export const Poste = () => {
   const [activeAccount, setActiveAccount] = useState(ACCOUNTS[0].email);
   const [emails, setEmails] = useState<Email[]>([]);
@@ -185,11 +167,12 @@ export const Poste = () => {
     try {
       setRefreshing(true);
       const res = await fetch(
-        `${BASEROW_URL}/database/rows/table/${TABLE_EMAILS}/?user_field_names=true&size=200&order_by=-id`,
+        `${BASEROW_URL}/database/rows/table/${TABLE_EMAILS}/?user_field_names=true&size=200`,
         { headers: HEADERS }
       );
       const data = await res.json();
-      setEmails(data.results || []);
+      // Inverser l'ordre — dernier reçu en premier
+      setEmails((data.results || []).reverse());
     } catch (e) {
       console.error('Erreur:', e);
     } finally {
@@ -306,10 +289,8 @@ export const Poste = () => {
         <TaskPopup email={selectedEmail} onConfirm={createTask} onClose={() => setShowTaskPopup(false)} />
       )}
 
-      {/* ── Barre onglets + contrôles ── */}
+      {/* ── Barre onglets ── */}
       <div className="flex items-center justify-between px-6 py-0 border-b border-[#22223a] bg-[#05050a] shrink-0">
-        
-        {/* Onglets comptes */}
         <div className="flex items-center gap-1">
           {ACCOUNTS.map(account => {
             const Icon = account.icon;
@@ -320,9 +301,7 @@ export const Poste = () => {
                 key={account.email}
                 onClick={() => { setActiveAccount(account.email); setSelectedEmail(null); }}
                 className={`relative flex items-center gap-2 px-5 py-4 text-sm font-semibold transition-all border-b-2 ${
-                  isActive
-                    ? 'text-[#e8e4d9] border-b-[#c9a84c]'
-                    : 'text-[#5a587a] border-b-transparent hover:text-[#a0a0c0]'
+                  isActive ? 'text-[#e8e4d9]' : 'text-[#5a587a] border-b-transparent hover:text-[#a0a0c0]'
                 }`}
                 style={isActive ? { borderBottomColor: account.color } : {}}
               >
@@ -341,7 +320,6 @@ export const Poste = () => {
           })}
         </div>
 
-        {/* Contrôles droite */}
         <div className="flex items-center gap-3">
           {taskSuccess && (
             <span className="flex items-center gap-1 px-3 py-1 bg-[#4caf7d]/20 border border-[#4caf7d]/30 rounded-full text-xs font-semibold text-[#4caf7d]">
@@ -372,11 +350,11 @@ export const Poste = () => {
         </div>
       </div>
 
-      {/* ── Layout principal ── */}
+      {/* ── Layout ── */}
       <div className="flex flex-1 overflow-hidden">
 
-        {/* ── Liste emails (35%) ── */}
-        <div className="w-96 flex flex-col border-r border-[#22223a] bg-[#05050a] shrink-0">
+        {/* Liste emails — 300px */}
+        <div className="flex flex-col border-r border-[#22223a] bg-[#05050a] shrink-0" style={{ width: '300px' }}>
           <div className="flex-1 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center h-32">
@@ -395,36 +373,36 @@ export const Poste = () => {
                   <button
                     key={email.id}
                     onClick={() => openEmail(email)}
-                    className={`w-full text-left p-4 border-b border-[#22223a]/50 transition-all hover:bg-[#0a0a15] ${
-                      isSelected ? 'bg-[#0f0f1a] border-l-2 border-l-[#c9a84c]' : ''
+                    className={`w-full text-left p-3 border-b border-[#22223a]/50 transition-all hover:bg-[#0a0a15] ${
+                      isSelected ? 'bg-[#0f0f1a] border-l-2' : ''
                     } ${email.Traité ? 'opacity-40' : ''}`}
                     style={isSelected ? { borderLeftColor: activeAccountData.color } : {}}
                   >
-                    <div className="flex items-start gap-3">
+                    <div className="flex items-start gap-2">
                       <div
-                        className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5"
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5"
                         style={{ background: `${activeAccountData.color}20`, color: activeAccountData.color, border: `1px solid ${activeAccountData.color}30` }}
                       >
                         {getInitials(email['Expéditeur'] || '')}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="flex items-center justify-between gap-1 mb-0.5">
                           <p className={`text-xs font-bold truncate ${!email.Traité ? 'text-[#e8e4d9]' : 'text-[#a0a0c0]'}`}>
                             {email['Expéditeur']?.replace(/<.*>/, '').replace(/"/g, '').trim() || 'Inconnu'}
                           </p>
-                          <div className="flex items-center gap-1 shrink-0">
+                          <div className="flex items-center gap-0.5 shrink-0">
                             {emailFiles.length > 0 && <Paperclip className="w-3 h-3 text-[#a0a0c0]" />}
                             {email['Action requise'] && <AlertCircle className="w-3 h-3 text-[#d95555]" />}
                             {email.Traité && <CheckCircle className="w-3 h-3 text-[#4caf7d]" />}
                           </div>
                         </div>
-                        <p className={`text-xs truncate mb-1 font-semibold ${!email.Traité ? 'text-[#c8c4b8]' : 'text-[#a0a0c0]'}`}>
+                        <p className={`text-xs truncate mb-0.5 font-semibold ${!email.Traité ? 'text-[#c8c4b8]' : 'text-[#a0a0c0]'}`}>
                           {email.Sujet || 'Sans sujet'}
                         </p>
                         <p className="text-[10px] text-[#7a78a0] line-clamp-2 leading-relaxed">
                           {email['Résumé IA'] || '—'}
                         </p>
-                        <div className="flex items-center gap-1 mt-2">
+                        <div className="flex items-center gap-1 mt-1">
                           <Clock className="w-3 h-3 text-[#5a587a]" />
                           <span className="text-[10px] text-[#7a78a0]">{formatDate(email['Date réception'])}</span>
                         </div>
@@ -437,7 +415,7 @@ export const Poste = () => {
           </div>
         </div>
 
-        {/* ── Détail email (65%) ── */}
+        {/* Détail email */}
         <div className="flex-1 flex flex-col bg-[#05050a] overflow-hidden">
           {!selectedEmail ? (
             <div className="flex flex-col items-center justify-center h-full gap-4">
@@ -449,7 +427,7 @@ export const Poste = () => {
           ) : (
             <div className="flex flex-col h-full overflow-hidden">
 
-              {/* Header email */}
+              {/* Header */}
               <div className="px-8 py-5 border-b border-[#22223a] shrink-0 bg-[#0a0a15]">
                 <div className="flex items-start justify-between gap-4 mb-3">
                   <div className="flex-1 min-w-0">
@@ -481,7 +459,6 @@ export const Poste = () => {
                   </div>
                 </div>
 
-                {/* Boutons */}
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
                     onClick={() => { setReplyMode(!replyMode); if (!replyMode) setReplyText(selectedEmail['suggestion_reponse'] || ''); }}
@@ -516,7 +493,7 @@ export const Poste = () => {
               {/* Corps */}
               <div className="flex-1 overflow-y-auto px-8 py-5 space-y-4">
 
-                {/* Zone réponse — en haut si active */}
+                {/* Zone réponse */}
                 {replyMode && (
                   <div className="bg-[#0f0f1a] rounded-xl border border-[#22223a] p-5">
                     <div className="flex items-center justify-between mb-3">
@@ -639,7 +616,7 @@ export const Poste = () => {
                   </div>
                 )}
 
-                {/* Contenu complet */}
+                {/* Contenu */}
                 {selectedEmail.Contenu && (
                   <div className="bg-[#0f0f1a] rounded-xl border border-[#2a2a4a] p-5">
                     <div className="flex items-center justify-between mb-4">
@@ -660,7 +637,6 @@ export const Poste = () => {
                     </div>
                   </div>
                 )}
-
               </div>
             </div>
           )}
