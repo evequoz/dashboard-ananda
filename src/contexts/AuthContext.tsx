@@ -6,7 +6,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 
 export type Role = "admin" | "assistant";
 
-export type PageKey = "overview" | "calendar" | "finance" | "emails" | "posts" | "tasks" | "tools";
+export type PageKey = "overview" | "agenda" | "poste" | "members" | "finance" | "tasks" | "tools";
 
 export interface User {
   email: string;
@@ -17,7 +17,7 @@ export interface User {
 
 // Permissions par rôle
 const ROLE_PERMISSIONS: Record<Role, PageKey[]> = {
-  admin: ["overview", "agenda", "finance", "poste", "members", "tasks", "tools"],
+  admin: ["overview", "agenda", "poste", "members", "finance", "tasks", "tools"],
   assistant: ["overview", "agenda", "poste", "tasks", "tools"],
 };
 
