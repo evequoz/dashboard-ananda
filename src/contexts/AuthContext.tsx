@@ -17,8 +17,8 @@ export interface User {
 
 // Permissions par rôle
 const ROLE_PERMISSIONS: Record<Role, PageKey[]> = {
-  admin: ["overview", "calendar", "finance", "emails", "posts", "tasks", "tools"],
-  assistant: ["overview", "calendar", "posts", "tasks", "tools"],
+  admin: ["overview", "agenda", "finance", "poste", "members", "tasks", "tools"],
+  assistant: ["overview", "agenda", "poste", "tasks", "tools"],
 };
 
 // Comptes utilisateurs (à personnaliser)
