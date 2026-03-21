@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Plus, RefreshCw, CheckCircle2, Circle, AlertTriangle,
   RotateCcw, Calendar, Columns, Clock, ChevronLeft,
-  ChevronRight, X, ChevronDown, ChevronRight as ChevronR
+  ChevronRight, X, ChevronDown, ChevronRight as ChevronR, Pencil
 } from 'lucide-react';
 
 const BASEROW_URL = 'https://baserow.ananda-communaute.cloud/api';
@@ -36,10 +36,12 @@ interface Task {
   'Tâche parente'?: any[];
 }
 
-interface FormState {
-  Titre: string; Description: string; Projet: string;
-  Priorité: string; Statut: string; 'Date échéance': string;
-  Récurrence: string; parentId?: number;
+interface ModalState {
+  open: boolean;
+  mode: 'create' | 'edit';
+  statut: string;
+  parent?: Task | null;
+  task?: Task | null;
 }
 
 function todayStr() { return new Date().toISOString().split('T')[0]; }
@@ -72,21 +74,38 @@ function ProjetBadge({ projet }: { projet: string }) {
   return <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#1a1a2e] text-[#8884a8] border border-[#22223a]">{projet}</span>;
 }
 
-// ─── MODAL ───────────────────────────────────────────────────
-function TaskModal({ onClose, onSave, defaultStatut = 'À faire', parentTask }: {
+// ─── MODAL CRÉATION / ÉDITION ─────────────────────────────────
+function TaskModal({ onClose, onSave, onUpdate, mode, task, defaultStatut = 'À faire', parentTask }: {
   onClose: () => void;
   onSave: (task: Task) => void;
+  onUpdate: (task: Task) => void;
+  mode: 'create' | 'edit';
+  task?: Task | null;
   defaultStatut?: string;
   parentTask?: Task | null;
 }) {
-  const [form, setForm] = useState<FormState>({
-    Titre: '', Description: '', Projet: '', Priorité: 'Normale',
-    Statut: defaultStatut, 'Date échéance': todayStr(), Récurrence: 'Aucune',
-    parentId: parentTask?.id,
+  const getInitialVal = (field: any) => {
+    if (!field) return '';
+    if (typeof field === 'object' && 'value' in field) return field.value;
+    return String(field);
+  };
+  const getInitialDate = (d: any) => {
+    if (!d) return todayStr();
+    return d.split('T')[0];
+  };
+
+  const [form, setForm] = useState({
+    Titre: mode === 'edit' ? (task?.Titre || '') : '',
+    Description: mode === 'edit' ? (task?.Description || '') : '',
+    Projet: mode === 'edit' ? getInitialVal(task?.Projet) : '',
+    Priorité: mode === 'edit' ? (getInitialVal(task?.Priorité) || 'Normale') : 'Normale',
+    Statut: mode === 'edit' ? (getInitialVal(task?.Statut) || defaultStatut) : defaultStatut,
+    'Date échéance': mode === 'edit' ? getInitialDate(task?.['Date échéance']) : todayStr(),
+    Récurrence: mode === 'edit' ? (getInitialVal(task?.Récurrence) || 'Aucune') : 'Aucune',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const set = (k: keyof FormState, v: any) => setForm(p => ({ ...p, [k]: v }));
+  const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
 
   async function save() {
     if (!form.Titre.trim()) { setError('Le titre est obligatoire'); return; }
@@ -102,15 +121,29 @@ function TaskModal({ onClose, onSave, defaultStatut = 'À faire', parentTask }: 
       if (form.Projet) body['Projet'] = form.Projet;
       if (form.Priorité) body['Priorité'] = form.Priorité;
       if (form.Récurrence && form.Récurrence !== 'Aucune') body['Récurrence'] = form.Récurrence;
-      if (form.parentId) body['Tâche parente'] = [{ id: form.parentId }];
+      if (parentTask) body['Tâche parente'] = [{ id: parentTask.id }];
 
-      const res = await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_ID}/?user_field_names=true`, {
-        method: 'POST', headers: HEADERS, body: JSON.stringify(body),
-      });
-      if (!res.ok) { const e = await res.json(); throw new Error(JSON.stringify(e)); }
-      onSave(await res.json());
+      if (mode === 'edit' && task) {
+        const res = await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_ID}/${task.id}/?user_field_names=true`, {
+          method: 'PATCH', headers: HEADERS, body: JSON.stringify(body),
+        });
+        if (!res.ok) { const e = await res.json(); throw new Error(JSON.stringify(e)); }
+        onUpdate(await res.json());
+      } else {
+        const res = await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_ID}/?user_field_names=true`, {
+          method: 'POST', headers: HEADERS, body: JSON.stringify(body),
+        });
+        if (!res.ok) { const e = await res.json(); throw new Error(JSON.stringify(e)); }
+        onSave(await res.json());
+      }
     } catch (e: any) { setError('Erreur : ' + e.message); setSaving(false); }
   }
+
+  const title = mode === 'edit'
+    ? `Modifier "${task?.Titre || 'la tâche'}"`
+    : parentTask
+      ? `Sous-tâche de "${parentTask.Titre}"`
+      : 'Nouvelle tâche';
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
@@ -118,14 +151,16 @@ function TaskModal({ onClose, onSave, defaultStatut = 'À faire', parentTask }: 
       <div className="bg-[#0a0a15] border border-[#22223a] rounded-2xl p-6 w-full max-w-md shadow-2xl">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-lg font-semibold text-[#e8e4d9]">
-              {parentTask ? `Sous-tâche de "${parentTask.Titre}"` : 'Nouvelle tâche'}
-            </h2>
-            {parentTask && <p className="text-xs text-[#5a587a] mt-0.5">Sera attachée à la tâche parente</p>}
+            <h2 className="text-base font-semibold text-[#e8e4d9]">{title}</h2>
+            {parentTask && mode === 'create' && (
+              <p className="text-xs text-[#5a587a] mt-0.5">Sera rattachée à la tâche parente</p>
+            )}
           </div>
           <button onClick={onClose} className="text-[#5a587a] hover:text-[#e8e4d9]"><X className="w-5 h-5" /></button>
         </div>
+
         {error && <div className="bg-red-950/40 border border-red-800/40 text-red-400 text-xs rounded-lg p-3 mb-4">{error}</div>}
+
         <div className="space-y-3">
           <div>
             <label className="text-xs text-[#5a587a] mb-1 block">Titre *</label>
@@ -136,7 +171,8 @@ function TaskModal({ onClose, onSave, defaultStatut = 'À faire', parentTask }: 
           <div>
             <label className="text-xs text-[#5a587a] mb-1 block">Description</label>
             <textarea className="w-full bg-[#0f0f1a] border border-[#22223a] rounded-lg px-3 py-2 text-sm text-[#e8e4d9] focus:outline-none focus:border-[#c9a84c]/50 resize-none h-16"
-              placeholder="Infos complémentaires..." value={form.Description} onChange={e => set('Description', e.target.value)} />
+              placeholder="Infos complémentaires..." value={form.Description}
+              onChange={e => set('Description', e.target.value)} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -176,11 +212,12 @@ function TaskModal({ onClose, onSave, defaultStatut = 'À faire', parentTask }: 
               value={form['Date échéance']} onChange={e => set('Date échéance', e.target.value)} />
           </div>
         </div>
+
         <div className="flex justify-end gap-3 mt-5">
           <button onClick={onClose} className="px-4 py-2 text-sm text-[#5a587a] hover:text-[#e8e4d9] transition-colors">Annuler</button>
           <button onClick={save} disabled={saving || !form.Titre.trim()}
             className="px-5 py-2 rounded-lg bg-gradient-to-r from-[#c9a84c]/20 to-[#e8c97a]/20 border border-[#c9a84c]/40 text-[#e8c97a] text-sm font-medium hover:from-[#c9a84c]/30 transition-all disabled:opacity-40">
-            {saving ? 'Enregistrement...' : 'Enregistrer'}
+            {saving ? 'Enregistrement...' : mode === 'edit' ? 'Mettre à jour' : 'Enregistrer'}
           </button>
         </div>
       </div>
@@ -188,15 +225,16 @@ function TaskModal({ onClose, onSave, defaultStatut = 'À faire', parentTask }: 
   );
 }
 
-// ─── CARTE TÂCHE + SOUS-TÂCHES ───────────────────────────────
-function TaskCard({ task, subTasks, onStatusChange, onAddSubTask, compact = false }: {
+// ─── CARTE TÂCHE ─────────────────────────────────────────────
+function TaskCard({ task, subTasks, onStatusChange, onEdit, onAddSubTask, compact = false }: {
   task: Task;
   subTasks?: Task[];
   onStatusChange: (id: number, statut: string) => void;
+  onEdit: (task: Task) => void;
   onAddSubTask?: (parent: Task) => void;
   compact?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const statut = getVal(task.Statut);
   const prio = getVal(task.Priorité);
   const projet = getVal(task.Projet);
@@ -215,19 +253,20 @@ function TaskCard({ task, subTasks, onStatusChange, onAddSubTask, compact = fals
   return (
     <div className={`rounded-xl border transition-all duration-200
       ${done ? 'border-[#1a1a2e] opacity-60' : overdue ? 'border-amber-800/40' : 'border-[#22223a] hover:border-[#33335a]'}
-      bg-[#0f0f1a]`}>
-      <div className="flex items-start gap-2 p-3">
-        {/* Expand toggle si sous-tâches */}
-        {hasSubs && !compact ? (
-          <button onClick={() => setExpanded(e => !e)} className="mt-0.5 flex-shrink-0 text-[#5a587a] hover:text-[#e8e4d9] transition-colors">
-            {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronR className="w-4 h-4" />}
-          </button>
-        ) : (
-          <div className="w-4 flex-shrink-0" />
-        )}
+      bg-[#0f0f1a] group`}>
 
-        {/* Cercle statut */}
-        <button onClick={() => onStatusChange(task.id, nextStatut())} className="mt-0.5 flex-shrink-0 transition-all hover:scale-110">
+      {/* Ligne principale */}
+      <div className="flex items-start gap-2 p-3">
+        {/* Toggle sous-tâches */}
+        <button onClick={() => hasSubs && !compact && setExpanded(e => !e)}
+          className={`mt-0.5 flex-shrink-0 transition-colors ${hasSubs && !compact ? 'text-[#5a587a] hover:text-[#e8e4d9]' : 'text-transparent cursor-default'}`}>
+          {hasSubs && !compact
+            ? expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronR className="w-4 h-4" />
+            : <ChevronR className="w-4 h-4" />}
+        </button>
+
+        {/* Statut */}
+        <button onClick={() => onStatusChange(task.id, nextStatut())} className="mt-0.5 flex-shrink-0 hover:scale-110 transition-all">
           {done
             ? <CheckCircle2 className="w-4 h-4 text-[#4caf7d]" />
             : statut === 'En cours'
@@ -235,6 +274,7 @@ function TaskCard({ task, subTasks, onStatusChange, onAddSubTask, compact = fals
               : <Circle className={`w-4 h-4 ${overdue ? 'text-amber-500' : 'text-[#33335a] hover:text-[#5a587a]'}`} />}
         </button>
 
+        {/* Contenu */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className={`text-sm font-medium leading-tight ${done ? 'line-through text-[#5a587a]' : 'text-[#e8e4d9]'}`}>
@@ -268,19 +308,17 @@ function TaskCard({ task, subTasks, onStatusChange, onAddSubTask, compact = fals
           </div>
         </div>
 
-        {/* Bouton ajouter sous-tâche */}
-        {onAddSubTask && !compact && (
-          <button onClick={() => onAddSubTask(task)}
-            title="Ajouter une sous-tâche"
-            className="opacity-0 group-hover:opacity-100 flex-shrink-0 text-[#33335a] hover:text-[#c9a84c] transition-all p-1 rounded">
-            <Plus className="w-3.5 h-3.5" />
-          </button>
-        )}
+        {/* Bouton édition — toujours visible */}
+        <button onClick={() => onEdit(task)}
+          className="flex-shrink-0 p-1.5 rounded-lg text-[#33335a] hover:text-[#c9a84c] hover:bg-[#22223a] transition-all"
+          title="Modifier la tâche">
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
       </div>
 
-      {/* Barre progression sous-tâches */}
+      {/* Barre progression */}
       {hasSubs && !compact && (
-        <div className="px-3 pb-2">
+        <div className="px-3 pb-1">
           <div className="w-full bg-[#0a0a15] rounded-full h-1 overflow-hidden">
             <div className="bg-[#4caf7d] h-full rounded-full transition-all duration-300"
               style={{ width: `${(doneSubs / subTasks!.length) * 100}%` }} />
@@ -288,45 +326,36 @@ function TaskCard({ task, subTasks, onStatusChange, onAddSubTask, compact = fals
         </div>
       )}
 
-      {/* Sous-tâches expandables */}
+      {/* Sous-tâches */}
       {hasSubs && expanded && !compact && (
-        <div className="border-t border-[#1a1a2e] mx-3 mb-2">
-          <div className="space-y-1 mt-2">
-            {subTasks!.map(sub => (
-              <div key={sub.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[#0a0a15] transition-colors">
-                <button onClick={() => onStatusChange(sub.id, getVal(sub.Statut) === 'Fait' ? 'À faire' : 'Fait')}
-                  className="flex-shrink-0 hover:scale-110 transition-all">
-                  {getVal(sub.Statut) === 'Fait'
-                    ? <CheckCircle2 className="w-3.5 h-3.5 text-[#4caf7d]" />
-                    : <Circle className="w-3.5 h-3.5 text-[#33335a] hover:text-[#5a587a]" />}
-                </button>
-                <span className={`text-xs flex-1 ${getVal(sub.Statut) === 'Fait' ? 'line-through text-[#5a587a]' : 'text-[#c8c4b8]'}`}>
-                  {sub.Titre || '(Sans titre)'}
-                </span>
-              </div>
-            ))}
-            {onAddSubTask && (
-              <button onClick={() => onAddSubTask(task)}
-                className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-[#5a587a] hover:text-[#c9a84c] transition-colors w-full">
-                <Plus className="w-3 h-3" />Ajouter une sous-tâche
+        <div className="border-t border-[#1a1a2e] mx-3 mb-1 pt-2 space-y-1">
+          {subTasks!.map(sub => (
+            <div key={sub.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[#0a0a15] transition-colors group/sub">
+              <button onClick={() => onStatusChange(sub.id, getVal(sub.Statut) === 'Fait' ? 'À faire' : 'Fait')}
+                className="flex-shrink-0 hover:scale-110 transition-all">
+                {getVal(sub.Statut) === 'Fait'
+                  ? <CheckCircle2 className="w-3.5 h-3.5 text-[#4caf7d]" />
+                  : <Circle className="w-3.5 h-3.5 text-[#33335a] hover:text-[#5a587a]" />}
               </button>
-            )}
-          </div>
+              <span className={`text-xs flex-1 ${getVal(sub.Statut) === 'Fait' ? 'line-through text-[#5a587a]' : 'text-[#c8c4b8]'}`}>
+                {sub.Titre || '(Sans titre)'}
+              </span>
+              <button onClick={() => onEdit(sub)}
+                className="opacity-0 group-hover/sub:opacity-100 p-1 text-[#33335a] hover:text-[#c9a84c] transition-all">
+                <Pencil className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
         </div>
       )}
-      {hasSubs && !expanded && !compact && onAddSubTask && (
-        <div className="px-3 pb-2">
+
+      {/* Bouton ajouter sous-tâche — toujours visible si pas compact */}
+      {!compact && onAddSubTask && (
+        <div className="px-3 pb-2.5 pt-1">
           <button onClick={() => onAddSubTask(task)}
-            className="flex items-center gap-1 text-[10px] text-[#33335a] hover:text-[#c9a84c] transition-colors">
-            <Plus className="w-3 h-3" />Sous-tâche
-          </button>
-        </div>
-      )}
-      {!hasSubs && onAddSubTask && !compact && (
-        <div className="px-3 pb-2">
-          <button onClick={() => onAddSubTask(task)}
-            className="flex items-center gap-1 text-[10px] text-[#33335a] hover:text-[#c9a84c] transition-colors">
-            <Plus className="w-3 h-3" />Sous-tâche
+            className="flex items-center gap-1.5 text-[11px] text-[#5a587a] hover:text-[#c9a84c] transition-colors px-2 py-1 rounded-lg hover:bg-[#22223a]">
+            <Plus className="w-3 h-3" />
+            Ajouter une sous-tâche
           </button>
         </div>
       )}
@@ -334,35 +363,19 @@ function TaskCard({ task, subTasks, onStatusChange, onAddSubTask, compact = fals
   );
 }
 
-// ─── KANBAN avec drag & drop natif ───────────────────────────
-function KanbanView({ tasks, onStatusChange, onAddInCol, onAddSubTask }: {
+// ─── KANBAN avec drag & drop ──────────────────────────────────
+function KanbanView({ tasks, onStatusChange, onAddInCol, onEdit, onAddSubTask }: {
   tasks: Task[];
   onStatusChange: (id: number, statut: string) => void;
   onAddInCol: (statut: string) => void;
+  onEdit: (task: Task) => void;
   onAddSubTask: (parent: Task) => void;
 }) {
   const dragId = useRef<number | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
   const parentTasks = tasks.filter(t => !getParentId(t));
   const subTasks = tasks.filter(t => getParentId(t) !== null);
-  const getSubTasks = (parentId: number) => subTasks.filter(s => getParentId(s) === parentId);
-
-  function onDragStart(e: React.DragEvent, id: number) {
-    dragId.current = id;
-    e.dataTransfer.effectAllowed = 'move';
-  }
-
-  function onDragOver(e: React.DragEvent) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  }
-
-  function onDrop(e: React.DragEvent, targetStatut: string) {
-    e.preventDefault();
-    if (dragId.current !== null) {
-      onStatusChange(dragId.current, targetStatut);
-      dragId.current = null;
-    }
-  }
+  const getSubTasks = (pid: number) => subTasks.filter(s => getParentId(s) === pid);
 
   return (
     <div className="grid grid-cols-3 gap-4">
@@ -371,29 +384,38 @@ function KanbanView({ tasks, onStatusChange, onAddInCol, onAddSubTask }: {
           const s = getVal(t.Statut);
           return s === col.id || (!s && col.id === 'À faire');
         });
+        const isOver = dragOver === col.id;
         return (
-          <div key={col.id} className="flex flex-col"
-            onDragOver={onDragOver}
-            onDrop={e => onDrop(e, col.id)}>
+          <div key={col.id} className={`flex flex-col rounded-xl border-2 transition-all p-3
+            ${isOver ? 'border-dashed' : 'border-transparent'}`}
+            style={{ borderColor: isOver ? col.color + '60' : undefined, background: isOver ? col.color + '08' : undefined }}
+            onDragOver={e => { e.preventDefault(); setDragOver(col.id); }}
+            onDragLeave={() => setDragOver(null)}
+            onDrop={e => {
+              e.preventDefault(); setDragOver(null);
+              if (dragId.current !== null) { onStatusChange(dragId.current, col.id); dragId.current = null; }
+            }}>
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full" style={{ background: col.color }} />
                 <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: col.color }}>{col.id}</span>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-[#0a0a15] border border-[#22223a] text-[#5a587a]">{colTasks.length}</span>
               </div>
-              <button onClick={() => onAddInCol(col.id)} className="text-[#5a587a] hover:text-[#e8e4d9] p-1 rounded hover:bg-[#22223a] transition-all">
+              <button onClick={() => onAddInCol(col.id)} className="text-[#5a587a] hover:text-[#e8e4d9] p-1 rounded hover:bg-[#22223a] transition-all" title={`Créer dans ${col.id}`}>
                 <Plus className="w-3.5 h-3.5" />
               </button>
             </div>
-            <div className="space-y-2 min-h-[120px]">
+            <div className="space-y-2 min-h-[80px]">
               {colTasks.length === 0 && (
                 <div className="border-2 border-dashed border-[#1a1a2e] rounded-xl p-6 text-center">
                   <p className="text-xs text-[#33335a]">Glisser ici</p>
                 </div>
               )}
               {colTasks.map(t => (
-                <div key={t.id} draggable onDragStart={e => onDragStart(e, t.id)}
-                  className="cursor-grab active:cursor-grabbing active:opacity-60 transition-opacity group">
-                  <TaskCard task={t} subTasks={getSubTasks(t.id)} onStatusChange={onStatusChange} onAddSubTask={onAddSubTask} compact />
+                <div key={t.id} draggable onDragStart={e => { dragId.current = t.id; e.dataTransfer.effectAllowed = 'move'; }}
+                  className="cursor-grab active:cursor-grabbing active:opacity-50 transition-opacity">
+                  <TaskCard task={t} subTasks={getSubTasks(t.id)} onStatusChange={onStatusChange}
+                    onEdit={onEdit} onAddSubTask={onAddSubTask} compact />
                 </div>
               ))}
             </div>
@@ -405,15 +427,16 @@ function KanbanView({ tasks, onStatusChange, onAddInCol, onAddSubTask }: {
 }
 
 // ─── VUE AUJOURD'HUI ─────────────────────────────────────────
-function TodayView({ tasks, onStatusChange, onAddSubTask }: {
+function TodayView({ tasks, onStatusChange, onEdit, onAddSubTask }: {
   tasks: Task[];
   onStatusChange: (id: number, statut: string) => void;
+  onEdit: (task: Task) => void;
   onAddSubTask: (parent: Task) => void;
 }) {
   const today = todayStr();
   const parentTasks = tasks.filter(t => !getParentId(t));
   const subTasks = tasks.filter(t => getParentId(t) !== null);
-  const getSubTasks = (parentId: number) => subTasks.filter(s => getParentId(s) === parentId);
+  const getSubTasks = (pid: number) => subTasks.filter(s => getParentId(s) === pid);
 
   const todayTasks = parentTasks.filter(t => {
     const d = t['Date échéance']?.split('T')[0];
@@ -432,7 +455,7 @@ function TodayView({ tasks, onStatusChange, onAddSubTask }: {
         <div className="space-y-2">
           {items.map(t => (
             <TaskCard key={t.id} task={t} subTasks={getSubTasks(t.id)}
-              onStatusChange={onStatusChange} onAddSubTask={onAddSubTask} />
+              onStatusChange={onStatusChange} onEdit={onEdit} onAddSubTask={onAddSubTask} />
           ))}
         </div>
       </div>
@@ -457,6 +480,7 @@ function TodayView({ tasks, onStatusChange, onAddSubTask }: {
         <div className="text-center py-16">
           <CheckCircle2 className="w-10 h-10 text-[#4caf7d]/40 mx-auto mb-3" />
           <p className="text-[#5a587a] text-sm">Aucune tâche pour aujourd'hui</p>
+          <p className="text-[#33335a] text-xs mt-1">Clique sur "Nouvelle tâche" pour commencer</p>
         </div>
       )}
       <Section title="En retard — à traiter" items={overdue} color="#f59e0b" />
@@ -468,16 +492,17 @@ function TodayView({ tasks, onStatusChange, onAddSubTask }: {
 }
 
 // ─── VUE CALENDRIER ──────────────────────────────────────────
-function CalendarView({ tasks, onStatusChange }: {
+function CalendarView({ tasks, onStatusChange, onEdit }: {
   tasks: Task[];
   onStatusChange: (id: number, statut: string) => void;
+  onEdit: (task: Task) => void;
 }) {
   const [cursor, setCursor] = useState(new Date());
   const [selected, setSelected] = useState<string | null>(null);
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
-  const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDay = new Date(year, month, 1).getDay();
   const startOffset = firstDay === 0 ? 6 : firstDay - 1;
 
   const parentTasks = tasks.filter(t => !getParentId(t));
@@ -497,14 +522,14 @@ function CalendarView({ tasks, onStatusChange }: {
       <div>
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => setCursor(new Date(year, month - 1, 1))}
-            className="p-2 rounded-lg border border-[#22223a] text-[#5a587a] hover:text-[#e8e4d9] hover:border-[#33335a] transition-all">
+            className="p-2 rounded-lg border border-[#22223a] text-[#5a587a] hover:text-[#e8e4d9] transition-all">
             <ChevronLeft className="w-4 h-4" />
           </button>
           <span className="text-sm font-semibold text-[#e8e4d9] capitalize">
             {cursor.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
           </span>
           <button onClick={() => setCursor(new Date(year, month + 1, 1))}
-            className="p-2 rounded-lg border border-[#22223a] text-[#5a587a] hover:text-[#e8e4d9] hover:border-[#33335a] transition-all">
+            className="p-2 rounded-lg border border-[#22223a] text-[#5a587a] hover:text-[#e8e4d9] transition-all">
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
@@ -526,12 +551,12 @@ function CalendarView({ tasks, onStatusChange }: {
             const hasDone = dayTasks.some(t => getVal(t.Statut) === 'Fait');
             return (
               <button key={day} onClick={() => setSelected(isSelected ? null : dateStr)}
-                className={`aspect-square rounded-lg flex flex-col items-center justify-start pt-1.5 px-1 transition-all text-xs
+                className={`aspect-square rounded-lg flex flex-col items-center justify-start pt-1.5 px-1 transition-all
                   ${isSelected ? 'bg-[#c9a84c]/20 border border-[#c9a84c]/40' : 'hover:bg-[#22223a] border border-transparent'}
-                  ${isToday ? 'border-[#c9a84c]/30' : ''}`}>
+                  ${isToday && !isSelected ? 'border border-[#c9a84c]/30' : ''}`}>
                 <span className={`font-medium text-[11px] ${isToday ? 'text-[#c9a84c]' : isPast ? 'text-[#33335a]' : 'text-[#e8e4d9]'}`}>{day}</span>
                 {dayTasks.length > 0 && (
-                  <div className="flex gap-0.5 mt-0.5 flex-wrap justify-center">
+                  <div className="flex gap-0.5 mt-0.5 justify-center">
                     {hasPending && <span className="w-1.5 h-1.5 rounded-full bg-[#c9a84c]" />}
                     {hasDone && <span className="w-1.5 h-1.5 rounded-full bg-[#4caf7d]" />}
                   </div>
@@ -544,16 +569,18 @@ function CalendarView({ tasks, onStatusChange }: {
       {selected && (
         <div className="bg-[#0a0a15] border border-[#22223a] rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-semibold text-[#e8e4d9]">
+            <p className="text-sm font-semibold text-[#e8e4d9] capitalize">
               {new Date(selected).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
             </p>
             <button onClick={() => setSelected(null)} className="text-[#5a587a] hover:text-[#e8e4d9]"><X className="w-4 h-4" /></button>
           </div>
           {selectedTasks.length === 0
             ? <p className="text-xs text-[#5a587a]">Aucune tâche ce jour</p>
-            : <div className="space-y-2">{selectedTasks.map(t => (
-                <TaskCard key={t.id} task={t} onStatusChange={onStatusChange} compact />
-              ))}</div>
+            : <div className="space-y-2">
+                {selectedTasks.map(t => (
+                  <TaskCard key={t.id} task={t} onStatusChange={onStatusChange} onEdit={onEdit} compact />
+                ))}
+              </div>
           }
         </div>
       )}
@@ -567,7 +594,7 @@ export const Taches = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [view, setView] = useState<View>('today');
-  const [modal, setModal] = useState<{ open: boolean; statut: string; parent?: Task | null }>({ open: false, statut: 'À faire', parent: null });
+  const [modal, setModal] = useState<ModalState>({ open: false, mode: 'create', statut: 'À faire', parent: null, task: null });
 
   const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -576,8 +603,7 @@ export const Taches = () => {
     try {
       const res = await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_ID}/?user_field_names=true&size=200`, { headers: HEADERS });
       if (!res.ok) throw new Error(`Erreur ${res.status}`);
-      const data = await res.json();
-      setTasks(data.results || []);
+      setTasks((await res.json()).results || []);
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
   }, []);
@@ -596,7 +622,24 @@ export const Taches = () => {
 
   function handleSaved(task: Task) {
     setTasks(prev => [task, ...prev]);
-    setModal({ open: false, statut: 'À faire', parent: null });
+    setModal({ open: false, mode: 'create', statut: 'À faire', parent: null, task: null });
+  }
+
+  function handleUpdated(updated: Task) {
+    setTasks(prev => prev.map(t => t.id === updated.id ? updated : t));
+    setModal({ open: false, mode: 'create', statut: 'À faire', parent: null, task: null });
+  }
+
+  function openEdit(task: Task) {
+    setModal({ open: true, mode: 'edit', statut: getVal(task.Statut) || 'À faire', parent: null, task });
+  }
+
+  function openAddSubTask(parent: Task) {
+    setModal({ open: true, mode: 'create', statut: 'À faire', parent, task: null });
+  }
+
+  function openCreate(statut: string) {
+    setModal({ open: true, mode: 'create', statut, parent: null, task: null });
   }
 
   const VIEWS: { id: View; label: string; icon: any }[] = [
@@ -607,7 +650,6 @@ export const Taches = () => {
 
   return (
     <div className="flex flex-col space-y-5">
-      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold text-[#e8e4d9]">Tâches</h1>
@@ -629,7 +671,7 @@ export const Taches = () => {
           <button onClick={loadTasks} className="p-2 rounded-lg border border-[#22223a] text-[#5a587a] hover:text-[#e8e4d9] hover:border-[#33335a] transition-all">
             <RefreshCw className="w-4 h-4" />
           </button>
-          <button onClick={() => setModal({ open: true, statut: 'À faire', parent: null })}
+          <button onClick={() => openCreate('À faire')}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-[#c9a84c]/20 to-[#e8c97a]/20 border border-[#c9a84c]/40 text-[#e8c97a] hover:from-[#c9a84c]/30 transition-all text-sm font-medium">
             <Plus className="w-4 h-4" />Nouvelle tâche
           </button>
@@ -640,32 +682,25 @@ export const Taches = () => {
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <div className="text-center">
-            <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-3 text-[#5a587a]" />
-            <p className="text-sm text-[#5a587a]">Chargement des tâches...</p>
-          </div>
+          <RefreshCw className="w-6 h-6 animate-spin mx-auto text-[#5a587a]" />
         </div>
       ) : (
         <>
-          {view === 'today' && (
-            <TodayView tasks={tasks} onStatusChange={updateStatut}
-              onAddSubTask={parent => setModal({ open: true, statut: 'À faire', parent })} />
-          )}
-          {view === 'kanban' && (
-            <KanbanView tasks={tasks} onStatusChange={updateStatut}
-              onAddInCol={statut => setModal({ open: true, statut, parent: null })}
-              onAddSubTask={parent => setModal({ open: true, statut: 'À faire', parent })} />
-          )}
-          {view === 'calendar' && <CalendarView tasks={tasks} onStatusChange={updateStatut} />}
+          {view === 'today' && <TodayView tasks={tasks} onStatusChange={updateStatut} onEdit={openEdit} onAddSubTask={openAddSubTask} />}
+          {view === 'kanban' && <KanbanView tasks={tasks} onStatusChange={updateStatut} onAddInCol={openCreate} onEdit={openEdit} onAddSubTask={openAddSubTask} />}
+          {view === 'calendar' && <CalendarView tasks={tasks} onStatusChange={updateStatut} onEdit={openEdit} />}
         </>
       )}
 
       {modal.open && (
         <TaskModal
-          onClose={() => setModal({ open: false, statut: 'À faire', parent: null })}
-          onSave={handleSaved}
+          mode={modal.mode}
+          task={modal.task}
           defaultStatut={modal.statut}
           parentTask={modal.parent}
+          onClose={() => setModal({ open: false, mode: 'create', statut: 'À faire', parent: null, task: null })}
+          onSave={handleSaved}
+          onUpdate={handleUpdated}
         />
       )}
     </div>
