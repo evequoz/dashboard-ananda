@@ -10,13 +10,13 @@ export const Sidebar = ({ currentPage, onPageChange }: SidebarProps) => {
   const { user, canAccess, logout } = useAuth();
 
   const menuItems = [
-    { id: 'overview', label: 'Aperçu',   icon: LayoutDashboard, page: 'overview' },
-    { id: 'agenda',   label: 'Agenda',   icon: Calendar,        page: 'calendar' },
-    { id: 'tasks',    label: 'Tâches',   icon: CheckSquare,     page: 'tasks'    },
-    { id: 'poste',    label: 'Poste',    icon: Mail,            page: 'posts'    },
-    { id: 'members',  label: 'Membres',  icon: Users,           page: 'overview' },
-    { id: 'finance',  label: 'Finance',  icon: DollarSign,      page: 'finance'  },
-    { id: 'tools',    label: 'Outils',   icon: Wrench,          page: 'tools'    },
+    { id: 'overview', label: 'Aperçu',  icon: LayoutDashboard, page: 'overview' },
+    { id: 'agenda',   label: 'Agenda',  icon: Calendar,        page: 'agenda'   },
+    { id: 'tasks',    label: 'Tâches',  icon: CheckSquare,     page: 'tasks'    },
+    { id: 'poste',    label: 'Poste',   icon: Mail,            page: 'poste'    },
+    { id: 'members',  label: 'Membres', icon: Users,           page: 'members'  },
+    { id: 'finance',  label: 'Finance', icon: DollarSign,      page: 'finance'  },
+    { id: 'tools',    label: 'Outils',  icon: Wrench,          page: 'tools'    },
   ];
 
   const visibleItems = menuItems.filter(item =>
