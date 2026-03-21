@@ -8,6 +8,7 @@ import { Members } from './pages/Members';
 import { Finance } from './pages/Finance';
 import { Tools } from './pages/Tools';
 import { CalendarPage } from './pages/CalendarPage';
+import { Taches } from './pages/Taches';
 import LoginPage from './pages/LoginPage';
 
 function AppContent() {
@@ -26,6 +27,8 @@ function AppContent() {
         return <Overview />;
       case 'agenda':
         return <CalendarPage />;
+      case 'taches':
+        return <Taches />;
       case 'poste':
         return <Poste />;
       case 'members':
