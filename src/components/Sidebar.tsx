@@ -11,10 +11,10 @@ export const Sidebar = ({ currentPage, onPageChange }: SidebarProps) => {
 
   const menuItems = [
     { id: 'overview', label: 'Aperçu',   icon: LayoutDashboard, page: 'overview' },
-    { id: 'agenda',   label: 'Agenda',   icon: Calendar,        page: 'agenda'   },
-    { id: 'taches',   label: 'Tâches',   icon: CheckSquare,     page: 'taches'   },
-    { id: 'poste',    label: 'Poste',    icon: Mail,            page: 'poste'    },
-    { id: 'members',  label: 'Membres',  icon: Users,           page: 'members'  },
+    { id: 'agenda',   label: 'Agenda',   icon: Calendar,        page: 'calendar' },
+    { id: 'tasks',    label: 'Tâches',   icon: CheckSquare,     page: 'tasks'    },
+    { id: 'poste',    label: 'Poste',    icon: Mail,            page: 'posts'    },
+    { id: 'members',  label: 'Membres',  icon: Users,           page: 'overview' },
     { id: 'finance',  label: 'Finance',  icon: DollarSign,      page: 'finance'  },
     { id: 'tools',    label: 'Outils',   icon: Wrench,          page: 'tools'    },
   ];
@@ -27,7 +27,6 @@ export const Sidebar = ({ currentPage, onPageChange }: SidebarProps) => {
 
   return (
     <aside className="w-64 bg-gradient-to-b from-[#0a0a15] to-[#0f0f1a] border-r border-[#22223a] flex flex-col h-screen sticky top-0">
-      {/* Logo */}
       <div className="p-6 border-b border-[#22223a]">
         <h1 className="text-2xl font-bold bg-gradient-to-r from-[#c9a84c] to-[#e8c97a] bg-clip-text text-transparent">
           Ananda Admin
@@ -35,7 +34,6 @@ export const Sidebar = ({ currentPage, onPageChange }: SidebarProps) => {
         <p className="text-xs text-[#5a587a] mt-1">Tableau de bord</p>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 p-4 space-y-2">
         {visibleItems.map((item) => {
           const Icon = item.icon;
@@ -57,7 +55,6 @@ export const Sidebar = ({ currentPage, onPageChange }: SidebarProps) => {
         })}
       </nav>
 
-      {/* Statut système */}
       <div className="px-4 pb-3">
         <div className="bg-[#0a0a15] rounded-lg p-3 border border-[#22223a]">
           <div className="flex items-center gap-2 mb-2">
@@ -68,7 +65,6 @@ export const Sidebar = ({ currentPage, onPageChange }: SidebarProps) => {
         </div>
       </div>
 
-      {/* Badge utilisateur */}
       <div className="p-4 border-t border-[#22223a]">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-full bg-[#c9a84c]/15 border border-[#c9a84c]/30 flex items-center justify-center text-[11px] font-semibold text-[#c9a84c] flex-shrink-0">
