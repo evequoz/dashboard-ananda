@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -170,6 +170,7 @@ const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
     location: event.extendedProps?.location || '',
     status: event.extendedProps?.status || 'busy',
     eventType: event.extendedProps?.eventType || eventTypes[0].label,
+    calendar: event.extendedProps?.calendar || 'Calendrier',
   });
 
   const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
@@ -300,7 +301,6 @@ const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
                 )}
               </div>
 
-              {/* Journée entière */}
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 10,
                 padding: '10px 14px', background: C.surface, borderRadius: 8,
@@ -312,7 +312,6 @@ const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
                 <span style={{ fontSize: 13, color: C.text }}>📅 Journée entière</span>
               </div>
 
-              {/* Dates */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
                   <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>
@@ -330,7 +329,6 @@ const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
                 )}
               </div>
 
-              {/* Heures */}
               {!form.allDay && (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div>
@@ -460,7 +458,6 @@ const NewEventModal = ({ date, onClose, onSave, eventTypes }: {
             </select>
           </div>
 
-          {/* Journée entière */}
           <div style={{
             display: 'flex', alignItems: 'flex-start', gap: 10,
             padding: '12px 14px', background: C.surface, borderRadius: 8,
@@ -477,7 +474,6 @@ const NewEventModal = ({ date, onClose, onSave, eventTypes }: {
             </div>
           </div>
 
-          {/* Dates */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
               <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>
@@ -495,7 +491,6 @@ const NewEventModal = ({ date, onClose, onSave, eventTypes }: {
             )}
           </div>
 
-          {/* Heures */}
           {!form.allDay && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div>
@@ -550,33 +545,7 @@ const NewEventModal = ({ date, onClose, onSave, eventTypes }: {
           }}>Annuler</button>
           <button onClick={() => {
             if (!form.title.trim()) return;
-            const type = eventTypes.find(t => t.label === form.eventType) || eventTypes[0];
-            const newEvent: any = {
-              id: `local-${Date.now()}`,
-              title: form.title,
-              allDay: form.allDay,
-              backgroundColor: type.bg,
-              borderColor: type.color,
-              textColor: type.color,
-              extendedProps: {
-                description: form.description,
-                location: form.location,
-                status: form.status,
-                recurrence: form.recurrence !== 'none' ? form.recurrence : null,
-                calendar: form.calendar,
-                eventType: form.eventType,
-              }
-            };
-            if (form.allDay) {
-              newEvent.start = form.date;
-              const end = new Date(form.endDate);
-              end.setDate(end.getDate() + 1);
-              newEvent.end = end.toISOString().split('T')[0];
-            } else {
-              newEvent.start = `${form.date}T${form.startTime}:00`;
-              newEvent.end = `${form.date}T${form.endTime}:00`;
-            }
-            onSave(newEvent);
+            onSave(form);
             onClose();
           }} style={{
             flex: 2, padding: '10px 0', borderRadius: 8,
@@ -656,6 +625,61 @@ export const CalendarPage = () => {
     return () => clearInterval(interval);
   }, [fetchEvents]);
 
+  // ✅ CORRIGÉ — récupère le vrai ID Google après création
+  const handleCreate = async (form: any) => {
+    const type = eventTypes.find(t => t.label === form.eventType) || eventTypes[0];
+    const tempId = `local-${Date.now()}`;
+
+    const newEvent: any = {
+      id: tempId,
+      title: form.title,
+      allDay: form.allDay,
+      backgroundColor: type.bg,
+      borderColor: type.color,
+      textColor: type.color,
+      extendedProps: {
+        description: form.description,
+        location: form.location,
+        status: form.status,
+        recurrence: form.recurrence !== 'none' ? form.recurrence : null,
+        calendar: form.calendar,
+        eventType: form.eventType,
+      }
+    };
+
+    if (form.allDay) {
+      newEvent.start = form.date;
+      const end = new Date(form.endDate);
+      end.setDate(end.getDate() + 1);
+      newEvent.end = end.toISOString().split('T')[0];
+    } else {
+      newEvent.start = `${form.date}T${form.startTime}:00`;
+      newEvent.end = `${form.date}T${form.endTime}:00`;
+    }
+
+    // Affiche immédiatement avec ID temporaire
+    setEvents(prev => [...prev, newEvent]);
+
+    try {
+      const res = await fetch('https://n8n.ananda-communaute.cloud/webhook/create-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newEvent)
+      });
+      const data = await res.json();
+
+      // ✅ Remplace l'ID temporaire par le vrai ID Google
+      const googleId = data?.id || data?.[0]?.id;
+      if (googleId) {
+        setEvents(prev => prev.map(e =>
+          e.id === tempId ? { ...e, id: googleId } : e
+        ));
+      }
+    } catch (e) {
+      console.error('Erreur création:', e);
+    }
+  };
+
   const handleUpdate = (id: string, data: any) => {
     const type = eventTypes.find(t => t.label === data.eventType) || eventTypes[0];
     setEvents(prev => prev.map(e =>
@@ -678,6 +702,7 @@ export const CalendarPage = () => {
           location: data.location,
           status: data.status,
           eventType: data.eventType,
+          calendar: data.calendar,
         }
       } : e
     ));
@@ -803,6 +828,7 @@ export const CalendarPage = () => {
             editable={true}
             select={(info) => setNewEventDate(info.startStr.split('T')[0])}
             eventClick={(info) => setSelectedEvent(info.event)}
+            // ✅ CORRIGÉ — drag & drop envoie vers update-event
             eventDrop={(info) => {
               setEvents(prev => prev.map(e =>
                 e.id === info.event.id
@@ -814,12 +840,17 @@ export const CalendarPage = () => {
                 body: JSON.stringify({ id: info.event.id, start: info.event.startStr, end: info.event.endStr })
               }).catch(console.error);
             }}
+            // ✅ CORRIGÉ — resize envoie maintenant vers update-event
             eventResize={(info) => {
               setEvents(prev => prev.map(e =>
                 e.id === info.event.id
                   ? { ...e, start: info.event.startStr, end: info.event.endStr }
                   : e
               ));
+              fetch('https://n8n.ananda-communaute.cloud/webhook/update-event', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: info.event.id, start: info.event.startStr, end: info.event.endStr })
+              }).catch(console.error);
             }}
             dayMaxEvents={4}
             businessHours={{ daysOfWeek: [1, 2, 3, 4, 5], startTime: '08:00', endTime: '20:00' }}
@@ -867,13 +898,7 @@ export const CalendarPage = () => {
         <NewEventModal
           date={newEventDate}
           onClose={() => setNewEventDate(null)}
-          onSave={(e) => {
-            setEvents(prev => [...prev, e]);
-            fetch('https://n8n.ananda-communaute.cloud/webhook/create-event', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(e)
-            }).catch(console.error);
-          }}
+          onSave={handleCreate}
           eventTypes={eventTypes}
         />
       )}
