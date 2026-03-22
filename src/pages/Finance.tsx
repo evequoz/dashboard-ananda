@@ -335,5 +335,3 @@ export const Finance = () => {
     </div>
   );
 };
-ECHO
-echo "Fichier créé"
