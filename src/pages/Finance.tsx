@@ -3,8 +3,8 @@ import { DollarSign, TrendingUp, TrendingDown, PlusCircle, X, Check, RefreshCw }
 
 const BASEROW_TOKEN = 'GBLdzaCZvQUVXkCqSls3WX3dT3uVg0H8';
 const BASEROW_URL = 'https://baserow.ananda-communaute.cloud/api';
-const FINANCE_TABLE = 534; // table Finance existante — à mettre à jour si différent
-const BUDGET_TABLE_ID = 536; // table Budget — à mettre à jour avec le vrai ID
+const FINANCE_TABLE = 543; // table Finance existante — à mettre à jour si différent
+const BUDGET_TABLE_ID = 542; // table Budget — à mettre à jour avec le vrai ID
 
 const headers = {
   Authorization: `Token ${BASEROW_TOKEN}`,
@@ -22,6 +22,7 @@ type Mouvement = {
   id: number;
   Date: string;
   Libellé: string;
+  Mensuel: number;
   'Montant CHF': number;
   Type: string;
   Source: string;
@@ -34,7 +35,8 @@ type BudgetLigne = {
   id: number;
   Libellé: string;
   Mensuel: number;
-  Actif: boolean;
+  Mensuel: number;
+  Actif: boolean | string;
   Catégorie: string;
 };
 
@@ -74,7 +76,7 @@ export const Finance = () => {
         { headers }
       );
       const budData = await budRes.json();
-      setBudget((budData.results || []).filter((r: BudgetLigne) => r.Actif));
+      setBudget((budData.results || []).filter((r: BudgetLigne) => r.Actif === true || r.Actif === 'VRAI' || r.Actif === '1'));
     } catch (e) {
       console.error(e);
     }
@@ -271,7 +273,7 @@ export const Finance = () => {
                       <div className="flex items-center gap-3">
                         <div className={`w-2 h-2 rounded-full ${m.Type === 'Entrée' ? 'bg-[#4caf7d]' : 'bg-[#d95555]'}`} />
                         <div>
-                          <p className="text-sm text-[#e8e4d9] font-medium">{m.Libellé}</p>
+                          <p className="text-sm text-[#e8e4d9] font-medium">{m['Libellé']}</p>
                           <p className="text-xs text-[#5a587a]">{m.Catégorie} · {m.Source} · {m.Date}</p>
                         </div>
                       </div>
@@ -293,7 +295,7 @@ export const Finance = () => {
                 <div className="space-y-2">
                   {budget.slice(0, 8).map(b => (
                     <div key={b.id} className="flex items-center justify-between">
-                      <span className="text-xs text-[#5a587a]">{b.Libellé}</span>
+                      <span className="text-xs text-[#5a587a]">{b['Libellé']}</span>
                       <span className="text-xs font-semibold text-[#c9a84c]">{fmt(parseFloat(String(b.Mensuel)) || 0)}</span>
                     </div>
                   ))}
