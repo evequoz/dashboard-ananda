@@ -86,15 +86,15 @@ export const Finance = () => {
   useEffect(() => { fetchData(); }, []);
 
   // Calculs
-  const entrees = mouvements.filter(m => m.Type === 'Entrée').reduce((s, m) => s + (parseFloat(String(m["Montant CHF"])) || 0), 0);
-  const depenses = mouvements.filter(m => m.Type === 'Dépense').reduce((s, m) => s + (parseFloat(String(m["Montant CHF"])) || 0), 0);
+  const entrees = mouvements.filter(m => (m.Type as any)?.value === 'Entrée' || m.Type === 'Entrée').reduce((s, m) => s + (parseFloat(String(m["Montant CHF"])) || 0), 0);
+  const depenses = mouvements.filter(m => (m.Type as any)?.value === 'Dépense' || m.Type === 'Dépense').reduce((s, m) => s + (parseFloat(String(m["Montant CHF"])) || 0), 0);
   const chargesFixes = budget.reduce((s, b) => s + (parseFloat(String(b.Mensuel)) || 0), 0);
   const balance = entrees - depenses - chargesFixes;
 
   // Répartition dépenses par catégorie
   const parCategorie = CATEGORIES.map(cat => ({
     cat,
-    total: mouvements.filter(m => m.Type === 'Dépense' && m.Catégorie === cat).reduce((s, m) => s + (parseFloat(String(m["Montant CHF"])) || 0), 0),
+    total: mouvements.filter(m => (m.Type as any)?.value === 'Dépense' || ((m.Type as any)?.value ?? m.Type) === 'Dépense' && ((m.Catégorie as any)?.value ?? m.Catégorie) === cat).reduce((s, m) => s + (parseFloat(String(m["Montant CHF"])) || 0), 0),
   })).filter(c => c.total > 0);
 
   const handleSave = async () => {
@@ -271,14 +271,14 @@ export const Finance = () => {
                   {mouvements.slice(0, 15).map(m => (
                     <div key={m.id} className="flex items-center justify-between px-4 py-3 bg-[#0f0f1a] rounded-lg border border-[#22223a]">
                       <div className="flex items-center gap-3">
-                        <div className={`w-2 h-2 rounded-full ${m.Type === 'Entrée' ? 'bg-[#4caf7d]' : 'bg-[#d95555]'}`} />
+                        <div className={`w-2 h-2 rounded-full ${(m.Type as any)?.value === 'Entrée' || m.Type === 'Entrée' ? 'bg-[#4caf7d]' : 'bg-[#d95555]'}`} />
                         <div>
                           <p className="text-sm text-[#e8e4d9] font-medium">{m['Libellé']}</p>
-                          <p className="text-xs text-[#5a587a]">{m.Catégorie} · {m.Source} · {m.Date}</p>
+                          <p className="text-xs text-[#5a587a]">{(m.Catégorie as any)?.value ?? m.Catégorie} · {(m.Source as any)?.value ?? m.Source} · {m.Date}</p>
                         </div>
                       </div>
-                      <p className={`text-sm font-bold ${m.Type === 'Entrée' ? 'text-[#4caf7d]' : 'text-[#d95555]'}`}>
-                        {m.Type === 'Entrée' ? '+' : '-'}{fmt(parseFloat(String(m['Montant CHF'])) || 0)}
+                      <p className={`text-sm font-bold ${(m.Type as any)?.value === 'Entrée' || m.Type === 'Entrée' ? 'text-[#4caf7d]' : 'text-[#d95555]'}`}>
+                        {(m.Type as any)?.value === 'Entrée' || m.Type === 'Entrée' ? '+' : '-'}{fmt(parseFloat(String(m['Montant CHF'])) || 0)}
                       </p>
                     </div>
                   ))}
