@@ -45,7 +45,6 @@ const formatTime = (dt: string) =>
 const formatDate = (dt: string) =>
   new Date(dt).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
-// ── Gestionnaire de types ─────────────────────────────────────
 const EventTypesManager = ({ types, onUpdate, onClose }: {
   types: typeof DEFAULT_EVENT_TYPES;
   onUpdate: (types: typeof DEFAULT_EVENT_TYPES) => void;
@@ -62,92 +61,42 @@ const EventTypesManager = ({ types, onUpdate, onClose }: {
   };
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000
-    }} onClick={onClose}>
-      <div style={{
-        background: C.card, borderRadius: 16, padding: 28, width: 460,
-        border: `1px solid ${C.goldDim}`, maxHeight: '85vh', overflowY: 'auto'
-      }} onClick={e => e.stopPropagation()}>
-
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000 }} onClick={onClose}>
+      <div style={{ background: C.card, borderRadius: 16, padding: 28, width: 460, border: `1px solid ${C.goldDim}`, maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
-          <h2 style={{ fontFamily: "'Playfair Display',serif", color: C.goldSoft, fontSize: 18 }}>
-            Types d'événements
-          </h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}>
-            <X size={16} />
-          </button>
+          <h2 style={{ fontFamily: "'Playfair Display',serif", color: C.goldSoft, fontSize: 18 }}>Types d'événements</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}><X size={16} /></button>
         </div>
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
           {localTypes.map((t, i) => (
-            <div key={i} style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '8px 12px', background: C.surface, borderRadius: 8,
-              border: `1px solid ${C.border}`
-            }}>
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: C.surface, borderRadius: 8, border: `1px solid ${C.border}` }}>
               <div style={{ width: 14, height: 14, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
               <span style={{ flex: 1, fontSize: 13, color: C.text }}>{t.label}</span>
-              <span style={{
-                padding: '2px 8px', borderRadius: 12, fontSize: 10,
-                background: t.bg, color: t.color, border: `1px solid ${t.color}40`
-              }}>aperçu</span>
-              <button onClick={() => setLocalTypes(prev => prev.filter((_, j) => j !== i))} style={{
-                background: 'none', border: 'none', color: C.red, cursor: 'pointer', padding: 2
-              }}><X size={13} /></button>
+              <button onClick={() => setLocalTypes(prev => prev.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: C.red, cursor: 'pointer', padding: 2 }}><X size={13} /></button>
             </div>
           ))}
         </div>
-
-        <div style={{
-          padding: 16, background: C.surface, borderRadius: 10,
-          border: `1px solid ${C.border}`, marginBottom: 20
-        }}>
-          <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>Ajouter un type</div>
-          <input value={newLabel} onChange={e => setNewLabel(e.target.value)}
-            placeholder="Nom du type..." style={{ ...inputStyle, marginBottom: 12 }}
-            onKeyDown={e => e.key === 'Enter' && addType()} />
-          <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>Couleur</div>
+        <div style={{ padding: 16, background: C.surface, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 20 }}>
+          <input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="Nom du type..." style={{ ...inputStyle, marginBottom: 12 }} onKeyDown={e => e.key === 'Enter' && addType()} />
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
             {COLOR_PALETTE.map(col => (
-              <div key={col} onClick={() => setNewColor(col)} style={{
-                width: 24, height: 24, borderRadius: '50%', background: col, cursor: 'pointer',
-                border: `3px solid ${newColor === col ? C.text : 'transparent'}`, transition: 'border .15s'
-              }} />
+              <div key={col} onClick={() => setNewColor(col)} style={{ width: 24, height: 24, borderRadius: '50%', background: col, cursor: 'pointer', border: `3px solid ${newColor === col ? C.text : 'transparent'}` }} />
             ))}
           </div>
-          <button onClick={addType} style={{
-            width: '100%', padding: '8px 0', borderRadius: 8,
-            border: `1px solid ${newColor}`, background: `${newColor}20`,
-            color: newColor, cursor: 'pointer', fontSize: 13, fontWeight: 500
-          }}>+ Ajouter "{newLabel || 'nouveau type'}"</button>
+          <button onClick={addType} style={{ width: '100%', padding: '8px 0', borderRadius: 8, border: `1px solid ${newColor}`, background: `${newColor}20`, color: newColor, cursor: 'pointer', fontSize: 13 }}>+ Ajouter</button>
         </div>
-
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onClose} style={{
-            flex: 1, padding: '10px 0', borderRadius: 8,
-            border: `1px solid ${C.border}`, background: 'transparent',
-            color: C.muted, cursor: 'pointer', fontSize: 13
-          }}>Annuler</button>
-          <button onClick={() => { onUpdate(localTypes); onClose(); }} style={{
-            flex: 2, padding: '10px 0', borderRadius: 8,
-            border: 'none', background: C.gold,
-            color: '#0a0808', cursor: 'pointer', fontSize: 13, fontWeight: 600
-          }}>✓ Sauvegarder</button>
+          <button onClick={onClose} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, cursor: 'pointer', fontSize: 13 }}>Annuler</button>
+          <button onClick={() => { onUpdate(localTypes); onClose(); }} style={{ flex: 2, padding: '10px 0', borderRadius: 8, border: 'none', background: C.gold, color: '#0a0808', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>✓ Sauvegarder</button>
         </div>
       </div>
     </div>
   );
 };
 
-// ── Modal détail / édition ────────────────────────────────────
 const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
-  event: any;
-  onClose: () => void;
-  onDelete: (id: string) => void;
-  onUpdate: (id: string, data: any) => void;
-  eventTypes: typeof DEFAULT_EVENT_TYPES;
+  event: any; onClose: () => void; onDelete: (id: string) => void;
+  onUpdate: (id: string, data: any) => void; eventTypes: typeof DEFAULT_EVENT_TYPES;
 }) => {
   const currentType = eventTypes.find(t => t.label === event.extendedProps?.eventType) || eventTypes[eventTypes.length - 1];
   const [editing, setEditing] = useState(false);
@@ -160,8 +109,7 @@ const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
   };
 
   const [form, setForm] = useState({
-    title: event.title || '',
-    allDay: event.allDay || false,
+    title: event.title || '', allDay: event.allDay || false,
     startDate: event.start ? new Date(event.start).toISOString().split('T')[0] : '',
     endDate: getEndDate(),
     startTime: event.start && !event.allDay ? formatTime(event.start) : '09:00',
@@ -177,82 +125,29 @@ const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
   const selectedType = eventTypes.find(t => t.label === form.eventType) || eventTypes[0];
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
-    }} onClick={onClose}>
-      <div style={{
-        background: C.card, borderRadius: 16, padding: 28, width: 440,
-        border: `1px solid ${currentType.color}50`,
-        boxShadow: `0 0 40px ${currentType.color}15`,
-        maxHeight: '90vh', overflowY: 'auto'
-      }} onClick={e => e.stopPropagation()}>
-
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={onClose}>
+      <div style={{ background: C.card, borderRadius: 16, padding: 28, width: 440, border: `1px solid ${currentType.color}50`, boxShadow: `0 0 40px ${currentType.color}15`, maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{
-              padding: '4px 12px', borderRadius: 20, fontSize: 11,
-              background: currentType.bg, color: currentType.color,
-              border: `1px solid ${currentType.color}40`,
-              display: 'flex', alignItems: 'center', gap: 5
-            }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: currentType.color }} />
-              {currentType.label}
-            </span>
-            <span style={{
-              padding: '4px 12px', borderRadius: 20, fontSize: 11,
-              background: event.extendedProps?.status === 'free' ? '#4caf7d18' : '#d9555518',
-              color: event.extendedProps?.status === 'free' ? C.green : C.red,
-              border: `1px solid ${event.extendedProps?.status === 'free' ? C.green : C.red}40`
-            }}>
-              {event.extendedProps?.status === 'free' ? '🟢 Libre' : '🔴 Occupé'}
-            </span>
-            {event.allDay && (
-              <span style={{
-                padding: '4px 12px', borderRadius: 20, fontSize: 11,
-                background: '#5588d018', color: C.blue, border: `1px solid ${C.blue}40`
-              }}>📅 Journée(s) entière(s)</span>
-            )}
-          </div>
+          <span style={{ padding: '4px 12px', borderRadius: 20, fontSize: 11, background: currentType.bg, color: currentType.color, border: `1px solid ${currentType.color}40` }}>{currentType.label}</span>
           <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={() => setEditing(!editing)} style={{
-              background: editing ? `${C.gold}20` : 'transparent',
-              border: `1px solid ${editing ? C.gold : C.border}`,
-              borderRadius: 8, color: editing ? C.gold : C.muted,
-              cursor: 'pointer', padding: '5px 8px'
-            }}><Edit2 size={13} /></button>
-            <button onClick={() => { onDelete(event.id); onClose(); }} style={{
-              background: 'transparent', border: `1px solid ${C.border}`,
-              borderRadius: 8, color: C.red, cursor: 'pointer', padding: '5px 8px'
-            }}><Trash2 size={13} /></button>
-            <button onClick={onClose} style={{
-              background: 'none', border: 'none', color: C.muted, cursor: 'pointer'
-            }}><X size={16} /></button>
+            <button onClick={() => setEditing(!editing)} style={{ background: editing ? `${C.gold}20` : 'transparent', border: `1px solid ${editing ? C.gold : C.border}`, borderRadius: 8, color: editing ? C.gold : C.muted, cursor: 'pointer', padding: '5px 8px' }}><Edit2 size={13} /></button>
+            <button onClick={() => { onDelete(event.id); onClose(); }} style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 8, color: C.red, cursor: 'pointer', padding: '5px 8px' }}><Trash2 size={13} /></button>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}><X size={16} /></button>
           </div>
         </div>
 
         {!editing ? (
           <>
-            <h2 style={{
-              fontFamily: "'Playfair Display',serif", color: C.goldSoft,
-              fontSize: 20, marginBottom: 20, lineHeight: 1.3
-            }}>{event.title}</h2>
+            <h2 style={{ fontFamily: "'Playfair Display',serif", color: C.goldSoft, fontSize: 20, marginBottom: 20 }}>{event.title}</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <Calendar size={14} color={C.gold} />
-                <span style={{ fontSize: 13, color: C.text }}>
-                  {formatDate(event.start)}
-                  {event.allDay && event.end && new Date(event.end).getDate() - new Date(event.start).getDate() > 1
-                    ? ` → ${formatDate(new Date(new Date(event.end).setDate(new Date(event.end).getDate() - 1)).toISOString())}`
-                    : ''}
-                </span>
+                <span style={{ fontSize: 13, color: C.text }}>{formatDate(event.start)}</span>
               </div>
               {!event.allDay && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <Clock size={14} color={C.gold} />
-                  <span style={{ fontSize: 13, color: C.text }}>
-                    {formatTime(event.start)}{event.end ? ` → ${formatTime(event.end)}` : ''}
-                  </span>
+                  <span style={{ fontSize: 13, color: C.text }}>{formatTime(event.start)}{event.end ? ` → ${formatTime(event.end)}` : ''}</span>
                 </div>
               )}
               {event.extendedProps?.location && (
@@ -261,24 +156,11 @@ const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
                   <span style={{ fontSize: 13, color: C.text }}>{event.extendedProps.location}</span>
                 </div>
               )}
-              {event.extendedProps?.recurrence && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <Repeat size={14} color={C.blue} />
-                  <span style={{ fontSize: 13, color: C.muted }}>Événement récurrent</span>
-                </div>
-              )}
               {event.extendedProps?.description && (
-                <div style={{
-                  padding: '12px 14px', background: C.surface, borderRadius: 8,
-                  fontSize: 13, color: C.muted, lineHeight: 1.6
-                }}>{event.extendedProps.description}</div>
+                <div style={{ padding: '12px 14px', background: C.surface, borderRadius: 8, fontSize: 13, color: C.muted, lineHeight: 1.6 }}>{event.extendedProps.description}</div>
               )}
             </div>
-            <button onClick={onClose} style={{
-              width: '100%', marginTop: 24, padding: '10px 0', borderRadius: 8,
-              border: `1px solid ${C.border}`, background: 'transparent',
-              color: C.muted, cursor: 'pointer', fontSize: 13
-            }}>Fermer</button>
+            <button onClick={onClose} style={{ width: '100%', marginTop: 24, padding: '10px 0', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, cursor: 'pointer', fontSize: 13 }}>Fermer</button>
           </>
         ) : (
           <>
@@ -288,91 +170,51 @@ const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
                 <input value={form.title} onChange={e => set('title', e.target.value)} style={inputStyle} />
               </div>
               <div>
-                <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Type d'événement</label>
-                <select value={form.eventType} onChange={e => set('eventType', e.target.value)}
-                  style={{ ...inputStyle, cursor: 'pointer' }}>
+                <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Type</label>
+                <select value={form.eventType} onChange={e => set('eventType', e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
                   {eventTypes.map(t => <option key={t.label} value={t.label}>{t.label}</option>)}
                 </select>
-                {selectedType && (
-                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: selectedType.color }} />
-                    <span style={{ fontSize: 11, color: selectedType.color }}>{selectedType.label}</span>
-                  </div>
-                )}
               </div>
-
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '10px 14px', background: C.surface, borderRadius: 8,
-                border: `1px solid ${form.allDay ? C.gold : C.border}`,
-                cursor: 'pointer', transition: 'border .2s'
-              }} onClick={() => set('allDay', !form.allDay)}>
-                <input type="checkbox" checked={form.allDay} onChange={() => {}}
-                  style={{ width: 16, height: 16, accentColor: C.gold, cursor: 'pointer' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: C.surface, borderRadius: 8, border: `1px solid ${form.allDay ? C.gold : C.border}`, cursor: 'pointer' }} onClick={() => set('allDay', !form.allDay)}>
+                <input type="checkbox" checked={form.allDay} onChange={() => {}} style={{ width: 16, height: 16, accentColor: C.gold }} />
                 <span style={{ fontSize: 13, color: C.text }}>📅 Journée entière</span>
               </div>
-
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
-                  <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>
-                    {form.allDay ? 'Date début' : 'Date'}
-                  </label>
-                  <input type="date" value={form.startDate}
-                    onChange={e => set('startDate', e.target.value)} style={inputStyle} />
+                  <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Date</label>
+                  <input type="date" value={form.startDate} onChange={e => set('startDate', e.target.value)} style={inputStyle} />
                 </div>
                 {form.allDay && (
                   <div>
                     <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Date fin</label>
-                    <input type="date" value={form.endDate || form.startDate}
-                      onChange={e => set('endDate', e.target.value)} style={inputStyle} />
+                    <input type="date" value={form.endDate || form.startDate} onChange={e => set('endDate', e.target.value)} style={inputStyle} />
                   </div>
                 )}
               </div>
-
               {!form.allDay && (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div>
                     <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Début</label>
-                    <input type="time" value={form.startTime}
-                      onChange={e => set('startTime', e.target.value)} style={inputStyle} />
+                    <input type="time" value={form.startTime} onChange={e => set('startTime', e.target.value)} style={inputStyle} />
                   </div>
                   <div>
                     <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Fin</label>
-                    <input type="time" value={form.endTime}
-                      onChange={e => set('endTime', e.target.value)} style={inputStyle} />
+                    <input type="time" value={form.endTime} onChange={e => set('endTime', e.target.value)} style={inputStyle} />
                   </div>
                 </div>
               )}
-
-              <div>
-                <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Statut</label>
-                <select value={form.status} onChange={e => set('status', e.target.value)}
-                  style={{ ...inputStyle, cursor: 'pointer' }}>
-                  <option value="busy">🔴 Occupé</option>
-                  <option value="free">🟢 Libre</option>
-                </select>
-              </div>
               <div>
                 <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Lieu</label>
                 <input value={form.location} onChange={e => set('location', e.target.value)} style={inputStyle} />
               </div>
               <div>
                 <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Description</label>
-                <textarea value={form.description} onChange={e => set('description', e.target.value)}
-                  rows={3} style={{ ...inputStyle, resize: 'vertical' } as any} />
+                <textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3} style={{ ...inputStyle, resize: 'vertical' } as any} />
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-              <button onClick={() => setEditing(false)} style={{
-                flex: 1, padding: '10px 0', borderRadius: 8,
-                border: `1px solid ${C.border}`, background: 'transparent',
-                color: C.muted, cursor: 'pointer', fontSize: 13
-              }}>Annuler</button>
-              <button onClick={() => { onUpdate(event.id, form); setEditing(false); onClose(); }} style={{
-                flex: 2, padding: '10px 0', borderRadius: 8,
-                border: 'none', background: C.gold,
-                color: '#0a0808', cursor: 'pointer', fontSize: 13, fontWeight: 600
-              }}>✓ Sauvegarder</button>
+              <button onClick={() => setEditing(false)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, cursor: 'pointer', fontSize: 13 }}>Annuler</button>
+              <button onClick={() => { onUpdate(event.id, form); setEditing(false); onClose(); }} style={{ flex: 2, padding: '10px 0', borderRadius: 8, border: 'none', background: C.gold, color: '#0a0808', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>✓ Sauvegarder</button>
             </div>
           </>
         )}
@@ -381,184 +223,92 @@ const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
   );
 };
 
-// ── Modal nouvel événement ────────────────────────────────────
 const NewEventModal = ({ date, onClose, onSave, eventTypes }: {
-  date: string;
-  onClose: () => void;
-  onSave: (e: any) => void;
-  eventTypes: typeof DEFAULT_EVENT_TYPES;
+  date: string; onClose: () => void; onSave: (e: any) => void; eventTypes: typeof DEFAULT_EVENT_TYPES;
 }) => {
   const [form, setForm] = useState({
-    title: '', date, endDate: date,
-    allDay: false,
+    title: '', date, endDate: date, allDay: false,
     startTime: '09:00', endTime: '10:00',
-    description: '', location: '',
-    status: 'busy', recurrence: 'none',
-    calendar: 'Calendrier',
-    eventType: eventTypes[0]?.label || 'Autre',
+    description: '', location: '', status: 'busy', recurrence: 'none',
+    calendar: 'Calendrier', eventType: eventTypes[0]?.label || 'Autre',
   });
   const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
   const selectedType = eventTypes.find(t => t.label === form.eventType) || eventTypes[0];
 
-  const RECURRENCE = [
-    { value: 'none', label: 'Pas de récurrence' },
-    { value: 'daily', label: 'Tous les jours' },
-    { value: 'weekly', label: 'Toutes les semaines' },
-    { value: 'biweekly', label: 'Toutes les 2 semaines' },
-    { value: 'monthly', label: 'Tous les mois' },
-  ];
-
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
-    }} onClick={onClose}>
-      <div style={{
-        background: C.card, borderRadius: 16, padding: 28, width: 480,
-        border: `1px solid ${selectedType?.color || C.goldDim}50`,
-        maxHeight: '90vh', overflowY: 'auto'
-      }} onClick={e => e.stopPropagation()}>
-
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={onClose}>
+      <div style={{ background: C.card, borderRadius: 16, padding: 28, width: 480, border: `1px solid ${selectedType?.color || C.goldDim}50`, maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
-          <h2 style={{ fontFamily: "'Playfair Display',serif", color: C.goldSoft, fontSize: 18 }}>
-            Nouvel événement
-          </h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}>
-            <X size={16} />
-          </button>
+          <h2 style={{ fontFamily: "'Playfair Display',serif", color: C.goldSoft, fontSize: 18 }}>Nouvel événement</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}><X size={16} /></button>
         </div>
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
             <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Titre *</label>
-            <input value={form.title} onChange={e => set('title', e.target.value)}
-              placeholder="Ex: Live EHME, Formation Kriya..." style={inputStyle} />
+            <input value={form.title} onChange={e => set('title', e.target.value)} placeholder="Ex: Live EHME, Formation Kriya..." style={inputStyle} />
           </div>
-
           <div>
             <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Type d'événement</label>
-            <select value={form.eventType} onChange={e => set('eventType', e.target.value)}
-              style={{ ...inputStyle, cursor: 'pointer' }}>
+            <select value={form.eventType} onChange={e => set('eventType', e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
               {eventTypes.map(t => <option key={t.label} value={t.label}>{t.label}</option>)}
             </select>
-            {selectedType && (
-              <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 10, height: 10, borderRadius: '50%', background: selectedType.color }} />
-                <span style={{ fontSize: 11, color: selectedType.color }}>{selectedType.label}</span>
-              </div>
-            )}
           </div>
-
           <div>
             <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Agenda</label>
-            <select value={form.calendar} onChange={e => set('calendar', e.target.value)}
-              style={{ ...inputStyle, cursor: 'pointer' }}>
+            <select value={form.calendar} onChange={e => set('calendar', e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
               <option value="Calendrier">📅 Calendrier (Serge)</option>
               <option value="Organisation lancement">🚀 Organisation lancement</option>
             </select>
           </div>
-
-          <div style={{
-            display: 'flex', alignItems: 'flex-start', gap: 10,
-            padding: '12px 14px', background: C.surface, borderRadius: 8,
-            border: `1px solid ${form.allDay ? C.gold : C.border}`,
-            cursor: 'pointer', transition: 'border .2s'
-          }} onClick={() => set('allDay', !form.allDay)}>
-            <input type="checkbox" checked={form.allDay} onChange={() => {}}
-              style={{ width: 16, height: 16, accentColor: C.gold, cursor: 'pointer', marginTop: 2 }} />
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px', background: C.surface, borderRadius: 8, border: `1px solid ${form.allDay ? C.gold : C.border}`, cursor: 'pointer' }} onClick={() => set('allDay', !form.allDay)}>
+            <input type="checkbox" checked={form.allDay} onChange={() => {}} style={{ width: 16, height: 16, accentColor: C.gold, marginTop: 2 }} />
             <div>
               <div style={{ fontSize: 13, color: C.text, fontWeight: 500 }}>📅 Journée entière</div>
-              <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
-                Apparaît en haut du calendrier — utile pour les voyages, absences, jours bloqués
-              </div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Utile pour les voyages, absences, jours bloqués</div>
             </div>
           </div>
-
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
-              <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>
-                {form.allDay ? 'Date début' : 'Date'}
-              </label>
-              <input type="date" value={form.date}
-                onChange={e => set('date', e.target.value)} style={inputStyle} />
+              <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>{form.allDay ? 'Date début' : 'Date'}</label>
+              <input type="date" value={form.date} onChange={e => set('date', e.target.value)} style={inputStyle} />
             </div>
             {form.allDay && (
               <div>
                 <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Date fin</label>
-                <input type="date" value={form.endDate}
-                  onChange={e => set('endDate', e.target.value)} style={inputStyle} />
+                <input type="date" value={form.endDate} onChange={e => set('endDate', e.target.value)} style={inputStyle} />
               </div>
             )}
           </div>
-
           {!form.allDay && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div>
                 <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Début</label>
-                <input type="time" value={form.startTime}
-                  onChange={e => set('startTime', e.target.value)} style={inputStyle} />
+                <input type="time" value={form.startTime} onChange={e => set('startTime', e.target.value)} style={inputStyle} />
               </div>
               <div>
                 <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Fin</label>
-                <input type="time" value={form.endTime}
-                  onChange={e => set('endTime', e.target.value)} style={inputStyle} />
+                <input type="time" value={form.endTime} onChange={e => set('endTime', e.target.value)} style={inputStyle} />
               </div>
             </div>
           )}
-
-          <div>
-            <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Statut</label>
-            <select value={form.status} onChange={e => set('status', e.target.value)}
-              style={{ ...inputStyle, cursor: 'pointer' }}>
-              <option value="busy">🔴 Occupé — bloque les disponibilités</option>
-              <option value="free">🟢 Libre — visible mais disponible</option>
-            </select>
-          </div>
-
-          <div>
-            <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Récurrence</label>
-            <select value={form.recurrence} onChange={e => set('recurrence', e.target.value)}
-              style={{ ...inputStyle, cursor: 'pointer' }}>
-              {RECURRENCE.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-            </select>
-          </div>
-
           <div>
             <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Lieu</label>
-            <input value={form.location} onChange={e => set('location', e.target.value)}
-              placeholder="En ligne, ville, adresse..." style={inputStyle} />
+            <input value={form.location} onChange={e => set('location', e.target.value)} placeholder="En ligne, ville, adresse..." style={inputStyle} />
           </div>
-
           <div>
             <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Description</label>
-            <textarea value={form.description} onChange={e => set('description', e.target.value)}
-              rows={3} placeholder="Notes, lien Zoom, infos complémentaires..."
-              style={{ ...inputStyle, resize: 'vertical' } as any} />
+            <textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3} placeholder="Notes, lien Zoom..." style={{ ...inputStyle, resize: 'vertical' } as any} />
           </div>
         </div>
-
         <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
-          <button onClick={onClose} style={{
-            flex: 1, padding: '10px 0', borderRadius: 8,
-            border: `1px solid ${C.border}`, background: 'transparent',
-            color: C.muted, cursor: 'pointer', fontSize: 13
-          }}>Annuler</button>
-          <button onClick={() => {
-            if (!form.title.trim()) return;
-            onSave(form);
-            onClose();
-          }} style={{
-            flex: 2, padding: '10px 0', borderRadius: 8,
-            border: 'none', background: selectedType?.color || C.gold,
-            color: '#0a0808', cursor: 'pointer', fontSize: 13, fontWeight: 600
-          }}>✓ Créer l'événement</button>
+          <button onClick={onClose} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, cursor: 'pointer', fontSize: 13 }}>Annuler</button>
+          <button onClick={() => { if (!form.title.trim()) return; onSave(form); onClose(); }} style={{ flex: 2, padding: '10px 0', borderRadius: 8, border: 'none', background: selectedType?.color || C.gold, color: '#0a0808', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>✓ Créer l'événement</button>
         </div>
       </div>
     </div>
   );
 };
 
-// ── Page principale ───────────────────────────────────────────
 export const CalendarPage = () => {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -625,7 +375,6 @@ export const CalendarPage = () => {
     return () => clearInterval(interval);
   }, [fetchEvents]);
 
-  // ✅ CORRIGÉ — récupère le vrai ID Google après création
   const handleCreate = async (form: any) => {
     const type = eventTypes.find(t => t.label === form.eventType) || eventTypes[0];
     const tempId = `local-${Date.now()}`;
@@ -657,35 +406,27 @@ export const CalendarPage = () => {
       newEvent.end = `${form.date}T${form.endTime}:00`;
     }
 
-    // Affiche immédiatement avec ID temporaire
     setEvents(prev => [...prev, newEvent]);
 
     try {
-    const res = await fetch('https://n8n.ananda-communaute.cloud/webhook/create-event', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify(newEvent)
-});
-const text = await res.text();
-if (text) {
-  try {
-    const data = JSON.parse(text);
-    const googleId = data?.id || data?.[0]?.id;
-    if (googleId) {
-      setEvents(prev => prev.map(e =>
-        e.id === tempId ? { ...e, id: googleId } : e
-      ));
-    }
-  } catch(e) {
-    console.log('Pas de JSON retourné, ok');
-  }
-}
-      // ✅ Remplace l'ID temporaire par le vrai ID Google
-      const googleId = data?.id || data?.[0]?.id;
-      if (googleId) {
-        setEvents(prev => prev.map(e =>
-          e.id === tempId ? { ...e, id: googleId } : e
-        ));
+      const res = await fetch('https://n8n.ananda-communaute.cloud/webhook/create-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newEvent)
+      });
+      const text = await res.text();
+      if (text) {
+        try {
+          const parsed = JSON.parse(text);
+          const googleId = parsed?.id || parsed?.[0]?.id;
+          if (googleId) {
+            setEvents(prev => prev.map(e =>
+              e.id === tempId ? { ...e, id: googleId } : e
+            ));
+          }
+        } catch {
+          // Pas de JSON retourné, pas grave
+        }
       }
     } catch (e) {
       console.error('Erreur création:', e);
@@ -708,14 +449,7 @@ if (text) {
         backgroundColor: type.bg,
         borderColor: type.color,
         textColor: type.color,
-        extendedProps: {
-          ...e.extendedProps,
-          description: data.description,
-          location: data.location,
-          status: data.status,
-          eventType: data.eventType,
-          calendar: data.calendar,
-        }
+        extendedProps: { ...e.extendedProps, description: data.description, location: data.location, status: data.status, eventType: data.eventType, calendar: data.calendar }
       } : e
     ));
     fetch('https://n8n.ananda-communaute.cloud/webhook/update-event', {
@@ -732,9 +466,7 @@ if (text) {
     }).catch(console.error);
   };
 
-  const todayEvents = events.filter(e =>
-    e.start && new Date(e.start).toDateString() === new Date().toDateString()
-  );
+  const todayEvents = events.filter(e => e.start && new Date(e.start).toDateString() === new Date().toDateString());
   const weekEvents = events.filter(e => {
     if (!e.start) return false;
     const d = new Date(e.start);
@@ -745,36 +477,15 @@ if (text) {
   });
 
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column',
-      padding: '12px 16px', height: 'calc(100vh - 70px)',
-      background: C.bg, fontFamily: "'Outfit', sans-serif"
-    }}>
-      <div style={{
-        flex: 1, display: 'flex', flexDirection: 'column',
-        borderRadius: 14, overflow: 'hidden',
-        border: `1px solid ${C.border}`,
-        boxShadow: '0 8px 40px rgba(0,0,0,0.4)'
-      }}>
-        {/* Header */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '10px 18px', background: C.surface,
-          borderBottom: `1px solid ${C.border}`,
-        }}>
+    <div style={{ display: 'flex', flexDirection: 'column', padding: '12px 16px', height: 'calc(100vh - 70px)', background: C.bg, fontFamily: "'Outfit', sans-serif" }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderRadius: 14, overflow: 'hidden', border: `1px solid ${C.border}`, boxShadow: '0 8px 40px rgba(0,0,0,0.4)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 18px', background: C.surface, borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Sparkles size={15} color={C.gold} />
-            <span style={{ fontFamily: "'Playfair Display',serif", color: C.goldSoft, fontSize: 15 }}>
-              Cockpit de Planification
-            </span>
+            <span style={{ fontFamily: "'Playfair Display',serif", color: C.goldSoft, fontSize: 15 }}>Cockpit de Planification</span>
             {loading && <span style={{ fontSize: 11, color: C.muted }}>↻</span>}
-            {lastSync && !loading && (
-              <span style={{ fontSize: 10, color: C.muted }}>
-                {lastSync.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            )}
+            {lastSync && !loading && <span style={{ fontSize: 10, color: C.muted }}>{lastSync.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>}
           </div>
-
           <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
             {[
               { label: "Auj.", value: todayEvents.length, color: C.gold },
@@ -783,43 +494,24 @@ if (text) {
               { label: 'Total', value: events.length, color: C.accent },
             ].map((s, i) => (
               <div key={i} style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 17, fontFamily: "'Playfair Display'", color: s.color, fontWeight: 700, lineHeight: 1 }}>
-                  {s.value}
-                </div>
+                <div style={{ fontSize: 17, fontFamily: "'Playfair Display'", color: s.color, fontWeight: 700, lineHeight: 1 }}>{s.value}</div>
                 <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{s.label}</div>
               </div>
             ))}
           </div>
-
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setShowTypesManager(true)} style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              padding: '6px 12px', background: 'transparent',
-              border: `1px solid ${C.border}`, borderRadius: 8,
-              color: C.muted, cursor: 'pointer', fontSize: 12
-            }}>
+            <button onClick={() => setShowTypesManager(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: 'pointer', fontSize: 12 }}>
               <Tag size={12} /> Types
             </button>
-            <button onClick={() => setNewEventDate(new Date().toISOString().split('T')[0])} style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              padding: '6px 14px', background: C.gold, border: 'none',
-              borderRadius: 8, color: '#0a0808', cursor: 'pointer',
-              fontSize: 12, fontWeight: 600
-            }}>
+            <button onClick={() => setNewEventDate(new Date().toISOString().split('T')[0])} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', background: C.gold, border: 'none', borderRadius: 8, color: '#0a0808', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
               <Plus size={12} /> Événement
             </button>
-            <button onClick={fetchEvents} style={{
-              display: 'flex', alignItems: 'center',
-              padding: '6px 10px', background: 'transparent',
-              border: `1px solid ${C.border}`, borderRadius: 8,
-              color: C.muted, cursor: 'pointer'
-            }}>
+            <button onClick={fetchEvents} style={{ display: 'flex', alignItems: 'center', padding: '6px 10px', background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: 'pointer' }}>
               <RefreshCw size={13} />
             </button>
           </div>
         </div>
 
-        {/* Calendrier */}
         <div style={{ flex: 1, background: '#fff', padding: '10px 12px', overflow: 'hidden' }}>
           <FullCalendar
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
@@ -827,11 +519,7 @@ if (text) {
             locales={[frLocale]}
             locale="fr"
             events={events}
-            headerToolbar={{
-              left: 'prev,next today',
-              center: 'title',
-              right: 'dayGridMonth,timeGridWeek,timeGridDay'
-            }}
+            headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay' }}
             height="100%"
             slotMinTime="07:00:00"
             slotMaxTime="22:00:00"
@@ -840,25 +528,15 @@ if (text) {
             editable={true}
             select={(info) => setNewEventDate(info.startStr.split('T')[0])}
             eventClick={(info) => setSelectedEvent(info.event)}
-            // ✅ CORRIGÉ — drag & drop envoie vers update-event
             eventDrop={(info) => {
-              setEvents(prev => prev.map(e =>
-                e.id === info.event.id
-                  ? { ...e, start: info.event.startStr, end: info.event.endStr, allDay: info.event.allDay }
-                  : e
-              ));
+              setEvents(prev => prev.map(e => e.id === info.event.id ? { ...e, start: info.event.startStr, end: info.event.endStr, allDay: info.event.allDay } : e));
               fetch('https://n8n.ananda-communaute.cloud/webhook/update-event', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: info.event.id, start: info.event.startStr, end: info.event.endStr })
               }).catch(console.error);
             }}
-            // ✅ CORRIGÉ — resize envoie maintenant vers update-event
             eventResize={(info) => {
-              setEvents(prev => prev.map(e =>
-                e.id === info.event.id
-                  ? { ...e, start: info.event.startStr, end: info.event.endStr }
-                  : e
-              ));
+              setEvents(prev => prev.map(e => e.id === info.event.id ? { ...e, start: info.event.startStr, end: info.event.endStr } : e));
               fetch('https://n8n.ananda-communaute.cloud/webhook/update-event', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: info.event.id, start: info.event.startStr, end: info.event.endStr })
@@ -887,7 +565,6 @@ if (text) {
         </div>
       </div>
 
-      {/* Légende */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', padding: '8px 4px' }}>
         {eventTypes.map((t, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -897,30 +574,9 @@ if (text) {
         ))}
       </div>
 
-      {selectedEvent && (
-        <EventModal
-          event={selectedEvent}
-          onClose={() => setSelectedEvent(null)}
-          onDelete={handleDelete}
-          onUpdate={handleUpdate}
-          eventTypes={eventTypes}
-        />
-      )}
-      {newEventDate && (
-        <NewEventModal
-          date={newEventDate}
-          onClose={() => setNewEventDate(null)}
-          onSave={handleCreate}
-          eventTypes={eventTypes}
-        />
-      )}
-      {showTypesManager && (
-        <EventTypesManager
-          types={eventTypes}
-          onUpdate={saveEventTypes}
-          onClose={() => setShowTypesManager(false)}
-        />
-      )}
+      {selectedEvent && <EventModal event={selectedEvent} onClose={() => setSelectedEvent(null)} onDelete={handleDelete} onUpdate={handleUpdate} eventTypes={eventTypes} />}
+      {newEventDate && <NewEventModal date={newEventDate} onClose={() => setNewEventDate(null)} onSave={handleCreate} eventTypes={eventTypes} />}
+      {showTypesManager && <EventTypesManager types={eventTypes} onUpdate={saveEventTypes} onClose={() => setShowTypesManager(false)} />}
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Outfit:wght@300;400;500&display=swap');
