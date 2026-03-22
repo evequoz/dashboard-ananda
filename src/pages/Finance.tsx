@@ -50,6 +50,7 @@ export const Finance = () => {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'mois' | 'archive'>('mois');
+  const [recherche, setRecherche] = useState('');
   const [filterMois, setFilterMois] = useState(now.getMonth());
   const [filterAnnee, setFilterAnnee] = useState(now.getFullYear());
   const [form, setForm] = useState({
@@ -97,7 +98,18 @@ export const Finance = () => {
   const balance = entrees - depenses - chargesFixes;
 
   // Archive — tous les mouvements de l'année
-  const mouvementsAnnee = mouvements.filter(m => m.Date?.startsWith(String(filterAnnee)));
+  const mouvementsAnnee = mouvements.filter(m => {
+    if (!m.Date?.startsWith(String(filterAnnee))) return false;
+    if (!recherche) return true;
+    const q = recherche.toLowerCase();
+    return (
+      (m['Libellé'] || '').toLowerCase().includes(q) ||
+      (getVal(m.Catégorie) || '').toLowerCase().includes(q) ||
+      (getVal(m.Source) || '').toLowerCase().includes(q) ||
+      (m.Notes || '').toLowerCase().includes(q) ||
+      String(m.Montant || '').includes(q)
+    );
+  });
 
   const handleEdit = (m: Mouvement) => {
     setEditingId(m.id);
@@ -405,10 +417,14 @@ export const Finance = () => {
               <h2 className="text-base font-semibold text-[#e8e4d9]">Archive {filterAnnee}</h2>
               <p className="text-xs text-[#5a587a] mt-1">{mouvementsAnnee.length} mouvements</p>
             </div>
-            <button onClick={exportCSV}
-              className="px-4 py-2 bg-[#22223a] text-[#e8e4d9] rounded-lg text-sm font-semibold flex items-center gap-2 hover:bg-[#2a2a4a]">
-              <Download className="w-4 h-4" /> Export CSV fiduciaire
-            </button>
+            <div className="flex items-center gap-3">
+              <input type="text" placeholder="Rechercher..." value={recherche} onChange={e => setRecherche(e.target.value)}
+                className="bg-[#0f0f1a] border border-[#22223a] rounded-lg px-3 py-2 text-sm text-[#e8e4d9] focus:outline-none focus:border-[#c9a84c] w-48" />
+              <button onClick={exportCSV}
+                className="px-4 py-2 bg-[#22223a] text-[#e8e4d9] rounded-lg text-sm font-semibold flex items-center gap-2 hover:bg-[#2a2a4a]">
+                <Download className="w-4 h-4" /> Export CSV
+              </button>
+            </div>
           </div>
 
           {/* Résumé annuel */}
