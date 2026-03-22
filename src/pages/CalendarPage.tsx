@@ -661,13 +661,25 @@ export const CalendarPage = () => {
     setEvents(prev => [...prev, newEvent]);
 
     try {
-      const res = await fetch('https://n8n.ananda-communaute.cloud/webhook/create-event', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newEvent)
-      });
-      const data = await res.json();
-
+    const res = await fetch('https://n8n.ananda-communaute.cloud/webhook/create-event', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(newEvent)
+});
+const text = await res.text();
+if (text) {
+  try {
+    const data = JSON.parse(text);
+    const googleId = data?.id || data?.[0]?.id;
+    if (googleId) {
+      setEvents(prev => prev.map(e =>
+        e.id === tempId ? { ...e, id: googleId } : e
+      ));
+    }
+  } catch(e) {
+    console.log('Pas de JSON retourné, ok');
+  }
+}
       // ✅ Remplace l'ID temporaire par le vrai ID Google
       const googleId = data?.id || data?.[0]?.id;
       if (googleId) {
