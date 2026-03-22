@@ -3,8 +3,8 @@ import { DollarSign, TrendingUp, TrendingDown, PlusCircle, X, Check, RefreshCw }
 
 const BASEROW_TOKEN = 'GBLdzaCZvQUVXkCqSls3WX3dT3uVg0H8';
 const BASEROW_URL = 'https://baserow.ananda-communaute.cloud/api';
-const FINANCE_TABLE = 543; // table Finance existante — à mettre à jour si différent
-const BUDGET_TABLE_ID = 542; // table Budget — à mettre à jour avec le vrai ID
+const FINANCE_TABLE = 534; // table Finance existante — à mettre à jour si différent
+const BUDGET_TABLE_ID = 536; // table Budget — à mettre à jour avec le vrai ID
 
 const headers = {
   Authorization: `Token ${BASEROW_TOKEN}`,
@@ -84,15 +84,15 @@ export const Finance = () => {
   useEffect(() => { fetchData(); }, []);
 
   // Calculs
-  const entrees = mouvements.filter(m => m.Type === 'Entrée').reduce((s, m) => s + (m['Montant CHF'] || 0), 0);
-  const depenses = mouvements.filter(m => m.Type === 'Dépense').reduce((s, m) => s + (m['Montant CHF'] || 0), 0);
-  const chargesFixes = budget.reduce((s, b) => s + (b.Mensuel || 0), 0);
+  const entrees = mouvements.filter(m => m.Type === 'Entrée').reduce((s, m) => s + (parseFloat(String(m["Montant CHF"])) || 0), 0);
+  const depenses = mouvements.filter(m => m.Type === 'Dépense').reduce((s, m) => s + (parseFloat(String(m["Montant CHF"])) || 0), 0);
+  const chargesFixes = budget.reduce((s, b) => s + (parseFloat(String(b.Mensuel)) || 0), 0);
   const balance = entrees - depenses - chargesFixes;
 
   // Répartition dépenses par catégorie
   const parCategorie = CATEGORIES.map(cat => ({
     cat,
-    total: mouvements.filter(m => m.Type === 'Dépense' && m.Catégorie === cat).reduce((s, m) => s + (m['Montant CHF'] || 0), 0),
+    total: mouvements.filter(m => m.Type === 'Dépense' && m.Catégorie === cat).reduce((s, m) => s + (parseFloat(String(m["Montant CHF"])) || 0), 0),
   })).filter(c => c.total > 0);
 
   const handleSave = async () => {
@@ -276,7 +276,7 @@ export const Finance = () => {
                         </div>
                       </div>
                       <p className={`text-sm font-bold ${m.Type === 'Entrée' ? 'text-[#4caf7d]' : 'text-[#d95555]'}`}>
-                        {m.Type === 'Entrée' ? '+' : '-'}{fmt(m['Montant CHF'] || 0)}
+                        {m.Type === 'Entrée' ? '+' : '-'}{fmt(parseFloat(String(m['Montant CHF'])) || 0)}
                       </p>
                     </div>
                   ))}
@@ -294,7 +294,7 @@ export const Finance = () => {
                   {budget.slice(0, 8).map(b => (
                     <div key={b.id} className="flex items-center justify-between">
                       <span className="text-xs text-[#5a587a]">{b.Libellé}</span>
-                      <span className="text-xs font-semibold text-[#c9a84c]">{fmt(b.Mensuel)}</span>
+                      <span className="text-xs font-semibold text-[#c9a84c]">{fmt(parseFloat(String(b.Mensuel)) || 0)}</span>
                     </div>
                   ))}
                   {budget.length > 8 && (
