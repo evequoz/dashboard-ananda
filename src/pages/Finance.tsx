@@ -68,6 +68,7 @@ export const Finance = () => {
       const rows: Mouvement[] = (finData.results || []).filter((r: Mouvement) =>
         r.Date?.startsWith(moisCourant)
       );
+      if (rows.length > 0) console.log('Mouvement sample:', JSON.stringify(rows[0]));
       setMouvements(rows);
 
       // Budget charges fixes
@@ -97,6 +98,15 @@ export const Finance = () => {
     total: mouvements.filter(m => (m.Type as any)?.value === 'Dépense' || ((m.Type as any)?.value ?? m.Type) === 'Dépense' && ((m.Catégorie as any)?.value ?? m.Catégorie) === cat).reduce((s, m) => s + (parseFloat(String(m["Montant CHF"])) || 0), 0),
   })).filter(c => c.total > 0);
 
+  const handleDelete = async (id: number) => {
+    if (!confirm('Supprimer ce mouvement ?')) return;
+    await fetch(`${BASEROW_URL}/database/rows/table/${FINANCE_TABLE}/${id}/?user_field_names=true`, {
+      method: 'DELETE',
+      headers,
+    });
+    fetchData();
+  };
+
   const handleSave = async () => {
     if (!form.libelle || !form.montant) return;
     setSaving(true);
@@ -107,7 +117,7 @@ export const Finance = () => {
         body: JSON.stringify({
           Date: form.date,
           Libellé: form.libelle,
-          'Montant CHF': parseFloat(form.montant),
+          "Montant CHF": parseFloat(form.montant) || 0,
           Type: formType,
           Source: form.source,
           Catégorie: form.categorie,
@@ -278,7 +288,7 @@ export const Finance = () => {
                         </div>
                       </div>
                       <p className={`text-sm font-bold ${(m.Type as any)?.value === 'Entrée' || m.Type === 'Entrée' ? 'text-[#4caf7d]' : 'text-[#d95555]'}`}>
-                        {(m.Type as any)?.value === 'Entrée' || m.Type === 'Entrée' ? '+' : '-'}{fmt(parseFloat(String(m['Montant CHF'])) || 0)}
+                        {(m.Type as any)?.value === 'Entrée' || m.Type === 'Entrée' ? '+' : '-'}{fmt(parseFloat(String(m['Montant CHF'] ?? m['montant_chf'] ?? 0)) || 0)}
                       </p>
                     </div>
                   ))}
