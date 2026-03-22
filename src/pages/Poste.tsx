@@ -37,7 +37,9 @@ interface Email {
   'Action requise': boolean;
   Traité: boolean;
   Compte: string;
-  'Suggestion réponse': string;
+  'Réponse 1': string;
+  'Réponse 2': string;
+  'Réponse 3': string;
   'A une pièce jointe': boolean;
   'Fichier': BaserowFile[];
 }
@@ -135,17 +137,28 @@ interface ReplyModalProps {
   onClose: () => void;
   sending: boolean;
   sendStatus: 'idle' | 'success' | 'error';
-  suggestion: string;
 }
-const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus, suggestion }: ReplyModalProps) => {
-  const [text, setText] = useState(suggestion || '');
+const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus }: ReplyModalProps) => {
+  const suggestions = [
+    { label: 'Réponse 1 — Directe', value: email['Réponse 1'] || '' },
+    { label: 'Réponse 2 — Développée', value: email['Réponse 2'] || '' },
+    { label: 'Réponse 3 — Spirituelle', value: email['Réponse 3'] || '' },
+  ].filter(s => s.value.trim() !== '');
+
+  const [text, setText] = useState(suggestions[0]?.value || '');
+  const [activeTab, setActiveTab] = useState(0);
+
+  const selectSuggestion = (idx: number) => {
+    setActiveTab(idx);
+    setText(suggestions[idx].value);
+  };
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-[#0f0f1a] border border-[#22223a] rounded-2xl shadow-2xl flex flex-col"
-        style={{ width: '780px', maxHeight: '90vh' }}>
+        style={{ width: '820px', maxHeight: '92vh' }}>
 
-        {/* Header modal */}
+        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#22223a] shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
@@ -164,34 +177,53 @@ const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus,
           </button>
         </div>
 
-        {/* Suggestion IA */}
-        <div className="px-6 pt-4 shrink-0">
-          <div className="p-4 bg-[#7b5ea7]/10 border border-[#7b5ea7]/25 rounded-xl">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-3.5 h-3.5 text-[#9b7ec7]" />
-                <span className="text-xs font-bold text-[#9b7ec7]">Suggestion IA</span>
-              </div>
-              {suggestion && (
-                <button onClick={() => setText(suggestion)}
+        {/* Suggestions IA — 3 onglets */}
+        {suggestions.length > 0 && (
+          <div className="px-6 pt-4 shrink-0">
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles className="w-3.5 h-3.5 text-[#7b5ea7]" />
+              <span className="text-xs font-bold text-[#9b7ec7]">Suggestions IA — dans ton style</span>
+            </div>
+
+            {/* Onglets */}
+            <div className="flex gap-2 mb-3">
+              {suggestions.map((s, i) => (
+                <button key={i} onClick={() => selectSuggestion(i)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                    activeTab === i
+                      ? 'bg-[#7b5ea7]/30 border-[#7b5ea7]/50 text-[#c9b8e8]'
+                      : 'bg-[#0a0a15] border-[#22223a] text-[#5a587a] hover:text-[#a0a0c0] hover:border-[#33335a]'
+                  }`}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Aperçu suggestion sélectionnée */}
+            <div className="p-4 bg-[#7b5ea7]/08 border border-[#7b5ea7]/20 rounded-xl mb-3 max-h-36 overflow-y-auto">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-bold text-[#7b5ea7] uppercase tracking-wider">
+                  {suggestions[activeTab]?.label}
+                </span>
+                <button onClick={() => setText(suggestions[activeTab].value)}
                   className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold bg-[#7b5ea7]/20 border border-[#7b5ea7]/30 text-[#9b7ec7] hover:bg-[#7b5ea7]/40 transition-all">
                   Utiliser <ChevronRight className="w-3 h-3" />
                 </button>
-              )}
+              </div>
+              <p className="text-xs text-[#b0a0d0] leading-relaxed whitespace-pre-wrap">
+                {suggestions[activeTab]?.value}
+              </p>
             </div>
-            <p className="text-sm text-[#b0a0d0] leading-relaxed">
-              {suggestion || <span className="text-[#5a587a] italic">Aucune suggestion disponible pour cet email.</span>}
-            </p>
           </div>
-        </div>
+        )}
 
         {/* Zone d'écriture */}
-        <div className="flex-1 px-6 pt-4 pb-2 min-h-0">
+        <div className="flex-1 px-6 pb-2 min-h-0">
           <textarea
             value={text}
             onChange={e => setText(e.target.value)}
-            className="w-full h-full min-h-[220px] bg-[#05050a] border border-[#22223a] rounded-xl p-4 text-sm text-[#e8e4d9] resize-none focus:outline-none focus:border-[#c9a84c]/40 transition-all leading-relaxed"
-            placeholder="Rédigez votre réponse..."
+            className="w-full h-full min-h-[200px] bg-[#05050a] border border-[#22223a] rounded-xl p-4 text-sm text-[#e8e4d9] resize-none focus:outline-none focus:border-[#c9a84c]/40 transition-all leading-relaxed"
+            placeholder="Rédigez ou modifiez votre réponse..."
             autoFocus
           />
         </div>
@@ -292,8 +324,8 @@ export const Poste = () => {
     try {
       await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_TACHES}/?user_field_names=true`,
         { method: 'POST', headers: HEADERS, body: JSON.stringify({
-          Nom: name, Description: desc, Statut: 'En cours',
-          Priorité: selectedEmail?.['Action requise'] ? 'haute' : 'normale',
+          Titre: name, Description: desc, Statut: 'En cours',
+          Priorité: selectedEmail?.['Action requise'] ? 'Haute' : 'Normale',
         })});
       setShowTaskPopup(false);
       setTaskSuccess(true);
@@ -332,6 +364,9 @@ export const Poste = () => {
     setSendStatus('idle');
   };
 
+  const hasSuggestions = (email: Email) =>
+    !!(email['Réponse 1'] || email['Réponse 2'] || email['Réponse 3']);
+
   const activeAccountData = ACCOUNTS.find(a => a.email === activeAccount)!;
   const files: BaserowFile[] = selectedEmail?.['Fichier'] || [];
 
@@ -349,11 +384,10 @@ export const Poste = () => {
           onClose={() => { setReplyMode(false); setSendStatus('idle'); }}
           sending={sending}
           sendStatus={sendStatus}
-          suggestion={selectedEmail['Suggestion réponse'] || ''}
         />
       )}
 
-      {/* ── Onglets ── */}
+      {/* Onglets comptes */}
       <div className="flex items-center justify-between px-6 border-b border-[#22223a] bg-[#05050a] shrink-0">
         <div className="flex items-center gap-1">
           {ACCOUNTS.map(account => {
@@ -402,10 +436,10 @@ export const Poste = () => {
         </div>
       </div>
 
-      {/* ── Layout ── */}
+      {/* Layout liste + détail */}
       <div className="flex flex-1 overflow-hidden">
 
-        {/* Liste 300px */}
+        {/* Liste emails */}
         <div className="flex flex-col border-r border-[#22223a] bg-[#05050a] shrink-0" style={{ width: '300px' }}>
           <div className="flex-1 overflow-y-auto">
             {loading ? (
@@ -438,6 +472,7 @@ export const Poste = () => {
                         </p>
                         <div className="flex items-center gap-0.5 shrink-0">
                           {emailFiles.length > 0 && <Paperclip className="w-3 h-3 text-[#a0a0c0]" />}
+                          {hasSuggestions(email) && <Sparkles className="w-3 h-3 text-[#7b5ea7]" />}
                           {email['Action requise'] && <AlertCircle className="w-3 h-3 text-[#d95555]" />}
                           {email.Traité && <CheckCircle className="w-3 h-3 text-[#4caf7d]" />}
                         </div>
@@ -460,7 +495,7 @@ export const Poste = () => {
           </div>
         </div>
 
-        {/* Détail */}
+        {/* Détail email */}
         <div className="flex-1 flex flex-col bg-[#05050a] overflow-hidden">
           {!selectedEmail ? (
             <div className="flex flex-col items-center justify-center h-full gap-4">
@@ -472,7 +507,7 @@ export const Poste = () => {
           ) : (
             <div className="flex flex-col h-full overflow-hidden">
 
-              {/* Header compact */}
+              {/* Header */}
               <div className="px-6 py-3 border-b border-[#22223a] shrink-0 bg-[#0a0a15]">
                 <div className="flex items-center justify-between gap-4 mb-2">
                   <div className="flex-1 min-w-0">
@@ -503,7 +538,7 @@ export const Poste = () => {
                   </div>
                 </div>
 
-                {/* Barre d'actions */}
+                {/* Actions */}
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <button onClick={() => setReplyMode(true)}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105"
@@ -551,26 +586,42 @@ export const Poste = () => {
                   </p>
                 </div>
 
-                {/* Suggestion de réponse */}
+                {/* 3 Suggestions de réponse */}
                 <div className="bg-[#0f0f1a] rounded-xl border border-[#2a2a4a] p-5">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="w-3.5 h-3.5 text-[#7b5ea7]" />
-                      <span className="text-xs font-bold text-[#e8e4d9]">Suggestion de réponse</span>
-                    </div>
-                    {selectedEmail['Suggestion réponse'] && (
-                      <button onClick={() => setReplyMode(true)}
-                        className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold bg-[#7b5ea7]/20 border border-[#7b5ea7]/30 text-[#9b7ec7] hover:bg-[#7b5ea7]/30 transition-all">
-                        Utiliser <ChevronRight className="w-3 h-3" />
-                      </button>
-                    )}
+                  <div className="flex items-center gap-2 mb-3">
+                    <Sparkles className="w-3.5 h-3.5 text-[#7b5ea7]" />
+                    <span className="text-xs font-bold text-[#e8e4d9]">Suggestions de réponse — dans ton style</span>
                   </div>
-                  <p className="text-sm leading-relaxed">
-                    {selectedEmail['Suggestion réponse']
-                      ? <span className="text-[#d0ccc0]">{selectedEmail['Suggestion réponse']}</span>
-                      : <span className="text-[#5a587a] italic">Aucune suggestion pour cet email.</span>
-                    }
-                  </p>
+
+                  {hasSuggestions(selectedEmail) ? (
+                    <div className="space-y-3">
+                      {[
+                        { label: 'Réponse 1 — Directe & concise', key: 'Réponse 1' as keyof Email, color: '#c9a84c' },
+                        { label: 'Réponse 2 — Développée', key: 'Réponse 2' as keyof Email, color: '#4caf7d' },
+                        { label: 'Réponse 3 — Chaleureuse & spirituelle', key: 'Réponse 3' as keyof Email, color: '#7b5ea7' },
+                      ].filter(s => selectedEmail[s.key]).map((s, i) => (
+                        <div key={i} className="rounded-xl border p-4 transition-all hover:border-opacity-60"
+                          style={{ borderColor: s.color + '30', background: s.color + '08' }}>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: s.color }}>
+                              {s.label}
+                            </span>
+                            <button onClick={() => setReplyMode(true)}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all"
+                              style={{ background: s.color + '20', border: `1px solid ${s.color}40`, color: s.color }}>
+                              Utiliser <ChevronRight className="w-3 h-3" />
+                            </button>
+                          </div>
+                          <p className="text-xs leading-relaxed whitespace-pre-wrap"
+                            style={{ color: s.color === '#c9a84c' ? '#d4c890' : s.color === '#4caf7d' ? '#90d4b0' : '#b090d4' }}>
+                            {selectedEmail[s.key] as string}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-[#5a587a] italic">Aucune suggestion pour cet email.</p>
+                  )}
                 </div>
 
                 {/* Contenu */}
