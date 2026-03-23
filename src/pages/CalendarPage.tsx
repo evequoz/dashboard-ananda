@@ -15,6 +15,16 @@ const C = {
   blue: '#5588d0', orange: '#d98844',
 };
 
+// Couleurs par calendrier
+const CALENDAR_COLORS: Record<string, { color: string; bg: string; label: string }> = {
+  'Calendrier': { color: '#7b5ea7', bg: '#7b5ea718', label: '📅 Calendrier (Serge)' },
+  'Organisation lancement': { color: '#5588d0', bg: '#5588d018', label: '🚀 Organisation lancement' },
+};
+
+const getCalendarColor = (calendarName: string) => {
+  return CALENDAR_COLORS[calendarName] || { color: C.gold, bg: `${C.gold}18`, label: calendarName };
+};
+
 const DEFAULT_EVENT_TYPES = [
   { label: 'Live / Q&A', color: '#4caf7d', bg: '#4caf7d18' },
   { label: 'Formation', color: '#5588d0', bg: '#5588d018' },
@@ -39,12 +49,33 @@ const inputStyle: React.CSSProperties = {
   fontFamily: "'Outfit', sans-serif", boxSizing: 'border-box'
 };
 
-// Sécurité ajoutée sur le parsing des dates
 const formatTime = (dt: any) =>
   dt ? new Date(dt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '--:--';
 
 const formatDate = (dt: any) =>
   dt ? new Date(dt).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
+
+// Retourne HH:MM de l'heure actuelle arrondie à la demie
+const getCurrentTime = () => {
+  const now = new Date();
+  const h = now.getHours().toString().padStart(2, '0');
+  const m = now.getMinutes() >= 30 ? '30' : '00';
+  return `${h}:${m}`;
+};
+
+// Ajoute 1h à un HH:MM
+const addOneHour = (time: string) => {
+  const [h, m] = time.split(':').map(Number);
+  const newH = (h + 1) % 24;
+  return `${newH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+};
+
+// Vérifie si fin > début
+const isEndAfterStart = (startTime: string, endTime: string, startDate: string, endDate: string) => {
+  const start = new Date(`${startDate}T${startTime}`);
+  const end = new Date(`${endDate}T${endTime}`);
+  return end > start;
+};
 
 const EventTypesManager = ({ types, onUpdate, onClose }: {
   types: typeof DEFAULT_EVENT_TYPES;
@@ -100,22 +131,25 @@ const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
   onUpdate: (id: string, data: any) => void; eventTypes: typeof DEFAULT_EVENT_TYPES;
 }) => {
   const currentType = eventTypes.find(t => t.label === event.extendedProps?.eventType) || eventTypes[eventTypes.length - 1];
+  const calColor = getCalendarColor(event.extendedProps?.calendar || '');
   const [editing, setEditing] = useState(false);
 
   const getEndDate = () => {
     if (!event.end) return event.start ? new Date(event.start).toISOString().split('T')[0] : '';
     const end = new Date(event.end);
-    // Correction: On retire le jour ajouté par FullCalendar pour le stockage n8n
     if (event.allDay) end.setDate(end.getDate() - 1);
     return end.toISOString().split('T')[0];
   };
+
+  const startTime = event.start && !event.allDay ? formatTime(event.start) : '09:00';
+  const endTime = event.end && !event.allDay ? formatTime(event.end) : addOneHour(startTime);
 
   const [form, setForm] = useState({
     title: event.title || '', allDay: event.allDay || false,
     startDate: event.start ? new Date(event.start).toISOString().split('T')[0] : '',
     endDate: getEndDate(),
-    startTime: event.start && !event.allDay ? formatTime(event.start) : '09:00',
-    endTime: event.end && !event.allDay ? formatTime(event.end) : '10:00',
+    startTime,
+    endTime,
     description: event.extendedProps?.description || '',
     location: event.extendedProps?.location || '',
     status: event.extendedProps?.status || 'busy',
@@ -123,13 +157,41 @@ const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
     calendar: event.extendedProps?.calendar || 'Calendrier',
   });
 
-  const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
+  const [timeError, setTimeError] = useState('');
+
+  const set = (k: string, v: any) => {
+    setForm(f => {
+      const updated = { ...f, [k]: v };
+      // Auto-ajustement fin si début change
+      if (k === 'startTime') {
+        updated.endTime = addOneHour(v);
+      }
+      return updated;
+    });
+    setTimeError('');
+  };
+
+  const handleSave = () => {
+    if (!form.allDay && !isEndAfterStart(form.startTime, form.endTime, form.startDate, form.endDate)) {
+      setTimeError('L\'heure de fin doit être après l\'heure de début');
+      return;
+    }
+    onUpdate(event.id, form);
+    setEditing(false);
+    onClose();
+  };
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={onClose}>
-      <div style={{ background: C.card, borderRadius: 16, padding: 28, width: 440, border: `1px solid ${currentType.color}50`, boxShadow: `0 0 40px ${currentType.color}15`, maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: C.card, borderRadius: 16, padding: 28, width: 440, border: `1px solid ${calColor.color}50`, boxShadow: `0 0 40px ${calColor.color}15`, maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <span style={{ padding: '4px 12px', borderRadius: 20, fontSize: 11, background: currentType.bg, color: currentType.color, border: `1px solid ${currentType.color}40` }}>{currentType.label}</span>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <span style={{ padding: '4px 12px', borderRadius: 20, fontSize: 11, background: currentType.bg, color: currentType.color, border: `1px solid ${currentType.color}40` }}>{currentType.label}</span>
+            {/* Badge calendrier coloré */}
+            <span style={{ padding: '4px 10px', borderRadius: 20, fontSize: 11, background: calColor.bg, color: calColor.color, border: `1px solid ${calColor.color}40` }}>
+              {event.extendedProps?.calendar || 'Calendrier'}
+            </span>
+          </div>
           <div style={{ display: 'flex', gap: 6 }}>
             <button onClick={() => setEditing(!editing)} style={{ background: editing ? `${C.gold}20` : 'transparent', border: `1px solid ${editing ? C.gold : C.border}`, borderRadius: 8, color: editing ? C.gold : C.muted, cursor: 'pointer', padding: '5px 8px' }}><Edit2 size={13} /></button>
             <button onClick={() => { onDelete(event.id); onClose(); }} style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 8, color: C.red, cursor: 'pointer', padding: '5px 8px' }}><Trash2 size={13} /></button>
@@ -142,18 +204,18 @@ const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
             <h2 style={{ fontFamily: "'Playfair Display',serif", color: C.goldSoft, fontSize: 20, marginBottom: 20 }}>{event.title}</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Calendar size={14} color={C.gold} />
+                <Calendar size={14} color={calColor.color} />
                 <span style={{ fontSize: 13, color: C.text }}>{formatDate(event.start)}</span>
               </div>
               {!event.allDay && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <Clock size={14} color={C.gold} />
+                  <Clock size={14} color={calColor.color} />
                   <span style={{ fontSize: 13, color: C.text }}>{formatTime(event.start)}{event.end ? ` → ${formatTime(event.end)}` : ''}</span>
                 </div>
               )}
               {event.extendedProps?.location && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <MapPin size={14} color={C.gold} />
+                  <MapPin size={14} color={calColor.color} />
                   <span style={{ fontSize: 13, color: C.text }}>{event.extendedProps.location}</span>
                 </div>
               )}
@@ -169,6 +231,15 @@ const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
               <div>
                 <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Titre</label>
                 <input value={form.title} onChange={e => set('title', e.target.value)} style={inputStyle} />
+              </div>
+              {/* Choix du calendrier en édition */}
+              <div>
+                <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Agenda</label>
+                <select value={form.calendar} onChange={e => set('calendar', e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                  {Object.entries(CALENDAR_COLORS).map(([key, val]) => (
+                    <option key={key} value={key}>{val.label}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Type</label>
@@ -200,10 +271,11 @@ const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
                   </div>
                   <div>
                     <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Fin</label>
-                    <input type="time" value={form.endTime} onChange={e => set('endTime', e.target.value)} style={inputStyle} />
+                    <input type="time" value={form.endTime} onChange={e => set('endTime', e.target.value)} style={{ ...inputStyle, borderColor: timeError ? C.red : C.border }} />
                   </div>
                 </div>
               )}
+              {timeError && <p style={{ fontSize: 11, color: C.red, margin: '-8px 0 0' }}>{timeError}</p>}
               <div>
                 <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Lieu</label>
                 <input value={form.location} onChange={e => set('location', e.target.value)} style={inputStyle} />
@@ -215,7 +287,7 @@ const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
               <button onClick={() => setEditing(false)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, cursor: 'pointer', fontSize: 13 }}>Annuler</button>
-              <button onClick={() => { onUpdate(event.id, form); setEditing(false); onClose(); }} style={{ flex: 2, padding: '10px 0', borderRadius: 8, border: 'none', background: C.gold, color: '#0a0808', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>✓ Sauvegarder</button>
+              <button onClick={handleSave} style={{ flex: 2, padding: '10px 0', borderRadius: 8, border: 'none', background: C.gold, color: '#0a0808', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>✓ Sauvegarder</button>
             </div>
           </>
         )}
@@ -227,18 +299,45 @@ const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
 const NewEventModal = ({ date, onClose, onSave, eventTypes }: {
   date: string; onClose: () => void; onSave: (e: any) => void; eventTypes: typeof DEFAULT_EVENT_TYPES;
 }) => {
+  const now = getCurrentTime();
   const [form, setForm] = useState({
     title: '', date, endDate: date, allDay: false,
-    startTime: '09:00', endTime: '10:00',
+    startTime: now,
+    endTime: addOneHour(now),
     description: '', location: '', status: 'busy', recurrence: 'none',
     calendar: 'Calendrier', eventType: eventTypes[0]?.label || 'Autre',
   });
-  const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
+
+  const [timeError, setTimeError] = useState('');
+
+  const set = (k: string, v: any) => {
+    setForm(f => {
+      const updated = { ...f, [k]: v };
+      // Auto-ajustement fin si début change
+      if (k === 'startTime') {
+        updated.endTime = addOneHour(v);
+      }
+      return updated;
+    });
+    setTimeError('');
+  };
+
   const selectedType = eventTypes.find(t => t.label === form.eventType) || eventTypes[0];
+  const calColor = getCalendarColor(form.calendar);
+
+  const handleSave = () => {
+    if (!form.title.trim()) return;
+    if (!form.allDay && !isEndAfterStart(form.startTime, form.endTime, form.date, form.endDate)) {
+      setTimeError('L\'heure de fin doit être après l\'heure de début');
+      return;
+    }
+    onSave(form);
+    onClose();
+  };
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={onClose}>
-      <div style={{ background: C.card, borderRadius: 16, padding: 28, width: 480, border: `1px solid ${selectedType?.color || C.goldDim}50`, maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: C.card, borderRadius: 16, padding: 28, width: 480, border: `1px solid ${calColor.color}50`, maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
           <h2 style={{ fontFamily: "'Playfair Display',serif", color: C.goldSoft, fontSize: 18 }}>Nouvel événement</h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}><X size={16} /></button>
@@ -246,7 +345,7 @@ const NewEventModal = ({ date, onClose, onSave, eventTypes }: {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
             <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Titre *</label>
-            <input value={form.title} onChange={e => set('title', e.target.value)} placeholder="Ex: Live EHME, Formation Kriya..." style={inputStyle} />
+            <input value={form.title} onChange={e => set('title', e.target.value)} placeholder="Ex: Live EHME, Formation Kriya..." style={inputStyle} autoFocus />
           </div>
           <div>
             <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Type d'événement</label>
@@ -254,12 +353,24 @@ const NewEventModal = ({ date, onClose, onSave, eventTypes }: {
               {eventTypes.map(t => <option key={t.label} value={t.label}>{t.label}</option>)}
             </select>
           </div>
+          {/* Agenda avec couleur visuelle */}
           <div>
             <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Agenda</label>
-            <select value={form.calendar} onChange={e => set('calendar', e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
-              <option value="Calendrier">📅 Calendrier (Serge)</option>
-              <option value="Organisation lancement">🚀 Organisation lancement</option>
-            </select>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {Object.entries(CALENDAR_COLORS).map(([key, val]) => (
+                <button key={key} onClick={() => set('calendar', key)}
+                  style={{
+                    flex: 1, padding: '10px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                    border: `2px solid ${form.calendar === key ? val.color : C.border}`,
+                    background: form.calendar === key ? val.bg : 'transparent',
+                    color: form.calendar === key ? val.color : C.muted,
+                    transition: 'all 0.15s',
+                  }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: val.color, display: 'inline-block', marginRight: 6 }} />
+                  {key}
+                </button>
+              ))}
+            </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px', background: C.surface, borderRadius: 8, border: `1px solid ${form.allDay ? C.gold : C.border}`, cursor: 'pointer' }} onClick={() => set('allDay', !form.allDay)}>
             <input type="checkbox" checked={form.allDay} onChange={() => {}} style={{ width: 16, height: 16, accentColor: C.gold, marginTop: 2 }} />
@@ -288,10 +399,11 @@ const NewEventModal = ({ date, onClose, onSave, eventTypes }: {
               </div>
               <div>
                 <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Fin</label>
-                <input type="time" value={form.endTime} onChange={e => set('endTime', e.target.value)} style={inputStyle} />
+                <input type="time" value={form.endTime} onChange={e => set('endTime', e.target.value)} style={{ ...inputStyle, borderColor: timeError ? C.red : C.border }} />
               </div>
             </div>
           )}
+          {timeError && <p style={{ fontSize: 11, color: C.red, margin: '-8px 0 0' }}>{timeError}</p>}
           <div>
             <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Lieu</label>
             <input value={form.location} onChange={e => set('location', e.target.value)} placeholder="En ligne, ville, adresse..." style={inputStyle} />
@@ -303,12 +415,17 @@ const NewEventModal = ({ date, onClose, onSave, eventTypes }: {
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
           <button onClick={onClose} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, cursor: 'pointer', fontSize: 13 }}>Annuler</button>
-          <button onClick={() => { if (!form.title.trim()) return; onSave(form); onClose(); }} style={{ flex: 2, padding: '10px 0', borderRadius: 8, border: 'none', background: selectedType?.color || C.gold, color: '#0a0808', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>✓ Créer l'événement</button>
+          <button onClick={handleSave}
+            style={{ flex: 2, padding: '10px 0', borderRadius: 8, border: 'none', background: calColor.color, color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+            ✓ Créer l'événement
+          </button>
         </div>
       </div>
     </div>
   );
 };
+
+const N8N_WEBHOOK = 'https://n8n.ananda-communaute.cloud/webhook/create-event';
 
 export const CalendarPage = () => {
   const [events, setEvents] = useState<any[]>([]);
@@ -329,7 +446,6 @@ export const CalendarPage = () => {
     try { localStorage.setItem('ananda-event-types', JSON.stringify(types)); } catch {}
   };
 
-  // Correction du useCallback : On ne met plus eventTypes pour éviter les boucles de fetch
   const fetchEvents = useCallback(async () => {
     setLoading(true);
     try {
@@ -340,8 +456,11 @@ export const CalendarPage = () => {
           const isAllDay = !item.start?.dateTime;
           const isFree = item.transparency === 'transparent';
           const eventType = item.extendedProperties?.private?.eventType || '';
-          
-          // Recherche intelligente du type
+          const calendarName = item.organizer?.displayName || item.calendar || 'Calendrier';
+
+          // Couleur prioritaire : celle du calendrier
+          const calColor = getCalendarColor(calendarName);
+
           let type = eventTypes.find(t => t.label === eventType);
           if (!type) {
             const summary = (item.summary || '').toLowerCase();
@@ -356,16 +475,17 @@ export const CalendarPage = () => {
             allDay: isAllDay,
             start: item.start?.dateTime || item.start?.date,
             end: item.end?.dateTime || item.end?.date,
-            backgroundColor: isFree ? 'transparent' : type?.bg,
-            borderColor: type?.color,
-            textColor: type?.color,
+            // Couleur basée sur le calendrier
+            backgroundColor: isFree ? 'transparent' : calColor.bg,
+            borderColor: calColor.color,
+            textColor: calColor.color,
             borderStyle: isFree ? 'dashed' : 'solid',
             extendedProps: {
               description: item.description || '',
               location: item.location || '',
               status: isFree ? 'free' : 'busy',
               recurrence: item.recurrence || null,
-              calendar: item.organizer?.displayName || '',
+              calendar: calendarName,
               eventType: type?.label || '',
             }
           };
@@ -378,7 +498,7 @@ export const CalendarPage = () => {
     } finally {
       setLoading(false);
     }
-  }, []); // Dépendances vidées
+  }, []);
 
   useEffect(() => {
     fetchEvents();
@@ -387,16 +507,16 @@ export const CalendarPage = () => {
   }, [fetchEvents]);
 
   const handleCreate = async (form: any) => {
-    const type = eventTypes.find(t => t.label === form.eventType) || eventTypes[0];
+    const calColor = getCalendarColor(form.calendar);
     const tempId = `local-${Date.now()}`;
 
     const newEvent: any = {
       id: tempId,
       title: form.title,
       allDay: form.allDay,
-      backgroundColor: type.bg,
-      borderColor: type.color,
-      textColor: type.color,
+      backgroundColor: calColor.bg,
+      borderColor: calColor.color,
+      textColor: calColor.color,
       extendedProps: {
         description: form.description,
         location: form.location,
@@ -420,12 +540,11 @@ export const CalendarPage = () => {
     setEvents(prev => [...prev, newEvent]);
 
     try {
-      await fetch('https://n8n.ananda-communaute.cloud/webhook/create-event', {
+      await fetch(N8N_WEBHOOK, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newEvent)
+        body: JSON.stringify({ action: 'create', ...newEvent })
       });
-      // Rafraîchissement pour synchroniser l'ID Google réel
       setTimeout(fetchEvents, 2000);
     } catch (e) {
       console.error('Erreur création:', e);
@@ -433,7 +552,7 @@ export const CalendarPage = () => {
   };
 
   const handleUpdate = (id: string, data: any) => {
-    const type = eventTypes.find(t => t.label === data.eventType) || eventTypes[0];
+    const calColor = getCalendarColor(data.calendar || 'Calendrier');
     setEvents(prev => prev.map(e =>
       e.id === id ? {
         ...e,
@@ -445,23 +564,23 @@ export const CalendarPage = () => {
           end.setDate(end.getDate() + 1);
           return end.toISOString().split('T')[0];
         })() : `${data.startDate}T${data.endTime}:00`,
-        backgroundColor: type.bg,
-        borderColor: type.color,
-        textColor: type.color,
+        backgroundColor: calColor.bg,
+        borderColor: calColor.color,
+        textColor: calColor.color,
         extendedProps: { ...e.extendedProps, description: data.description, location: data.location, status: data.status, eventType: data.eventType, calendar: data.calendar }
       } : e
     ));
-    fetch('https://n8n.ananda-communaute.cloud/webhook/update-event', {
+    fetch(N8N_WEBHOOK, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, ...data })
+      body: JSON.stringify({ action: 'update', id, ...data })
     }).catch(console.error);
   };
 
   const handleDelete = (id: string) => {
     setEvents(prev => prev.filter(e => e.id !== id));
-    fetch('https://n8n.ananda-communaute.cloud/webhook/delete-event', {
+    fetch(N8N_WEBHOOK, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id })
+      body: JSON.stringify({ action: 'delete', id })
     }).catch(console.error);
   };
 
@@ -485,11 +604,21 @@ export const CalendarPage = () => {
             {loading && <span style={{ fontSize: 11, color: C.muted }}>↻</span>}
             {lastSync && !loading && <span style={{ fontSize: 10, color: C.muted }}>{lastSync.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>}
           </div>
+
+          {/* Légende calendriers */}
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+            {Object.entries(CALENDAR_COLORS).map(([key, val]) => (
+              <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', background: val.color }} />
+                <span style={{ fontSize: 11, color: C.muted }}>{key}</span>
+              </div>
+            ))}
+          </div>
+
           <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
             {[
               { label: "Auj.", value: todayEvents.length, color: C.gold },
               { label: 'Semaine', value: weekEvents.length, color: C.blue },
-              { label: 'Lives', value: events.filter(e => e.title?.toLowerCase().includes('live')).length, color: C.green },
               { label: 'Total', value: events.length, color: C.accent },
             ].map((s, i) => (
               <div key={i} style={{ textAlign: 'center' }}>
@@ -529,41 +658,46 @@ export const CalendarPage = () => {
             eventClick={(info) => setSelectedEvent(info.event)}
             eventDrop={(info) => {
               setEvents(prev => prev.map(e => e.id === info.event.id ? { ...e, start: info.event.startStr, end: info.event.endStr, allDay: info.event.allDay } : e));
-              fetch('https://n8n.ananda-communaute.cloud/webhook/update-event', {
+              fetch(N8N_WEBHOOK, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: info.event.id, start: info.event.startStr, end: info.event.endStr })
+                body: JSON.stringify({ action: 'update', id: info.event.id, start: info.event.startStr, end: info.event.endStr })
               }).catch(console.error);
             }}
             eventResize={(info) => {
               setEvents(prev => prev.map(e => e.id === info.event.id ? { ...e, start: info.event.startStr, end: info.event.endStr } : e));
-              fetch('https://n8n.ananda-communaute.cloud/webhook/update-event', {
+              fetch(N8N_WEBHOOK, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: info.event.id, start: info.event.startStr, end: info.event.endStr })
+                body: JSON.stringify({ action: 'update', id: info.event.id, start: info.event.startStr, end: info.event.endStr })
               }).catch(console.error);
             }}
             dayMaxEvents={4}
             businessHours={{ daysOfWeek: [1, 2, 3, 4, 5], startTime: '08:00', endTime: '20:00' }}
             eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
-            eventContent={(arg) => (
-              <div style={{ padding: '2px 5px', overflow: 'hidden' }}>
-                <div style={{ fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {arg.event.extendedProps?.status === 'free' ? '🟢 ' : ''}
-                  {arg.event.allDay ? '📅 ' : ''}
-                  {arg.event.title}
-                </div>
-                {!arg.event.allDay && (
-                  <div style={{ fontSize: 10, opacity: 0.8 }}>
-                    {arg.timeText}
-                    {arg.event.extendedProps?.recurrence && ' 🔁'}
-                    {arg.event.extendedProps?.location && ' 📍'}
+            eventContent={(arg) => {
+              const cal = arg.event.extendedProps?.calendar || '';
+              const calC = getCalendarColor(cal);
+              return (
+                <div style={{ padding: '2px 5px', overflow: 'hidden' }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: calC.color }}>
+                    {arg.event.extendedProps?.status === 'free' ? '🟢 ' : ''}
+                    {arg.event.allDay ? '📅 ' : ''}
+                    {arg.event.title}
                   </div>
-                )}
-              </div>
-            )}
+                  {!arg.event.allDay && (
+                    <div style={{ fontSize: 10, opacity: 0.8, color: calC.color }}>
+                      {arg.timeText}
+                      {arg.event.extendedProps?.recurrence && ' 🔁'}
+                      {arg.event.extendedProps?.location && ' 📍'}
+                    </div>
+                  )}
+                </div>
+              );
+            }}
           />
         </div>
       </div>
 
+      {/* Légende types */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', padding: '8px 4px' }}>
         {eventTypes.map((t, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
