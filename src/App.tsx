@@ -4,7 +4,6 @@ import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { Overview } from './pages/Overview';
 import { Poste } from './pages/Poste';
-import { Members } from './pages/Members';
 import { Finance } from './pages/Finance';
 import { Tools } from './pages/Tools';
 import { CalendarPage } from './pages/CalendarPage';
@@ -23,22 +22,13 @@ function AppContent() {
 
   const renderPage = () => {
     switch (safePage) {
-      case 'overview':
-        return <Overview />;
-      case 'agenda':
-        return <CalendarPage />;
-      case 'tasks':
-        return <Taches />;
-      case 'poste':
-        return <Poste />;
-      case 'members':
-        return <Members />;
-      case 'finance':
-        return <Finance />;
-      case 'tools':
-        return <Tools />;
-      default:
-        return <Overview />;
+      case 'overview':  return <Overview />;
+      case 'agenda':    return <CalendarPage />;
+      case 'tasks':     return <Taches />;
+      case 'poste':     return <Poste />;
+      case 'finance':   return <Finance />;
+      case 'tools':     return <Tools />;
+      default:          return <Overview />;
     }
   };
 
