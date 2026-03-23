@@ -122,7 +122,6 @@ const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
   });
 
   const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
-  const selectedType = eventTypes.find(t => t.label === form.eventType) || eventTypes[0];
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={onClose}>
@@ -375,6 +374,7 @@ export const CalendarPage = () => {
     return () => clearInterval(interval);
   }, [fetchEvents]);
 
+  // ✅ Après création → refresh automatique pour obtenir les vrais IDs Google
   const handleCreate = async (form: any) => {
     const type = eventTypes.find(t => t.label === form.eventType) || eventTypes[0];
     const tempId = `local-${Date.now()}`;
@@ -406,31 +406,23 @@ export const CalendarPage = () => {
       newEvent.end = `${form.date}T${form.endTime}:00`;
     }
 
+    // Affiche immédiatement
     setEvents(prev => [...prev, newEvent]);
 
     try {
-      const res = await fetch('https://n8n.ananda-communaute.cloud/webhook/create-event', {
+      await fetch('https://n8n.ananda-communaute.cloud/webhook/create-event', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newEvent)
       });
-      const text = await res.text();
-      if (text) {
-        try {
-          const parsed = JSON.parse(text);
-          const googleId = parsed?.id || parsed?.[0]?.id;
-          if (googleId) {
-            setEvents(prev => prev.map(e =>
-              e.id === tempId ? { ...e, id: googleId } : e
-            ));
-          }
-        } catch {
-          // Pas de JSON retourné, pas grave
-        }
-      }
     } catch (e) {
       console.error('Erreur création:', e);
     }
+
+    // ✅ Refresh automatique après 3 secondes pour récupérer les vrais IDs Google
+    setTimeout(() => {
+      fetchEvents();
+    }, 3000);
   };
 
   const handleUpdate = (id: string, data: any) => {
