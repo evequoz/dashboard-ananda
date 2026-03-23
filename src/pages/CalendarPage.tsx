@@ -4,7 +4,7 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import frLocale from '@fullcalendar/core/locales/fr';
-import { Sparkles, RefreshCw, Plus, X, Calendar, Clock, MapPin, Repeat, Edit2, Trash2, Tag } from 'lucide-react';
+import { Sparkles, RefreshCw, Plus, X, Calendar, Clock, MapPin, Edit2, Trash2, Tag } from 'lucide-react';
 
 const C = {
   bg: '#080810', surface: '#0f0f1a', card: '#14141f',
@@ -39,11 +39,12 @@ const inputStyle: React.CSSProperties = {
   fontFamily: "'Outfit', sans-serif", boxSizing: 'border-box'
 };
 
-const formatTime = (dt: string) =>
-  new Date(dt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+// Sécurité ajoutée sur le parsing des dates
+const formatTime = (dt: any) =>
+  dt ? new Date(dt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '--:--';
 
-const formatDate = (dt: string) =>
-  new Date(dt).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+const formatDate = (dt: any) =>
+  dt ? new Date(dt).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
 
 const EventTypesManager = ({ types, onUpdate, onClose }: {
   types: typeof DEFAULT_EVENT_TYPES;
@@ -104,6 +105,7 @@ const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
   const getEndDate = () => {
     if (!event.end) return event.start ? new Date(event.start).toISOString().split('T')[0] : '';
     const end = new Date(event.end);
+    // Correction: On retire le jour ajouté par FullCalendar pour le stockage n8n
     if (event.allDay) end.setDate(end.getDate() - 1);
     return end.toISOString().split('T')[0];
   };
@@ -327,6 +329,7 @@ export const CalendarPage = () => {
     try { localStorage.setItem('ananda-event-types', JSON.stringify(types)); } catch {}
   };
 
+  // Correction du useCallback : On ne met plus eventTypes pour éviter les boucles de fetch
   const fetchEvents = useCallback(async () => {
     setLoading(true);
     try {
@@ -337,16 +340,25 @@ export const CalendarPage = () => {
           const isAllDay = !item.start?.dateTime;
           const isFree = item.transparency === 'transparent';
           const eventType = item.extendedProperties?.private?.eventType || '';
-          const type = eventTypes.find(t => t.label === eventType) || eventTypes[eventTypes.length - 1];
+          
+          // Recherche intelligente du type
+          let type = eventTypes.find(t => t.label === eventType);
+          if (!type) {
+            const summary = (item.summary || '').toLowerCase();
+            if (summary.includes('live')) type = eventTypes.find(t => t.label.toLowerCase().includes('live'));
+            if (summary.includes('formation')) type = eventTypes.find(t => t.label.toLowerCase().includes('formation'));
+            if (!type) type = eventTypes[eventTypes.length - 1];
+          }
+
           return {
             id: item.id || `evt-${Math.random()}`,
             title: item.summary || item.events || 'Événement',
             allDay: isAllDay,
             start: item.start?.dateTime || item.start?.date,
             end: item.end?.dateTime || item.end?.date,
-            backgroundColor: isFree ? 'transparent' : type.bg,
-            borderColor: type.color,
-            textColor: type.color,
+            backgroundColor: isFree ? 'transparent' : type?.bg,
+            borderColor: type?.color,
+            textColor: type?.color,
             borderStyle: isFree ? 'dashed' : 'solid',
             extendedProps: {
               description: item.description || '',
@@ -354,7 +366,7 @@ export const CalendarPage = () => {
               status: isFree ? 'free' : 'busy',
               recurrence: item.recurrence || null,
               calendar: item.organizer?.displayName || '',
-              eventType,
+              eventType: type?.label || '',
             }
           };
         });
@@ -366,7 +378,7 @@ export const CalendarPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [eventTypes]);
+  }, []); // Dépendances vidées
 
   useEffect(() => {
     fetchEvents();
@@ -374,7 +386,6 @@ export const CalendarPage = () => {
     return () => clearInterval(interval);
   }, [fetchEvents]);
 
-  // ✅ Après création → refresh automatique pour obtenir les vrais IDs Google
   const handleCreate = async (form: any) => {
     const type = eventTypes.find(t => t.label === form.eventType) || eventTypes[0];
     const tempId = `local-${Date.now()}`;
@@ -406,7 +417,6 @@ export const CalendarPage = () => {
       newEvent.end = `${form.date}T${form.endTime}:00`;
     }
 
-    // Affiche immédiatement
     setEvents(prev => [...prev, newEvent]);
 
     try {
@@ -415,14 +425,11 @@ export const CalendarPage = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newEvent)
       });
+      // Rafraîchissement pour synchroniser l'ID Google réel
+      setTimeout(fetchEvents, 2000);
     } catch (e) {
       console.error('Erreur création:', e);
     }
-
-    // ✅ Refresh automatique après 3 secondes pour récupérer les vrais IDs Google
-    setTimeout(() => {
-      fetchEvents();
-    }, 3000);
   };
 
   const handleUpdate = (id: string, data: any) => {
