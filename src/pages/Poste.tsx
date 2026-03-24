@@ -93,15 +93,15 @@ const TaskPopup = ({ email, onConfirm, onClose }: TaskPopupProps) => {
   );
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-[#0f0f1a] border border-[#22223a] rounded-2xl p-6 w-[500px] shadow-2xl">
+      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-6 w-[500px] shadow-2xl">
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-[#c9a84c]/20 flex items-center justify-center">
               <Plus className="w-4 h-4 text-[#c9a84c]" />
             </div>
-            <h3 className="text-base font-bold text-[#e8e4d9]">Créer une tâche</h3>
+            <h3 className="text-base font-bold text-[var(--text-primary)]">Créer une tâche</h3>
           </div>
-          <button onClick={onClose} className="text-[#5a587a] hover:text-[#e8e4d9] transition-all">
+          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -109,16 +109,16 @@ const TaskPopup = ({ email, onConfirm, onClose }: TaskPopupProps) => {
           <div>
             <label className="text-xs font-semibold text-[#a0a0c0] mb-2 block">Nom de la tâche</label>
             <input type="text" value={taskName} onChange={e => setTaskName(e.target.value)}
-              className="w-full bg-[#05050a] border border-[#22223a] rounded-lg px-3 py-2.5 text-sm text-[#e8e4d9] focus:outline-none focus:border-[#c9a84c]/50 transition-all" />
+              className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#c9a84c]/50 transition-all" />
           </div>
           <div>
             <label className="text-xs font-semibold text-[#a0a0c0] mb-2 block">Description</label>
             <textarea value={taskDesc} onChange={e => setTaskDesc(e.target.value)}
-              className="w-full h-24 bg-[#05050a] border border-[#22223a] rounded-lg px-3 py-2.5 text-sm text-[#e8e4d9] resize-none focus:outline-none focus:border-[#c9a84c]/50 transition-all" />
+              className="w-full h-24 bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-3 py-2.5 text-sm text-[var(--text-primary)] resize-none focus:outline-none focus:border-[#c9a84c]/50 transition-all" />
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-5">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-[#a0a0c0] hover:text-[#e8e4d9] border border-[#22223a] transition-all">Annuler</button>
+          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-[#a0a0c0] hover:text-[var(--text-primary)] border border-[var(--border)] transition-all">Annuler</button>
           <button onClick={() => onConfirm(taskName, taskDesc)} disabled={!taskName.trim()}
             className="px-5 py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-[#c9a84c] to-[#e8c97a] text-[#05050a] hover:scale-105 transition-all disabled:opacity-40">
             Créer
@@ -155,24 +155,24 @@ const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus 
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-[#0f0f1a] border border-[#22223a] rounded-2xl shadow-2xl flex flex-col"
+      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col"
         style={{ width: '820px', maxHeight: '92vh' }}>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#22223a] shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
               style={{ background: `${accountColor}20`, border: `1px solid ${accountColor}30` }}>
               <Send className="w-4 h-4" style={{ color: accountColor }} />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-[#e8e4d9]">Répondre</h3>
-              <p className="text-xs text-[#5a587a] mt-0.5">
+              <h3 className="text-sm font-bold text-[var(--text-primary)]">Répondre</h3>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
                 → {email['Expéditeur']?.replace(/<.*>/, '').replace(/"/g, '').trim()}
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-[#5a587a] hover:text-[#e8e4d9] hover:bg-[#22223a] transition-all">
+          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--border)] transition-all">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -192,7 +192,7 @@ const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus 
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
                     activeTab === i
                       ? 'bg-[#7b5ea7]/30 border-[#7b5ea7]/50 text-[#c9b8e8]'
-                      : 'bg-[#0a0a15] border-[#22223a] text-[#5a587a] hover:text-[#a0a0c0] hover:border-[#33335a]'
+                      : 'bg-[var(--bg-surface)] border-[var(--border)] text-[var(--text-muted)] hover:text-[#a0a0c0] hover:border-[#33335a]'
                   }`}>
                   {s.label}
                 </button>
@@ -222,14 +222,14 @@ const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus 
           <textarea
             value={text}
             onChange={e => setText(e.target.value)}
-            className="w-full h-full min-h-[200px] bg-[#05050a] border border-[#22223a] rounded-xl p-4 text-sm text-[#e8e4d9] resize-none focus:outline-none focus:border-[#c9a84c]/40 transition-all leading-relaxed"
+            className="w-full h-full min-h-[200px] bg-[var(--bg-main)] border border-[var(--border)] rounded-xl p-4 text-sm text-[var(--text-primary)] resize-none focus:outline-none focus:border-[#c9a84c]/40 transition-all leading-relaxed"
             placeholder="Rédigez ou modifiez votre réponse..."
             autoFocus
           />
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-[#22223a] shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--border)] shrink-0">
           <div>
             {sendStatus === 'success' && (
               <span className="text-xs text-[#4caf7d] flex items-center gap-1.5">
@@ -244,7 +244,7 @@ const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus 
           </div>
           <div className="flex gap-3">
             <button onClick={onClose}
-              className="px-5 py-2 rounded-lg text-sm text-[#a0a0c0] hover:text-[#e8e4d9] border border-[#22223a] hover:border-[#5a587a] transition-all">
+              className="px-5 py-2 rounded-lg text-sm text-[#a0a0c0] hover:text-[var(--text-primary)] border border-[var(--border)] hover:border-[#5a587a] transition-all">
               Annuler
             </button>
             <button onClick={() => onSend(text)} disabled={sending || !text.trim()}
@@ -388,7 +388,7 @@ export const Poste = () => {
       )}
 
       {/* Onglets comptes */}
-      <div className="flex items-center justify-between px-6 border-b border-[#22223a] bg-[#05050a] shrink-0">
+      <div className="flex items-center justify-between px-6 border-b border-[var(--border)] bg-[var(--bg-main)] shrink-0">
         <div className="flex items-center gap-1">
           {ACCOUNTS.map(account => {
             const Icon = account.icon;
@@ -398,7 +398,7 @@ export const Poste = () => {
               <button key={account.email}
                 onClick={() => { setActiveAccount(account.email); setSelectedEmail(null); }}
                 className={`flex items-center gap-2 px-5 py-3.5 text-sm font-semibold transition-all border-b-2 ${
-                  isActive ? 'text-[#e8e4d9]' : 'text-[#5a587a] border-b-transparent hover:text-[#a0a0c0]'
+                  isActive ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)] border-b-transparent hover:text-[#a0a0c0]'
                 }`}
                 style={isActive ? { borderBottomColor: account.color } : {}}>
                 <Icon className="w-4 h-4" style={isActive ? { color: account.color } : {}} />
@@ -424,13 +424,13 @@ export const Poste = () => {
           )}
           <button onClick={() => setShowTreated(!showTreated)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-              showTreated ? 'bg-[#c9a84c]/20 border-[#c9a84c]/40 text-[#c9a84c]' : 'bg-[#0a0a15] border-[#22223a] text-[#a0a0c0] hover:text-[#e8e4d9]'
+              showTreated ? 'bg-[#c9a84c]/20 border-[#c9a84c]/40 text-[#c9a84c]' : 'bg-[var(--bg-surface)] border-[var(--border)] text-[#a0a0c0] hover:text-[var(--text-primary)]'
             }`}>
             {showTreated ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
             {showTreated ? 'Masquer traités' : 'Traités'}
           </button>
           <button onClick={fetchEmails} disabled={refreshing}
-            className="p-1.5 rounded-lg bg-[#0a0a15] border border-[#22223a] text-[#a0a0c0] hover:text-[#e8e4d9] transition-all">
+            className="p-1.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] text-[#a0a0c0] hover:text-[var(--text-primary)] transition-all">
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
         </div>
@@ -440,11 +440,11 @@ export const Poste = () => {
       <div className="flex flex-1 overflow-hidden">
 
         {/* Liste emails */}
-        <div className="flex flex-col border-r border-[#22223a] bg-[#05050a] shrink-0" style={{ width: '300px' }}>
+        <div className="flex flex-col border-r border-[var(--border)] bg-[var(--bg-main)] shrink-0" style={{ width: '300px' }}>
           <div className="flex-1 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center h-32">
-                <RefreshCw className="w-5 h-5 text-[#5a587a] animate-spin" />
+                <RefreshCw className="w-5 h-5 text-[var(--text-muted)] animate-spin" />
               </div>
             ) : filteredEmails.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-32 gap-2">
@@ -456,8 +456,8 @@ export const Poste = () => {
               const emailFiles: BaserowFile[] = email['Fichier'] || [];
               return (
                 <button key={email.id} onClick={() => openEmail(email)}
-                  className={`w-full text-left p-3 border-b border-[#22223a]/50 transition-all hover:bg-[#0a0a15] ${
-                    isSelected ? 'bg-[#0f0f1a] border-l-2' : ''
+                  className={`w-full text-left p-3 border-b border-[var(--border)]/50 transition-all hover:bg-[var(--bg-surface)] ${
+                    isSelected ? 'bg-[var(--bg-card)] border-l-2' : ''
                   } ${email.Traité ? 'opacity-40' : ''}`}
                   style={isSelected ? { borderLeftColor: activeAccountData.color } : {}}>
                   <div className="flex items-start gap-2">
@@ -467,7 +467,7 @@ export const Poste = () => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1 mb-0.5">
-                        <p className={`text-xs font-bold truncate ${!email.Traité ? 'text-[#e8e4d9]' : 'text-[#a0a0c0]'}`}>
+                        <p className={`text-xs font-bold truncate ${!email.Traité ? 'text-[var(--text-primary)]' : 'text-[#a0a0c0]'}`}>
                           {email['Expéditeur']?.replace(/<.*>/, '').replace(/"/g, '').trim() || 'Inconnu'}
                         </p>
                         <div className="flex items-center gap-0.5 shrink-0">
@@ -484,7 +484,7 @@ export const Poste = () => {
                         {email['Résumé IA'] || '—'}
                       </p>
                       <div className="flex items-center gap-1 mt-1">
-                        <Clock className="w-3 h-3 text-[#5a587a]" />
+                        <Clock className="w-3 h-3 text-[var(--text-muted)]" />
                         <span className="text-[10px] text-[#7a78a0]">{formatDate(email['Date réception'])}</span>
                       </div>
                     </div>
@@ -496,10 +496,10 @@ export const Poste = () => {
         </div>
 
         {/* Détail email */}
-        <div className="flex-1 flex flex-col bg-[#05050a] overflow-hidden">
+        <div className="flex-1 flex flex-col bg-[var(--bg-main)] overflow-hidden">
           {!selectedEmail ? (
             <div className="flex flex-col items-center justify-center h-full gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-[#0a0a15] border border-[#22223a] flex items-center justify-center">
+              <div className="w-16 h-16 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border)] flex items-center justify-center">
                 <Mail className="w-8 h-8 text-[#22223a]" />
               </div>
               <p className="text-[#a0a0c0] text-sm">Sélectionnez un email</p>
@@ -508,18 +508,18 @@ export const Poste = () => {
             <div className="flex flex-col h-full overflow-hidden">
 
               {/* Header */}
-              <div className="px-6 py-3 border-b border-[#22223a] shrink-0 bg-[#0a0a15]">
+              <div className="px-6 py-3 border-b border-[var(--border)] shrink-0 bg-[var(--bg-surface)]">
                 <div className="flex items-center justify-between gap-4 mb-2">
                   <div className="flex-1 min-w-0">
-                    <h2 className="text-base font-bold text-[#e8e4d9] leading-tight truncate">
+                    <h2 className="text-base font-bold text-[var(--text-primary)] leading-tight truncate">
                       {selectedEmail.Sujet || 'Sans sujet'}
                     </h2>
                     <div className="flex items-center gap-3 mt-0.5">
                       <span className="text-xs text-[#c8c4b8]">
-                        <span className="text-[#5a587a]">De : </span>
+                        <span className="text-[var(--text-muted)]">De : </span>
                         {selectedEmail['Expéditeur']?.replace(/"/g, '') || '—'}
                       </span>
-                      <span className="flex items-center gap-1 text-xs text-[#5a587a]">
+                      <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
                         <Clock className="w-3 h-3" />{formatDate(selectedEmail['Date réception'])}
                       </span>
                     </div>
@@ -552,12 +552,12 @@ export const Poste = () => {
                     </button>
                   )}
                   <button onClick={() => setShowTaskPopup(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#0f0f1a] border border-[#22223a] text-[#c8c4b8] hover:text-[#e8e4d9] hover:border-[#c9a84c]/30 transition-all">
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[var(--bg-card)] border border-[var(--border)] text-[#c8c4b8] hover:text-[var(--text-primary)] hover:border-[#c9a84c]/30 transition-all">
                     <Plus className="w-3.5 h-3.5" /> Tâche
                   </button>
                   {files.map((file, i) => (
                     <a key={i} href={file.url} target="_blank" rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#0f0f1a] border border-[#22223a] text-[#a0a0c0] hover:text-[#c9a84c] hover:border-[#c9a84c]/40 transition-all">
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-card)] border border-[var(--border)] text-[#a0a0c0] hover:text-[#c9a84c] hover:border-[#c9a84c]/40 transition-all">
                       <FileText className="w-3.5 h-3.5 shrink-0" />
                       <span className="max-w-[160px] truncate">{getFileName(file.visible_name)}</span>
                       <ExternalLink className="w-3 h-3 shrink-0 opacity-50" />
@@ -581,16 +581,16 @@ export const Poste = () => {
                     </div>
                     <span className="text-xs font-bold text-[#c9a84c]">Résumé IA</span>
                   </div>
-                  <p className="text-sm text-[#e8e4d9] leading-relaxed">
+                  <p className="text-sm text-[var(--text-primary)] leading-relaxed">
                     {selectedEmail['Résumé IA'] || 'Aucun résumé.'}
                   </p>
                 </div>
 
                 {/* 3 Suggestions de réponse */}
-                <div className="bg-[#0f0f1a] rounded-xl border border-[#2a2a4a] p-5">
+                <div className="bg-[var(--bg-card)] rounded-xl border border-[#2a2a4a] p-5">
                   <div className="flex items-center gap-2 mb-3">
                     <Sparkles className="w-3.5 h-3.5 text-[#7b5ea7]" />
-                    <span className="text-xs font-bold text-[#e8e4d9]">Suggestions de réponse — dans ton style</span>
+                    <span className="text-xs font-bold text-[var(--text-primary)]">Suggestions de réponse — dans ton style</span>
                   </div>
 
                   {hasSuggestions(selectedEmail) ? (
@@ -620,20 +620,20 @@ export const Poste = () => {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-[#5a587a] italic">Aucune suggestion pour cet email.</p>
+                    <p className="text-sm text-[var(--text-muted)] italic">Aucune suggestion pour cet email.</p>
                   )}
                 </div>
 
                 {/* Contenu */}
                 {selectedEmail.Contenu && (
-                  <div className="bg-[#0f0f1a] rounded-xl border border-[#2a2a4a] p-5">
+                  <div className="bg-[var(--bg-card)] rounded-xl border border-[#2a2a4a] p-5">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <FileText className="w-3.5 h-3.5 text-[#a0a0c0]" />
-                        <span className="text-xs font-bold text-[#e8e4d9]">Contenu</span>
+                        <span className="text-xs font-bold text-[var(--text-primary)]">Contenu</span>
                       </div>
                       <button onClick={() => setShowFullContent(!showFullContent)}
-                        className="text-xs text-[#a0a0c0] hover:text-[#e8e4d9] flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[#22223a] hover:border-[#c9a84c]/30 transition-all">
+                        className="text-xs text-[#a0a0c0] hover:text-[var(--text-primary)] flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[var(--border)] hover:border-[#c9a84c]/30 transition-all">
                         {showFullContent ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
                         {showFullContent ? 'Réduire' : 'Voir tout'}
                       </button>

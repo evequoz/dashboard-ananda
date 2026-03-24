@@ -7,10 +7,10 @@ import frLocale from '@fullcalendar/core/locales/fr';
 import { Sparkles, RefreshCw, Plus, X, Calendar, Clock, MapPin, Edit2, Trash2, Tag } from 'lucide-react';
 
 const C = {
-  bg: '#080810', surface: '#0f0f1a', card: '#14141f',
-  border: '#22223a', gold: '#c9a84c', goldSoft: '#e8c97a',
+  bg: 'var(--bg-main)', surface: 'var(--bg-surface)', card: 'var(--bg-card)',
+  border: 'var(--border)', gold: 'var(--gold)', goldSoft: 'var(--gold-soft)',
   goldDim: '#5a4820', goldGlow: 'rgba(201,168,76,0.12)',
-  text: '#e8e4d9', muted: '#5a587a',
+  text: 'var(--text-primary)', muted: 'var(--text-muted)',
   accent: '#7b5ea7', green: '#4caf7d', red: '#d95555',
   blue: '#5588d0', orange: '#d98844',
 };
@@ -640,7 +640,7 @@ export const CalendarPage = () => {
           </div>
         </div>
 
-        <div style={{ flex: 1, background: '#fff', padding: '10px 12px', overflow: 'hidden' }}>
+        <div style={{ flex: 1, background: 'var(--bg-surface)', padding: '10px 12px', overflow: 'hidden' }}>
           <FullCalendar
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
             initialView="timeGridWeek"
@@ -714,22 +714,29 @@ export const CalendarPage = () => {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Outfit:wght@300;400;500&display=swap');
         .fc { font-family: 'Outfit', sans-serif !important; }
-        .fc-button-primary { background:#0f0f1a !important; border-color:#22223a !important; color:#e8e4d9 !important; font-size:12px !important; padding:5px 12px !important; text-transform:capitalize !important; border-radius:8px !important; }
-        .fc-button-primary:hover { background:#c9a84c15 !important; border-color:#c9a84c !important; color:#c9a84c !important; }
-        .fc-button-primary:not(:disabled).fc-button-active { background:#c9a84c !important; border-color:#c9a84c !important; color:#0a0808 !important; }
-        .fc-toolbar-title { font-family:'Playfair Display',serif !important; font-size:15px !important; color:#1a1a2a !important; font-weight:600 !important; }
+        .fc-button-primary { background:var(--bg-card) !important; border-color:var(--border) !important; color:var(--text-primary) !important; font-size:12px !important; padding:5px 12px !important; text-transform:capitalize !important; border-radius:8px !important; }
+        .fc-button-primary:hover { background:rgba(201,168,76,0.08) !important; border-color:var(--gold) !important; color:var(--gold) !important; }
+        .fc-button-primary:not(:disabled).fc-button-active { background:var(--gold) !important; border-color:var(--gold) !important; color:#0a0808 !important; }
+        .fc-toolbar-title { font-family:'Playfair Display',serif !important; font-size:15px !important; color:var(--text-primary) !important; font-weight:600 !important; }
         .fc-v-event { border-radius:6px !important; border-width:2px !important; cursor:pointer !important; }
         .fc-event:hover { opacity:0.85 !important; transform:translateY(-1px); transition:all .15s; }
-        .fc-timegrid-now-indicator-line { border-color:#c9a84c !important; border-width:2px !important; }
-        .fc-timegrid-now-indicator-arrow { border-top-color:#c9a84c !important; }
+        .fc-timegrid-now-indicator-line { border-color:var(--gold) !important; border-width:2px !important; }
+        .fc-timegrid-now-indicator-arrow { border-top-color:var(--gold) !important; }
         .fc-day-today { background:rgba(201,168,76,0.05) !important; }
-        .fc-col-header-cell-cushion { color:#333 !important; font-weight:500 !important; font-size:12px !important; text-decoration:none !important; }
-        .fc-timegrid-slot-label { font-size:11px !important; color:#999 !important; }
-        .fc-daygrid-day-number { color:#333 !important; text-decoration:none !important; }
+        .fc-col-header-cell-cushion { color:var(--text-primary) !important; font-weight:500 !important; font-size:12px !important; text-decoration:none !important; }
+        .fc-timegrid-slot-label { font-size:11px !important; color:var(--text-muted) !important; }
+        .fc-daygrid-day-number { color:var(--text-primary) !important; text-decoration:none !important; }
         .fc-highlight { background:rgba(201,168,76,0.12) !important; }
-        .fc-more-link { color:#c9a84c !important; font-size:11px !important; }
+        .fc-more-link { color:var(--gold) !important; font-size:11px !important; }
         .fc-daygrid-event { border-radius:6px !important; padding:2px 4px !important; }
         .fc-daygrid-block-event { border-width:2px !important; }
+        .fc-theme-standard td, .fc-theme-standard th { border-color:var(--border) !important; }
+        .fc-theme-standard .fc-scrollgrid { border-color:var(--border) !important; }
+        .fc .fc-view-harness { background:var(--bg-surface) !important; }
+        .fc-daygrid-day, .fc-timegrid-col { background:var(--bg-surface) !important; }
+        .fc-daygrid-day.fc-day-other { background:var(--bg-main) !important; }
+        .fc-timegrid-axis, .fc-list-empty { background:var(--bg-surface) !important; }
+        .fc-col-header { background:var(--bg-card) !important; }
       `}</style>
     </div>
   );

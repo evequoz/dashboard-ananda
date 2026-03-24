@@ -47,6 +47,7 @@ interface ModalState {
 function todayStr() { return new Date().toISOString().split('T')[0]; }
 function getVal(f: any): string {
   if (!f) return '';
+  if (Array.isArray(f)) return f[0]?.value ?? '';
   if (typeof f === 'object' && 'value' in f) return f.value;
   return String(f);
 }
@@ -64,14 +65,14 @@ function PrioBadge({ prio }: { prio: string }) {
   if (!prio || prio === 'Normale') return null;
   const s: Record<string, string> = {
     Haute: 'bg-amber-900/40 text-amber-300 border border-amber-700/50',
-    Basse: 'bg-[#22223a] text-[#5a587a] border border-[#22223a]',
+    Basse: 'bg-[#22223a] text-[var(--text-muted)] border border-[var(--border)]',
   };
   return <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${s[prio] || ''}`}>{prio}</span>;
 }
 
 function ProjetBadge({ projet }: { projet: string }) {
   if (!projet) return null;
-  return <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#1a1a2e] text-[#8884a8] border border-[#22223a]">{projet}</span>;
+  return <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#1a1a2e] text-[#8884a8] border border-[var(--border)]">{projet}</span>;
 }
 
 // ─── MODAL CRÉATION / ÉDITION ─────────────────────────────────
@@ -84,8 +85,9 @@ function TaskModal({ onClose, onSave, onUpdate, mode, task, defaultStatut = 'À 
   defaultStatut?: string;
   parentTask?: Task | null;
 }) {
-  const getInitialVal = (field: any) => {
+  const getInitialVal = (field: any): string => {
     if (!field) return '';
+    if (Array.isArray(field)) return field[0]?.value ?? '';
     if (typeof field === 'object' && 'value' in field) return field.value;
     return String(field);
   };
@@ -148,43 +150,43 @@ function TaskModal({ onClose, onSave, onUpdate, mode, task, defaultStatut = 'À 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-[#0a0a15] border border-[#22223a] rounded-2xl p-6 w-full max-w-md shadow-2xl">
+      <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 w-full max-w-md shadow-2xl">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-base font-semibold text-[#e8e4d9]">{title}</h2>
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">{title}</h2>
             {parentTask && mode === 'create' && (
-              <p className="text-xs text-[#5a587a] mt-0.5">Sera rattachée à la tâche parente</p>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">Sera rattachée à la tâche parente</p>
             )}
           </div>
-          <button onClick={onClose} className="text-[#5a587a] hover:text-[#e8e4d9]"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X className="w-5 h-5" /></button>
         </div>
 
         {error && <div className="bg-red-950/40 border border-red-800/40 text-red-400 text-xs rounded-lg p-3 mb-4">{error}</div>}
 
         <div className="space-y-3">
           <div>
-            <label className="text-xs text-[#5a587a] mb-1 block">Titre *</label>
-            <input autoFocus className="w-full bg-[#0f0f1a] border border-[#22223a] rounded-lg px-3 py-2 text-sm text-[#e8e4d9] focus:outline-none focus:border-[#c9a84c]/50"
+            <label className="text-xs text-[var(--text-muted)] mb-1 block">Titre *</label>
+            <input autoFocus className="w-full bg-[var(--bg-card)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#c9a84c]/50"
               placeholder="Nom de la tâche" value={form.Titre}
               onChange={e => set('Titre', e.target.value)} onKeyDown={e => e.key === 'Enter' && save()} />
           </div>
           <div>
-            <label className="text-xs text-[#5a587a] mb-1 block">Description</label>
-            <textarea className="w-full bg-[#0f0f1a] border border-[#22223a] rounded-lg px-3 py-2 text-sm text-[#e8e4d9] focus:outline-none focus:border-[#c9a84c]/50 resize-none h-16"
+            <label className="text-xs text-[var(--text-muted)] mb-1 block">Description</label>
+            <textarea className="w-full bg-[var(--bg-card)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#c9a84c]/50 resize-none h-16"
               placeholder="Infos complémentaires..." value={form.Description}
               onChange={e => set('Description', e.target.value)} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-[#5a587a] mb-1 block">Projet</label>
-              <select className="w-full bg-[#0f0f1a] border border-[#22223a] rounded-lg px-3 py-2 text-sm text-[#e8e4d9] focus:outline-none focus:border-[#c9a84c]/50"
+              <label className="text-xs text-[var(--text-muted)] mb-1 block">Projet</label>
+              <select className="w-full bg-[var(--bg-card)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#c9a84c]/50"
                 value={form.Projet} onChange={e => set('Projet', e.target.value)}>
                 {PROJETS.map(p => <option key={p} value={p}>{p || '— Choisir —'}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs text-[#5a587a] mb-1 block">Priorité</label>
-              <select className="w-full bg-[#0f0f1a] border border-[#22223a] rounded-lg px-3 py-2 text-sm text-[#e8e4d9] focus:outline-none focus:border-[#c9a84c]/50"
+              <label className="text-xs text-[var(--text-muted)] mb-1 block">Priorité</label>
+              <select className="w-full bg-[var(--bg-card)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#c9a84c]/50"
                 value={form.Priorité} onChange={e => set('Priorité', e.target.value)}>
                 {PRIORITES.map(p => <option key={p}>{p}</option>)}
               </select>
@@ -192,29 +194,29 @@ function TaskModal({ onClose, onSave, onUpdate, mode, task, defaultStatut = 'À 
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-[#5a587a] mb-1 block">Statut</label>
-              <select className="w-full bg-[#0f0f1a] border border-[#22223a] rounded-lg px-3 py-2 text-sm text-[#e8e4d9] focus:outline-none focus:border-[#c9a84c]/50"
+              <label className="text-xs text-[var(--text-muted)] mb-1 block">Statut</label>
+              <select className="w-full bg-[var(--bg-card)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#c9a84c]/50"
                 value={form.Statut} onChange={e => set('Statut', e.target.value)}>
                 {STATUTS.map(s => <option key={s}>{s}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs text-[#5a587a] mb-1 block">Récurrence</label>
-              <select className="w-full bg-[#0f0f1a] border border-[#22223a] rounded-lg px-3 py-2 text-sm text-[#e8e4d9] focus:outline-none focus:border-[#c9a84c]/50"
+              <label className="text-xs text-[var(--text-muted)] mb-1 block">Récurrence</label>
+              <select className="w-full bg-[var(--bg-card)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#c9a84c]/50"
                 value={form.Récurrence} onChange={e => set('Récurrence', e.target.value)}>
                 {RECURRENCES.map(r => <option key={r}>{r}</option>)}
               </select>
             </div>
           </div>
           <div>
-            <label className="text-xs text-[#5a587a] mb-1 block">Date d'échéance</label>
-            <input type="date" className="w-full bg-[#0f0f1a] border border-[#22223a] rounded-lg px-3 py-2 text-sm text-[#e8e4d9] focus:outline-none focus:border-[#c9a84c]/50"
+            <label className="text-xs text-[var(--text-muted)] mb-1 block">Date d'échéance</label>
+            <input type="date" className="w-full bg-[var(--bg-card)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#c9a84c]/50"
               value={form['Date échéance']} onChange={e => set('Date échéance', e.target.value)} />
           </div>
         </div>
 
         <div className="flex justify-end gap-3 mt-5">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-[#5a587a] hover:text-[#e8e4d9] transition-colors">Annuler</button>
+          <button onClick={onClose} className="px-4 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Annuler</button>
           <button onClick={save} disabled={saving || !form.Titre.trim()}
             className="px-5 py-2 rounded-lg bg-gradient-to-r from-[#c9a84c]/20 to-[#e8c97a]/20 border border-[#c9a84c]/40 text-[#e8c97a] text-sm font-medium hover:from-[#c9a84c]/30 transition-all disabled:opacity-40">
             {saving ? 'Enregistrement...' : mode === 'edit' ? 'Mettre à jour' : 'Enregistrer'}
@@ -252,14 +254,14 @@ function TaskCard({ task, subTasks, onStatusChange, onEdit, onAddSubTask, compac
 
   return (
     <div className={`rounded-xl border transition-all duration-200
-      ${done ? 'border-[#1a1a2e] opacity-60' : overdue ? 'border-amber-800/40' : 'border-[#22223a] hover:border-[#33335a]'}
-      bg-[#0f0f1a] group`}>
+      ${done ? 'border-[#1a1a2e] opacity-60' : overdue ? 'border-amber-800/40' : 'border-[var(--border)] hover:border-[#33335a]'}
+      bg-[var(--bg-card)] group`}>
 
       {/* Ligne principale */}
       <div className="flex items-start gap-2 p-3">
         {/* Toggle sous-tâches */}
         <button onClick={() => hasSubs && !compact && setExpanded(e => !e)}
-          className={`mt-0.5 flex-shrink-0 transition-colors ${hasSubs && !compact ? 'text-[#5a587a] hover:text-[#e8e4d9]' : 'text-transparent cursor-default'}`}>
+          className={`mt-0.5 flex-shrink-0 transition-colors ${hasSubs && !compact ? 'text-[var(--text-muted)] hover:text-[var(--text-primary)]' : 'text-transparent cursor-default'}`}>
           {hasSubs && !compact
             ? expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronR className="w-4 h-4" />
             : <ChevronR className="w-4 h-4" />}
@@ -271,13 +273,13 @@ function TaskCard({ task, subTasks, onStatusChange, onEdit, onAddSubTask, compac
             ? <CheckCircle2 className="w-4 h-4 text-[#4caf7d]" />
             : statut === 'En cours'
               ? <Circle className="w-4 h-4 text-[#c9a84c]" />
-              : <Circle className={`w-4 h-4 ${overdue ? 'text-amber-500' : 'text-[#33335a] hover:text-[#5a587a]'}`} />}
+              : <Circle className={`w-4 h-4 ${overdue ? 'text-amber-500' : 'text-[#33335a] hover:text-[var(--text-muted)]'}`} />}
         </button>
 
         {/* Contenu */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className={`text-sm font-medium leading-tight ${done ? 'line-through text-[#5a587a]' : 'text-[#e8e4d9]'}`}>
+            <span className={`text-sm font-medium leading-tight ${done ? 'line-through text-[var(--text-muted)]' : 'text-[var(--text-primary)]'}`}>
               {task.Titre || '(Sans titre)'}
             </span>
             <PrioBadge prio={prio} />
@@ -289,28 +291,28 @@ function TaskCard({ task, subTasks, onStatusChange, onEdit, onAddSubTask, compac
             )}
           </div>
           {!compact && task.Description && (
-            <p className="text-xs text-[#5a587a] mt-1 line-clamp-2">{task.Description}</p>
+            <p className="text-xs text-[var(--text-muted)] mt-1 line-clamp-2">{task.Description}</p>
           )}
           <div className="flex items-center gap-2 mt-1 flex-wrap">
             {rec && rec !== 'Aucune' && (
-              <span className="flex items-center gap-1 text-[10px] text-[#5a587a]">
+              <span className="flex items-center gap-1 text-[10px] text-[var(--text-muted)]">
                 <RotateCcw className="w-2.5 h-2.5" />{rec}
               </span>
             )}
             {task['Date échéance'] && (
-              <span className="text-[10px] text-[#5a587a]">
+              <span className="text-[10px] text-[var(--text-muted)]">
                 {new Date(task['Date échéance']).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
               </span>
             )}
             {hasSubs && (
-              <span className="text-[10px] text-[#5a587a]">{doneSubs}/{subTasks!.length} sous-tâches</span>
+              <span className="text-[10px] text-[var(--text-muted)]">{doneSubs}/{subTasks!.length} sous-tâches</span>
             )}
           </div>
         </div>
 
         {/* Bouton édition — toujours visible */}
         <button onClick={() => onEdit(task)}
-          className="flex-shrink-0 p-1.5 rounded-lg text-[#33335a] hover:text-[#c9a84c] hover:bg-[#22223a] transition-all"
+          className="flex-shrink-0 p-1.5 rounded-lg text-[#33335a] hover:text-[#c9a84c] hover:bg-[var(--border)] transition-all"
           title="Modifier la tâche">
           <Pencil className="w-3.5 h-3.5" />
         </button>
@@ -319,7 +321,7 @@ function TaskCard({ task, subTasks, onStatusChange, onEdit, onAddSubTask, compac
       {/* Barre progression */}
       {hasSubs && !compact && (
         <div className="px-3 pb-1">
-          <div className="w-full bg-[#0a0a15] rounded-full h-1 overflow-hidden">
+          <div className="w-full bg-[var(--bg-surface)] rounded-full h-1 overflow-hidden">
             <div className="bg-[#4caf7d] h-full rounded-full transition-all duration-300"
               style={{ width: `${(doneSubs / subTasks!.length) * 100}%` }} />
           </div>
@@ -330,14 +332,14 @@ function TaskCard({ task, subTasks, onStatusChange, onEdit, onAddSubTask, compac
       {hasSubs && expanded && !compact && (
         <div className="border-t border-[#1a1a2e] mx-3 mb-1 pt-2 space-y-1">
           {subTasks!.map(sub => (
-            <div key={sub.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[#0a0a15] transition-colors group/sub">
+            <div key={sub.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-surface)] transition-colors group/sub">
               <button onClick={() => onStatusChange(sub.id, getVal(sub.Statut) === 'Fait' ? 'À faire' : 'Fait')}
                 className="flex-shrink-0 hover:scale-110 transition-all">
                 {getVal(sub.Statut) === 'Fait'
                   ? <CheckCircle2 className="w-3.5 h-3.5 text-[#4caf7d]" />
-                  : <Circle className="w-3.5 h-3.5 text-[#33335a] hover:text-[#5a587a]" />}
+                  : <Circle className="w-3.5 h-3.5 text-[#33335a] hover:text-[var(--text-muted)]" />}
               </button>
-              <span className={`text-xs flex-1 ${getVal(sub.Statut) === 'Fait' ? 'line-through text-[#5a587a]' : 'text-[#c8c4b8]'}`}>
+              <span className={`text-xs flex-1 ${getVal(sub.Statut) === 'Fait' ? 'line-through text-[var(--text-muted)]' : 'text-[#c8c4b8]'}`}>
                 {sub.Titre || '(Sans titre)'}
               </span>
               <button onClick={() => onEdit(sub)}
@@ -353,7 +355,7 @@ function TaskCard({ task, subTasks, onStatusChange, onEdit, onAddSubTask, compac
       {!compact && onAddSubTask && (
         <div className="px-3 pb-2.5 pt-1">
           <button onClick={() => onAddSubTask(task)}
-            className="flex items-center gap-1.5 text-[11px] text-[#5a587a] hover:text-[#c9a84c] transition-colors px-2 py-1 rounded-lg hover:bg-[#22223a]">
+            className="flex items-center gap-1.5 text-[11px] text-[var(--text-muted)] hover:text-[#c9a84c] transition-colors px-2 py-1 rounded-lg hover:bg-[var(--border)]">
             <Plus className="w-3 h-3" />
             Ajouter une sous-tâche
           </button>
@@ -399,9 +401,9 @@ function KanbanView({ tasks, onStatusChange, onAddInCol, onEdit, onAddSubTask }:
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full" style={{ background: col.color }} />
                 <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: col.color }}>{col.id}</span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-[#0a0a15] border border-[#22223a] text-[#5a587a]">{colTasks.length}</span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-muted)]">{colTasks.length}</span>
               </div>
-              <button onClick={() => onAddInCol(col.id)} className="text-[#5a587a] hover:text-[#e8e4d9] p-1 rounded hover:bg-[#22223a] transition-all" title={`Créer dans ${col.id}`}>
+              <button onClick={() => onAddInCol(col.id)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 rounded hover:bg-[var(--border)] transition-all" title={`Créer dans ${col.id}`}>
                 <Plus className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -465,13 +467,13 @@ function TodayView({ tasks, onStatusChange, onEdit, onAddSubTask }: {
     <div className="space-y-6">
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: 'À faire', value: pending.length, color: 'text-[#e8e4d9]' },
+          { label: 'À faire', value: pending.length, color: 'text-[var(--text-primary)]' },
           { label: 'En cours', value: inprogress.length, color: 'text-[#c9a84c]' },
           { label: 'Faites', value: done.length, color: 'text-[#4caf7d]' },
-          { label: 'En retard', value: overdue.length, color: overdue.length > 0 ? 'text-amber-400' : 'text-[#5a587a]' },
+          { label: 'En retard', value: overdue.length, color: overdue.length > 0 ? 'text-amber-400' : 'text-[var(--text-muted)]' },
         ].map(s => (
-          <div key={s.label} className="bg-[#0a0a15] rounded-xl border border-[#22223a] p-3">
-            <p className="text-xs text-[#5a587a] mb-1">{s.label}</p>
+          <div key={s.label} className="bg-[var(--bg-surface)] rounded-xl border border-[var(--border)] p-3">
+            <p className="text-xs text-[var(--text-muted)] mb-1">{s.label}</p>
             <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
           </div>
         ))}
@@ -479,7 +481,7 @@ function TodayView({ tasks, onStatusChange, onEdit, onAddSubTask }: {
       {overdue.length === 0 && pending.length === 0 && inprogress.length === 0 && done.length === 0 && (
         <div className="text-center py-16">
           <CheckCircle2 className="w-10 h-10 text-[#4caf7d]/40 mx-auto mb-3" />
-          <p className="text-[#5a587a] text-sm">Aucune tâche pour aujourd'hui</p>
+          <p className="text-[var(--text-muted)] text-sm">Aucune tâche pour aujourd'hui</p>
           <p className="text-[#33335a] text-xs mt-1">Clique sur "Nouvelle tâche" pour commencer</p>
         </div>
       )}
@@ -522,20 +524,20 @@ function CalendarView({ tasks, onStatusChange, onEdit }: {
       <div>
         <div className="flex items-center justify-between mb-4">
           <button onClick={() => setCursor(new Date(year, month - 1, 1))}
-            className="p-2 rounded-lg border border-[#22223a] text-[#5a587a] hover:text-[#e8e4d9] transition-all">
+            className="p-2 rounded-lg border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all">
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <span className="text-sm font-semibold text-[#e8e4d9] capitalize">
+          <span className="text-sm font-semibold text-[var(--text-primary)] capitalize">
             {cursor.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
           </span>
           <button onClick={() => setCursor(new Date(year, month + 1, 1))}
-            className="p-2 rounded-lg border border-[#22223a] text-[#5a587a] hover:text-[#e8e4d9] transition-all">
+            className="p-2 rounded-lg border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all">
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
         <div className="grid grid-cols-7 gap-1 mb-1">
           {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(d => (
-            <div key={d} className="text-center text-xs text-[#5a587a] font-medium py-1">{d}</div>
+            <div key={d} className="text-center text-xs text-[var(--text-muted)] font-medium py-1">{d}</div>
           ))}
         </div>
         <div className="grid grid-cols-7 gap-1">
@@ -552,9 +554,9 @@ function CalendarView({ tasks, onStatusChange, onEdit }: {
             return (
               <button key={day} onClick={() => setSelected(isSelected ? null : dateStr)}
                 className={`aspect-square rounded-lg flex flex-col items-center justify-start pt-1.5 px-1 transition-all
-                  ${isSelected ? 'bg-[#c9a84c]/20 border border-[#c9a84c]/40' : 'hover:bg-[#22223a] border border-transparent'}
+                  ${isSelected ? 'bg-[#c9a84c]/20 border border-[#c9a84c]/40' : 'hover:bg-[var(--border)] border border-transparent'}
                   ${isToday && !isSelected ? 'border border-[#c9a84c]/30' : ''}`}>
-                <span className={`font-medium text-[11px] ${isToday ? 'text-[#c9a84c]' : isPast ? 'text-[#33335a]' : 'text-[#e8e4d9]'}`}>{day}</span>
+                <span className={`font-medium text-[11px] ${isToday ? 'text-[#c9a84c]' : isPast ? 'text-[#33335a]' : 'text-[var(--text-primary)]'}`}>{day}</span>
                 {dayTasks.length > 0 && (
                   <div className="flex gap-0.5 mt-0.5 justify-center">
                     {hasPending && <span className="w-1.5 h-1.5 rounded-full bg-[#c9a84c]" />}
@@ -567,15 +569,15 @@ function CalendarView({ tasks, onStatusChange, onEdit }: {
         </div>
       </div>
       {selected && (
-        <div className="bg-[#0a0a15] border border-[#22223a] rounded-xl p-4">
+        <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-semibold text-[#e8e4d9] capitalize">
+            <p className="text-sm font-semibold text-[var(--text-primary)] capitalize">
               {new Date(selected).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
             </p>
-            <button onClick={() => setSelected(null)} className="text-[#5a587a] hover:text-[#e8e4d9]"><X className="w-4 h-4" /></button>
+            <button onClick={() => setSelected(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X className="w-4 h-4" /></button>
           </div>
           {selectedTasks.length === 0
-            ? <p className="text-xs text-[#5a587a]">Aucune tâche ce jour</p>
+            ? <p className="text-xs text-[var(--text-muted)]">Aucune tâche ce jour</p>
             : <div className="space-y-2">
                 {selectedTasks.map(t => (
                   <TaskCard key={t.id} task={t} onStatusChange={onStatusChange} onEdit={onEdit} compact />
@@ -652,23 +654,23 @@ export const Taches = () => {
     <div className="flex flex-col space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-[#e8e4d9]">Tâches</h1>
-          <p className="text-sm text-[#5a587a] mt-0.5 capitalize">{today}</p>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Tâches</h1>
+          <p className="text-sm text-[var(--text-muted)] mt-0.5 capitalize">{today}</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center bg-[#0a0a15] border border-[#22223a] rounded-lg p-1 gap-1">
+          <div className="flex items-center bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg p-1 gap-1">
             {VIEWS.map(v => {
               const Icon = v.icon;
               return (
                 <button key={v.id} onClick={() => setView(v.id)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all
-                    ${view === v.id ? 'bg-[#22223a] text-[#e8c97a]' : 'text-[#5a587a] hover:text-[#e8e4d9]'}`}>
+                    ${view === v.id ? 'bg-[#22223a] text-[#e8c97a]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
                   <Icon className="w-3.5 h-3.5" />{v.label}
                 </button>
               );
             })}
           </div>
-          <button onClick={loadTasks} className="p-2 rounded-lg border border-[#22223a] text-[#5a587a] hover:text-[#e8e4d9] hover:border-[#33335a] transition-all">
+          <button onClick={loadTasks} className="p-2 rounded-lg border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[#33335a] transition-all">
             <RefreshCw className="w-4 h-4" />
           </button>
           <button onClick={() => openCreate('À faire')}
@@ -682,7 +684,7 @@ export const Taches = () => {
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <RefreshCw className="w-6 h-6 animate-spin mx-auto text-[#5a587a]" />
+          <RefreshCw className="w-6 h-6 animate-spin mx-auto text-[var(--text-muted)]" />
         </div>
       ) : (
         <>
