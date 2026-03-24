@@ -574,7 +574,7 @@ export const Poste = () => {
               <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
 
                 {/* Résumé IA */}
-                <div className="bg-gradient-to-br from-[#1a1a2e] to-[#0f0f1a] rounded-xl border border-[#c9a84c]/25 p-5">
+                <div className="bg-[var(--bg-card)] rounded-xl border border-[#c9a84c]/25 p-5">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-6 h-6 rounded-lg bg-[#c9a84c]/20 flex items-center justify-center">
                       <Sparkles className="w-3.5 h-3.5 text-[#c9a84c]" />
@@ -587,7 +587,7 @@ export const Poste = () => {
                 </div>
 
                 {/* 3 Suggestions de réponse */}
-                <div className="bg-[var(--bg-card)] rounded-xl border border-[#2a2a4a] p-5">
+                <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-5">
                   <div className="flex items-center gap-2 mb-3">
                     <Sparkles className="w-3.5 h-3.5 text-[#7b5ea7]" />
                     <span className="text-xs font-bold text-[var(--text-primary)]">Suggestions de réponse — dans ton style</span>
@@ -626,7 +626,7 @@ export const Poste = () => {
 
                 {/* Contenu */}
                 {selectedEmail.Contenu && (
-                  <div className="bg-[var(--bg-card)] rounded-xl border border-[#2a2a4a] p-5">
+                  <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-5">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <FileText className="w-3.5 h-3.5 text-[#a0a0c0]" />

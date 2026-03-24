@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Plus, RefreshCw, CheckCircle2, Circle, AlertTriangle,
   RotateCcw, Calendar, Columns, Clock, ChevronLeft,
-  ChevronRight, X, ChevronDown, ChevronRight as ChevronR, Pencil
+  ChevronRight, X, ChevronDown, ChevronRight as ChevronR, Pencil, Trash2
 } from 'lucide-react';
 
 const BASEROW_URL = 'https://baserow.ananda-communaute.cloud/api';
@@ -65,14 +65,14 @@ function PrioBadge({ prio }: { prio: string }) {
   if (!prio || prio === 'Normale') return null;
   const s: Record<string, string> = {
     Haute: 'bg-amber-900/40 text-amber-300 border border-amber-700/50',
-    Basse: 'bg-[#22223a] text-[var(--text-muted)] border border-[var(--border)]',
+    Basse: 'bg-[var(--border)] text-[var(--text-muted)] border border-[var(--border-hover)]',
   };
   return <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${s[prio] || ''}`}>{prio}</span>;
 }
 
 function ProjetBadge({ projet }: { projet: string }) {
   if (!projet) return null;
-  return <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#1a1a2e] text-[#8884a8] border border-[var(--border)]">{projet}</span>;
+  return <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--bg-card)] text-[var(--text-secondary)] border border-[var(--border)]">{projet}</span>;
 }
 
 // ─── MODAL CRÉATION / ÉDITION ─────────────────────────────────
@@ -123,7 +123,7 @@ function TaskModal({ onClose, onSave, onUpdate, mode, task, defaultStatut = 'À 
       if (form.Projet) body['Projet'] = form.Projet;
       if (form.Priorité) body['Priorité'] = form.Priorité;
       if (form.Récurrence && form.Récurrence !== 'Aucune') body['Récurrence'] = form.Récurrence;
-      if (parentTask) body['Tâche parente'] = [{ id: parentTask.id }];
+      if (parentTask) body['Tâche parente'] = [parentTask.id];
 
       if (mode === 'edit' && task) {
         const res = await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_ID}/${task.id}/?user_field_names=true`, {
@@ -228,11 +228,12 @@ function TaskModal({ onClose, onSave, onUpdate, mode, task, defaultStatut = 'À 
 }
 
 // ─── CARTE TÂCHE ─────────────────────────────────────────────
-function TaskCard({ task, subTasks, onStatusChange, onEdit, onAddSubTask, compact = false }: {
+function TaskCard({ task, subTasks, onStatusChange, onEdit, onDelete, onAddSubTask, compact = false }: {
   task: Task;
   subTasks?: Task[];
   onStatusChange: (id: number, statut: string) => void;
   onEdit: (task: Task) => void;
+  onDelete?: (id: number) => void;
   onAddSubTask?: (parent: Task) => void;
   compact?: boolean;
 }) {
@@ -310,12 +311,21 @@ function TaskCard({ task, subTasks, onStatusChange, onEdit, onAddSubTask, compac
           </div>
         </div>
 
-        {/* Bouton édition — toujours visible */}
-        <button onClick={() => onEdit(task)}
-          className="flex-shrink-0 p-1.5 rounded-lg text-[#33335a] hover:text-[#c9a84c] hover:bg-[var(--border)] transition-all"
-          title="Modifier la tâche">
-          <Pencil className="w-3.5 h-3.5" />
-        </button>
+        {/* Boutons action */}
+        <div className="flex-shrink-0 flex items-center gap-1">
+          <button onClick={() => onEdit(task)}
+            className="p-1.5 rounded-lg text-[#33335a] hover:text-[#c9a84c] hover:bg-[var(--border)] transition-all"
+            title="Modifier">
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          {onDelete && (
+            <button onClick={() => onDelete(task.id)}
+              className="p-1.5 rounded-lg text-[#33335a] hover:text-red-400 hover:bg-red-500/10 transition-all"
+              title="Supprimer">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Barre progression */}
@@ -366,11 +376,12 @@ function TaskCard({ task, subTasks, onStatusChange, onEdit, onAddSubTask, compac
 }
 
 // ─── KANBAN avec drag & drop ──────────────────────────────────
-function KanbanView({ tasks, onStatusChange, onAddInCol, onEdit, onAddSubTask }: {
+function KanbanView({ tasks, onStatusChange, onAddInCol, onEdit, onDelete, onAddSubTask }: {
   tasks: Task[];
   onStatusChange: (id: number, statut: string) => void;
   onAddInCol: (statut: string) => void;
   onEdit: (task: Task) => void;
+  onDelete: (id: number) => void;
   onAddSubTask: (parent: Task) => void;
 }) {
   const dragId = useRef<number | null>(null);
@@ -417,7 +428,7 @@ function KanbanView({ tasks, onStatusChange, onAddInCol, onEdit, onAddSubTask }:
                 <div key={t.id} draggable onDragStart={e => { dragId.current = t.id; e.dataTransfer.effectAllowed = 'move'; }}
                   className="cursor-grab active:cursor-grabbing active:opacity-50 transition-opacity">
                   <TaskCard task={t} subTasks={getSubTasks(t.id)} onStatusChange={onStatusChange}
-                    onEdit={onEdit} onAddSubTask={onAddSubTask} compact />
+                    onEdit={onEdit} onDelete={onDelete} onAddSubTask={onAddSubTask} compact />
                 </div>
               ))}
             </div>
@@ -429,10 +440,11 @@ function KanbanView({ tasks, onStatusChange, onAddInCol, onEdit, onAddSubTask }:
 }
 
 // ─── VUE AUJOURD'HUI ─────────────────────────────────────────
-function TodayView({ tasks, onStatusChange, onEdit, onAddSubTask }: {
+function TodayView({ tasks, onStatusChange, onEdit, onDelete, onAddSubTask }: {
   tasks: Task[];
   onStatusChange: (id: number, statut: string) => void;
   onEdit: (task: Task) => void;
+  onDelete: (id: number) => void;
   onAddSubTask: (parent: Task) => void;
 }) {
   const today = todayStr();
@@ -457,7 +469,7 @@ function TodayView({ tasks, onStatusChange, onEdit, onAddSubTask }: {
         <div className="space-y-2">
           {items.map(t => (
             <TaskCard key={t.id} task={t} subTasks={getSubTasks(t.id)}
-              onStatusChange={onStatusChange} onEdit={onEdit} onAddSubTask={onAddSubTask} />
+              onStatusChange={onStatusChange} onEdit={onEdit} onDelete={onDelete} onAddSubTask={onAddSubTask} />
           ))}
         </div>
       </div>
@@ -644,6 +656,14 @@ export const Taches = () => {
     setModal({ open: true, mode: 'create', statut, parent: null, task: null });
   }
 
+  async function deleteTask(id: number) {
+    if (!confirm('Supprimer cette tâche ?')) return;
+    setTasks(prev => prev.filter(t => t.id !== id));
+    try {
+      await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_ID}/${id}/`, { method: 'DELETE', headers: HEADERS });
+    } catch { loadTasks(); }
+  }
+
   const VIEWS: { id: View; label: string; icon: any }[] = [
     { id: 'today', label: "Aujourd'hui", icon: Clock },
     { id: 'kanban', label: 'Kanban', icon: Columns },
@@ -688,8 +708,8 @@ export const Taches = () => {
         </div>
       ) : (
         <>
-          {view === 'today' && <TodayView tasks={tasks} onStatusChange={updateStatut} onEdit={openEdit} onAddSubTask={openAddSubTask} />}
-          {view === 'kanban' && <KanbanView tasks={tasks} onStatusChange={updateStatut} onAddInCol={openCreate} onEdit={openEdit} onAddSubTask={openAddSubTask} />}
+          {view === 'today' && <TodayView tasks={tasks} onStatusChange={updateStatut} onEdit={openEdit} onDelete={deleteTask} onAddSubTask={openAddSubTask} />}
+          {view === 'kanban' && <KanbanView tasks={tasks} onStatusChange={updateStatut} onAddInCol={openCreate} onEdit={openEdit} onDelete={deleteTask} onAddSubTask={openAddSubTask} />}
           {view === 'calendar' && <CalendarView tasks={tasks} onStatusChange={updateStatut} onEdit={openEdit} />}
         </>
       )}
