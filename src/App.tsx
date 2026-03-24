@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, createContext, useContext } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -10,49 +10,108 @@ import { CalendarPage } from './pages/CalendarPage';
 import { Taches } from './pages/Taches';
 import LoginPage from './pages/LoginPage';
 
+export const ThemeContext = createContext<{
+  theme: 'dark' | 'light';
+  toggleTheme: () => void;
+}>({ theme: 'dark', toggleTheme: () => {} });
+
+export const useTheme = () => useContext(ThemeContext);
+
+const THEMES = {
+  dark: {
+    '--bg-main':      '#05050a',
+    '--bg-surface':   '#0a0a15',
+    '--bg-card':      '#0f0f1a',
+    '--bg-input':     '#0a0a15',
+    '--border':       '#22223a',
+    '--border-hover': '#33335a',
+    '--text-primary': '#e8e4d9',
+    '--text-secondary':'#a0a0c0',
+    '--text-muted':   '#5a587a',
+    '--gold':         '#c9a84c',
+    '--gold-soft':    '#e8c97a',
+    '--sidebar-bg':   '#0a0a15',
+    '--card-hover':   '#141428',
+  },
+  light: {
+    '--bg-main':      '#f2f0eb',
+    '--bg-surface':   '#ffffff',
+    '--bg-card':      '#fafaf7',
+    '--bg-input':     '#f5f3ee',
+    '--border':       '#e2dfd7',
+    '--border-hover': '#c8c5bc',
+    '--text-primary': '#1a1826',
+    '--text-secondary':'#4a4868',
+    '--text-muted':   '#8a88aa',
+    '--gold':         '#a07828',
+    '--gold-soft':    '#7a5c1e',
+    '--sidebar-bg':   '#1a1826',
+    '--card-hover':   '#f0ede8',
+  },
+};
+
 function AppContent() {
   const { user, canAccess } = useAuth();
   const [currentPage, setCurrentPage] = useState('overview');
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    try { return (localStorage.getItem('ananda-theme') as 'dark' | 'light') || 'dark'; }
+    catch { return 'dark'; }
+  });
 
-  if (!user) {
-    return <LoginPage />;
-  }
+  useEffect(() => {
+    const root = document.documentElement;
+    Object.entries(THEMES[theme]).forEach(([k, v]) => root.style.setProperty(k, v));
+    root.setAttribute('data-theme', theme);
+    try { localStorage.setItem('ananda-theme', theme); } catch {}
+  }, [theme]);
+
+  const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
+
+  if (!user) return (
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      <LoginPage />
+    </ThemeContext.Provider>
+  );
 
   const safePage = canAccess(currentPage as any) ? currentPage : 'overview';
 
   const renderPage = () => {
     switch (safePage) {
-      case 'overview':  return <Overview />;
-      case 'agenda':    return <CalendarPage />;
-      case 'tasks':     return <Taches />;
-      case 'poste':     return <Poste />;
-      case 'finance':   return <Finance />;
-      case 'tools':     return <Tools />;
-      default:          return <Overview />;
+      case 'overview': return <Overview />;
+      case 'agenda':   return <CalendarPage />;
+      case 'tasks':    return <Taches />;
+      case 'poste':    return <Poste />;
+      case 'finance':  return <Finance />;
+      case 'tools':    return <Tools />;
+      default:         return <Overview />;
     }
   };
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-[#05050a] via-[#0a0a15] to-[#0f0f1a] text-[#e8e4d9]">
-      <Sidebar currentPage={safePage} onPageChange={setCurrentPage} />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header />
-        <main className="flex-1 overflow-y-auto p-8">
-          <div className="max-w-7xl mx-auto">
-            {renderPage()}
-          </div>
-        </main>
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      <div style={{
+        display: 'flex', height: '100vh',
+        background: 'var(--bg-main)',
+        color: 'var(--text-primary)',
+        transition: 'background 0.3s, color 0.3s',
+        fontFamily: "'DM Sans', system-ui, sans-serif",
+      }}>
+        <Sidebar currentPage={safePage} onPageChange={setCurrentPage} />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <Header />
+          <main style={{ flex: 1, overflowY: 'auto', padding: '32px' }}>
+            <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
+              {renderPage()}
+            </div>
+          </main>
+        </div>
       </div>
-    </div>
+    </ThemeContext.Provider>
   );
 }
 
 function App() {
-  return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
-  );
+  return <AuthProvider><AppContent /></AuthProvider>;
 }
 
 export default App;
