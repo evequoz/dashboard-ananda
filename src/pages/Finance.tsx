@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, PlusCircle, X, Check, RefreshCw, Download } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, PlusCircle, X, Check, RefreshCw, Download, AlertCircle } from 'lucide-react';
+import { useTheme } from '../App';
 
 const BASEROW_TOKEN = 'GBLdzaCZvQUVXkCqSls3WX3dT3uVg0H8';
 const BASEROW_URL = 'https://baserow.ananda-communaute.cloud/api';
@@ -16,32 +17,22 @@ const SOURCES = ['Stripe', 'Systeme IO', 'Cash', 'Virement', 'Carte crédit', 'C
 const MOIS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 
 const now = new Date();
-
-type Mouvement = {
-  id: number;
-  Date: string;
-  'Date paiement': string;
-  Libellé: string;
-  Montant: number;
-  Type: any;
-  Source: any;
-  Catégorie: any;
-  Notes: string;
-  Validé: boolean;
-};
-
-type BudgetLigne = {
-  id: number;
-  Libellé: string;
-  Mensuel: number;
-  Actif: boolean | string;
-  Catégorie: string;
-};
-
 const fmt = (n: number) => Math.round(n).toLocaleString('fr-CH') + ' CHF';
 const getVal = (field: any) => (field as any)?.value ?? field ?? '';
 
+type Mouvement = {
+  id: number; Date: string; 'Date paiement': string;
+  Libellé: string; Montant: number; Type: any;
+  Source: any; Catégorie: any; Notes: string; Validé: boolean;
+};
+type BudgetLigne = {
+  id: number; Libellé: string; Mensuel: number; Actif: boolean | string; Catégorie: string;
+};
+
 export const Finance = () => {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
   const [mouvements, setMouvements] = useState<Mouvement[]>([]);
   const [budget, setBudget] = useState<BudgetLigne[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,50 +45,63 @@ export const Finance = () => {
   const [filterMois, setFilterMois] = useState(now.getMonth());
   const [filterAnnee, setFilterAnnee] = useState(now.getFullYear());
   const [form, setForm] = useState({
-    date: now.toISOString().slice(0, 10),
-    datePaiement: '',
-    libelle: '',
-    montant: '',
-    source: 'Virement',
-    categorie: 'Divers',
-    notes: '',
+    date: now.toISOString().slice(0, 10), datePaiement: '',
+    libelle: '', montant: '', source: 'Virement', categorie: 'Divers', notes: '',
   });
+
+  // Couleurs selon thème
+  const C = {
+    bg:      isDark ? '#0a0a15' : '#ffffff',
+    card:    isDark ? '#0f0f1a' : '#fafaf7',
+    input:   isDark ? '#05050a' : '#f5f3ee',
+    border:  isDark ? '#22223a' : '#e2dfd7',
+    text:    isDark ? '#e8e4d9' : '#1a1826',
+    muted:   isDark ? '#5a587a' : '#8a88aa',
+    gold:    isDark ? '#c9a84c' : '#a07828',
+    green:   '#4caf7d',
+    red:     '#d95555',
+    orange:  '#c9a84c',
+  };
+
+  const inputStyle = {
+    background: C.input, border: `1px solid ${C.border}`, borderRadius: 8,
+    padding: '8px 12px', fontSize: 13, color: C.text, outline: 'none', width: '100%',
+    boxSizing: 'border-box' as const, fontFamily: 'inherit',
+  };
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const finRes = await fetch(
-        `${BASEROW_URL}/database/rows/table/${FINANCE_TABLE}/?user_field_names=true&size=200&order_by=-Date`,
-        { headers }
-      );
+      const [finRes, budRes] = await Promise.all([
+        fetch(`${BASEROW_URL}/database/rows/table/${FINANCE_TABLE}/?user_field_names=true&size=200&order_by=-Date`, { headers }),
+        fetch(`${BASEROW_URL}/database/rows/table/${BUDGET_TABLE_ID}/?user_field_names=true&size=100`, { headers }),
+      ]);
       const finData = await finRes.json();
-      setMouvements(finData.results || []);
-
-      const budRes = await fetch(
-        `${BASEROW_URL}/database/rows/table/${BUDGET_TABLE_ID}/?user_field_names=true&size=100`,
-        { headers }
-      );
       const budData = await budRes.json();
-      setBudget((budData.results || []).filter((r: BudgetLigne) =>
-        r.Actif === true || r.Actif === 'VRAI'
-      ));
+      setMouvements(finData.results || []);
+      setBudget((budData.results || []).filter((r: BudgetLigne) => r.Actif === true || r.Actif === 'VRAI'));
     } catch (e) { console.error(e); }
     setLoading(false);
   };
 
   useEffect(() => { fetchData(); }, []);
 
-  // Filtre mois courant
   const moisStr = `${filterAnnee}-${String(filterMois + 1).padStart(2, '0')}`;
   const mouvementsMois = mouvements.filter(m => m.Date?.startsWith(moisStr));
 
-  // Calculs mois
+  // ── Factures non payées de mois précédents ──
+  const facturesImpayees = mouvements.filter(m => {
+    if (getVal(m.Type) !== 'Dépense') return false;
+    if (m['Date paiement']) return false;
+    if (m.Date?.startsWith(moisStr)) return false; // déjà dans le mois affiché
+    return true;
+  });
+
   const entrees = mouvementsMois.filter(m => getVal(m.Type) === 'Entrée').reduce((s, m) => s + (parseFloat(String(m.Montant)) || 0), 0);
   const depenses = mouvementsMois.filter(m => getVal(m.Type) === 'Dépense').reduce((s, m) => s + (parseFloat(String(m.Montant)) || 0), 0);
   const chargesFixes = budget.reduce((s, b) => s + (parseFloat(String(b.Mensuel)) || 0), 0);
   const balance = entrees - depenses - chargesFixes;
 
-  // Archive — tous les mouvements de l'année
   const mouvementsAnnee = mouvements.filter(m => {
     if (!m.Date?.startsWith(String(filterAnnee))) return false;
     if (!recherche) return true;
@@ -114,31 +118,19 @@ export const Finance = () => {
   const handleEdit = (m: Mouvement) => {
     setEditingId(m.id);
     setFormType(getVal(m.Type) as 'Entrée' | 'Dépense');
-    setForm({
-      date: m.Date || '',
-      datePaiement: m['Date paiement'] || '',
-      libelle: m['Libellé'] || '',
-      montant: String(m.Montant || ''),
-      source: getVal(m.Source) || 'Virement',
-      categorie: getVal(m.Catégorie) || 'Divers',
-      notes: m.Notes || '',
-    });
+    setForm({ date: m.Date || '', datePaiement: m['Date paiement'] || '', libelle: m['Libellé'] || '', montant: String(m.Montant || ''), source: getVal(m.Source) || 'Virement', categorie: getVal(m.Catégorie) || 'Divers', notes: m.Notes || '' });
     setShowForm(true);
   };
 
   const handleDelete = async (id: number) => {
     if (!confirm('Supprimer ce mouvement ?')) return;
-    await fetch(`${BASEROW_URL}/database/rows/table/${FINANCE_TABLE}/${id}/?user_field_names=true`, {
-      method: 'DELETE', headers,
-    });
+    await fetch(`${BASEROW_URL}/database/rows/table/${FINANCE_TABLE}/${id}/?user_field_names=true`, { method: 'DELETE', headers });
     fetchData();
   };
 
   const handlePay = async (id: number) => {
     await fetch(`${BASEROW_URL}/database/rows/table/${FINANCE_TABLE}/${id}/?user_field_names=true`, {
-      method: 'PATCH',
-      headers,
-      body: JSON.stringify({ 'Date paiement': new Date().toISOString().split('T')[0] }),
+      method: 'PATCH', headers, body: JSON.stringify({ 'Date paiement': new Date().toISOString().split('T')[0] }),
     });
     fetchData();
   };
@@ -151,75 +143,63 @@ export const Finance = () => {
         ? `${BASEROW_URL}/database/rows/table/${FINANCE_TABLE}/${editingId}/?user_field_names=true`
         : `${BASEROW_URL}/database/rows/table/${FINANCE_TABLE}/?user_field_names=true`;
       await fetch(url, {
-        method: editingId ? 'PATCH' : 'POST',
-        headers,
-        body: JSON.stringify({
-          Date: form.date,
-          'Date paiement': form.datePaiement || null,
-          Libellé: form.libelle,
-          Montant: parseFloat(form.montant) || 0,
-          Type: formType,
-          Source: form.source,
-          Catégorie: form.categorie,
-          Notes: form.notes,
-          Validé: true,
-        }),
+        method: editingId ? 'PATCH' : 'POST', headers,
+        body: JSON.stringify({ Date: form.date, 'Date paiement': form.datePaiement || null, Libellé: form.libelle, Montant: parseFloat(form.montant) || 0, Type: formType, Source: form.source, Catégorie: form.categorie, Notes: form.notes, Validé: true }),
       });
       setForm({ date: now.toISOString().slice(0, 10), datePaiement: '', libelle: '', montant: '', source: 'Virement', categorie: 'Divers', notes: '' });
-      setEditingId(null);
-      setShowForm(false);
-      fetchData();
+      setEditingId(null); setShowForm(false); fetchData();
     } catch (e) { console.error(e); }
     setSaving(false);
   };
 
   const exportCSV = () => {
-    const rows = mouvementsAnnee;
     const header = 'Date,Date paiement,Libellé,Montant,Type,Source,Catégorie,Notes,Validé';
-    const lines = rows.map(m =>
-      [m.Date, m['Date paiement'] || '', `"${m['Libellé'] || ''}"`, m.Montant,
-       getVal(m.Type), getVal(m.Source), getVal(m.Catégorie),
-       `"${m.Notes || ''}"`, m.Validé].join(',')
-    );
-    const csv = [header, ...lines].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `finance_${filterAnnee}.csv`;
+    const lines = mouvementsAnnee.map(m => [m.Date, m['Date paiement'] || '', `"${m['Libellé'] || ''}"`, m.Montant, getVal(m.Type), getVal(m.Source), getVal(m.Catégorie), `"${m.Notes || ''}"`, m.Validé].join(','));
+    const blob = new Blob([[header, ...lines].join('\n')], { type: 'text/csv' });
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `finance_${filterAnnee}.csv` });
     a.click();
   };
 
-  const MouvementRow = ({ m }: { m: Mouvement }) => {
+  const MouvementRow = ({ m, showRetard = false }: { m: Mouvement; showRetard?: boolean }) => {
     const isEntree = getVal(m.Type) === 'Entrée';
     const nonPaye = !m['Date paiement'] && getVal(m.Type) === 'Dépense';
     return (
-      <div className="flex items-center justify-between px-4 py-3 bg-[#0f0f1a] rounded-lg border border-[#22223a] group hover:border-[#c9a84c]/30">
-        <div className="flex items-center gap-3">
-          <div className={`w-2 h-2 rounded-full ${isEntree ? 'bg-[#4caf7d]' : nonPaye ? 'bg-[#c9a84c]' : 'bg-[#d95555]'}`} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', background: showRetard ? (isDark ? 'rgba(201,168,76,0.06)' : 'rgba(201,168,76,0.08)') : C.card, borderRadius: 10, border: `1px solid ${showRetard ? 'rgba(201,168,76,0.25)' : C.border}`, transition: 'all 0.15s' }}
+        onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = showRetard ? 'rgba(201,168,76,0.5)' : C.gold + '50'}
+        onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = showRetard ? 'rgba(201,168,76,0.25)' : C.border}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: isEntree ? C.green : nonPaye ? C.orange : C.red }} />
           <div>
-            <p className="text-sm text-[#e8e4d9] font-medium">{m['Libellé']}</p>
-            <p className="text-xs text-[#5a587a]">
+            <p style={{ fontSize: 13, fontWeight: 600, color: C.text, margin: 0 }}>{m['Libellé']}</p>
+            <p style={{ fontSize: 11, color: C.muted, margin: '2px 0 0' }}>
               {getVal(m.Catégorie)} · {getVal(m.Source)} · {m.Date}
-              {nonPaye && <span className="ml-2 text-[#c9a84c]">⏳ Non payée</span>}
-              {m['Date paiement'] && <span className="ml-2 text-[#5a587a]">Payé: {m['Date paiement']}</span>}
+              {nonPaye && !showRetard && <span style={{ marginLeft: 8, color: C.orange }}>⏳ Non payée</span>}
+              {showRetard && <span style={{ marginLeft: 8, color: C.orange, fontWeight: 600 }}>⚠️ Mois précédent</span>}
+              {m['Date paiement'] && <span style={{ marginLeft: 8, color: C.muted }}>Payé: {m['Date paiement']}</span>}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <p className={`text-sm font-bold ${isEntree ? 'text-[#4caf7d]' : nonPaye ? 'text-[#c9a84c]' : 'text-[#d95555]'}`}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <p style={{ fontSize: 13, fontWeight: 700, color: isEntree ? C.green : nonPaye ? C.orange : C.red, margin: 0 }}>
             {isEntree ? '+' : '-'}{fmt(parseFloat(String(m.Montant ?? 0)) || 0)}
           </p>
           {getVal(m.Type) === 'Dépense' && !m['Date paiement'] && (
-            <button onClick={() => handlePay(m.id)} className="opacity-0 group-hover:opacity-100 px-2 py-1 bg-[#4caf7d22] text-[#4caf7d] rounded text-xs font-semibold hover:bg-[#4caf7d44] transition-all" title="Marquer comme payée">
+            <button onClick={() => handlePay(m.id)} style={{ padding: '4px 10px', background: 'rgba(76,175,125,0.15)', color: C.green, border: `1px solid rgba(76,175,125,0.3)`, borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
               Payé
             </button>
           )}
-          <button onClick={() => handleEdit(m)} className="opacity-0 group-hover:opacity-100 text-[#5a587a] hover:text-[#c9a84c] transition-all">
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          <button onClick={() => handleEdit(m)} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 4 }}
+            onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.color = C.gold}
+            onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.color = C.muted}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           </button>
-          <button onClick={() => handleDelete(m.id)} className="opacity-0 group-hover:opacity-100 text-[#5a587a] hover:text-[#d95555] transition-all">
-            <X className="w-4 h-4" />
+          <button onClick={() => handleDelete(m.id)} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer', padding: 4 }}
+            onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.color = C.red}
+            onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.color = C.muted}
+          >
+            <X size={14} />
           </button>
         </div>
       </div>
@@ -227,92 +207,82 @@ export const Finance = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, fontFamily: 'inherit' }}>
+
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold text-[#e8e4d9]">Finances</h1>
-          <select value={filterMois} onChange={e => setFilterMois(Number(e.target.value))}
-            className="bg-[#0f0f1a] border border-[#22223a] rounded-lg px-3 py-1.5 text-sm text-[#e8e4d9]">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: C.text, margin: 0 }}>Finances</h1>
+          <select value={filterMois} onChange={e => setFilterMois(Number(e.target.value))} style={{ ...inputStyle, width: 'auto', padding: '6px 10px' }}>
             {MOIS.map((m, i) => <option key={i} value={i}>{m}</option>)}
           </select>
-          <select value={filterAnnee} onChange={e => setFilterAnnee(Number(e.target.value))}
-            className="bg-[#0f0f1a] border border-[#22223a] rounded-lg px-3 py-1.5 text-sm text-[#e8e4d9]">
+          <select value={filterAnnee} onChange={e => setFilterAnnee(Number(e.target.value))} style={{ ...inputStyle, width: 'auto', padding: '6px 10px' }}>
             {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
           </select>
         </div>
-        <div className="flex items-center gap-3">
-          <button onClick={fetchData} className="p-2 rounded-lg border border-[#22223a] text-[#5a587a] hover:text-[#e8e4d9]">
-            <RefreshCw className="w-4 h-4" />
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={fetchData} style={{ padding: '8px', background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: 'pointer' }}>
+            <RefreshCw size={15} />
           </button>
           <button onClick={() => { setFormType('Entrée'); setEditingId(null); setShowForm(true); }}
-            className="px-4 py-2 bg-[#4caf7d] text-white rounded-lg text-sm font-semibold flex items-center gap-2">
-            <PlusCircle className="w-4 h-4" /> Entrée
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: C.green, color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            <PlusCircle size={14} /> Entrée
           </button>
           <button onClick={() => { setFormType('Dépense'); setEditingId(null); setShowForm(true); }}
-            className="px-4 py-2 bg-[#d95555] text-white rounded-lg text-sm font-semibold flex items-center gap-2">
-            <PlusCircle className="w-4 h-4" /> Dépense
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: C.red, color: 'white', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            <PlusCircle size={14} /> Dépense
           </button>
         </div>
       </div>
 
       {/* Formulaire */}
       {showForm && (
-        <div className="bg-[#0a0a15] border border-[#22223a] rounded-xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold text-[#e8e4d9]">
-              {editingId ? '✏️ Modifier' : `Nouvelle ${formType === 'Entrée' ? '💚 Entrée' : '🔴 Dépense'}`}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 18 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 600, color: C.text, margin: 0 }}>
+              {editingId ? '✏️ Modifier' : `${formType === 'Entrée' ? '💚 Nouvelle entrée' : '🔴 Nouvelle dépense'}`}
             </h2>
-            <button onClick={() => { setShowForm(false); setEditingId(null); }} className="text-[#5a587a] hover:text-[#e8e4d9]">
-              <X className="w-5 h-5" />
-            </button>
+            <button onClick={() => { setShowForm(false); setEditingId(null); }} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}><X size={16} /></button>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <div>
-              <label className="text-xs text-[#5a587a] mb-1 block">Date facture</label>
-              <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })}
-                className="w-full bg-[#0f0f1a] border border-[#22223a] rounded-lg px-3 py-2 text-sm text-[#e8e4d9] focus:outline-none focus:border-[#c9a84c]" />
+              <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 6 }}>Date facture</label>
+              <input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} style={inputStyle} />
             </div>
             <div>
-              <label className="text-xs text-[#5a587a] mb-1 block">Date paiement (optionnel)</label>
-              <input type="date" value={form.datePaiement} onChange={e => setForm({ ...form, datePaiement: e.target.value })}
-                className="w-full bg-[#0f0f1a] border border-[#22223a] rounded-lg px-3 py-2 text-sm text-[#e8e4d9] focus:outline-none focus:border-[#c9a84c]" />
+              <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 6 }}>Date paiement (optionnel)</label>
+              <input type="date" value={form.datePaiement} onChange={e => setForm({ ...form, datePaiement: e.target.value })} style={inputStyle} />
             </div>
             <div>
-              <label className="text-xs text-[#5a587a] mb-1 block">Montant CHF</label>
-              <input type="number" placeholder="0.00" value={form.montant} onChange={e => setForm({ ...form, montant: e.target.value })}
-                className="w-full bg-[#0f0f1a] border border-[#22223a] rounded-lg px-3 py-2 text-sm text-[#e8e4d9] focus:outline-none focus:border-[#c9a84c]" />
+              <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 6 }}>Montant CHF</label>
+              <input type="number" placeholder="0.00" value={form.montant} onChange={e => setForm({ ...form, montant: e.target.value })} style={inputStyle} />
             </div>
-            <div className="col-span-2">
-              <label className="text-xs text-[#5a587a] mb-1 block">Libellé</label>
-              <input type="text" placeholder="Fournisseur - description..." value={form.libelle} onChange={e => setForm({ ...form, libelle: e.target.value })}
-                className="w-full bg-[#0f0f1a] border border-[#22223a] rounded-lg px-3 py-2 text-sm text-[#e8e4d9] focus:outline-none focus:border-[#c9a84c]" />
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 6 }}>Libellé</label>
+              <input type="text" placeholder="Fournisseur - description..." value={form.libelle} onChange={e => setForm({ ...form, libelle: e.target.value })} style={inputStyle} />
             </div>
             <div>
-              <label className="text-xs text-[#5a587a] mb-1 block">Source</label>
-              <select value={form.source} onChange={e => setForm({ ...form, source: e.target.value })}
-                className="w-full bg-[#0f0f1a] border border-[#22223a] rounded-lg px-3 py-2 text-sm text-[#e8e4d9]">
+              <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 6 }}>Source</label>
+              <select value={form.source} onChange={e => setForm({ ...form, source: e.target.value })} style={inputStyle}>
                 {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs text-[#5a587a] mb-1 block">Catégorie</label>
-              <select value={form.categorie} onChange={e => setForm({ ...form, categorie: e.target.value })}
-                className="w-full bg-[#0f0f1a] border border-[#22223a] rounded-lg px-3 py-2 text-sm text-[#e8e4d9]">
+              <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 6 }}>Catégorie</label>
+              <select value={form.categorie} onChange={e => setForm({ ...form, categorie: e.target.value })} style={inputStyle}>
                 {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
-            <div className="col-span-2">
-              <label className="text-xs text-[#5a587a] mb-1 block">Notes</label>
-              <input type="text" placeholder="..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })}
-                className="w-full bg-[#0f0f1a] border border-[#22223a] rounded-lg px-3 py-2 text-sm text-[#e8e4d9] focus:outline-none focus:border-[#c9a84c]" />
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 6 }}>Notes</label>
+              <input type="text" placeholder="..." value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} style={inputStyle} />
             </div>
           </div>
-          <div className="flex justify-end gap-3 mt-4">
-            <button onClick={() => { setShowForm(false); setEditingId(null); }} className="px-4 py-2 text-sm text-[#5a587a]">Annuler</button>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
+            <button onClick={() => { setShowForm(false); setEditingId(null); }} style={{ padding: '8px 16px', background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: 'pointer', fontSize: 13 }}>Annuler</button>
             <button onClick={handleSave} disabled={saving || !form.libelle || !form.montant}
-              className="px-6 py-2 bg-[#c9a84c] text-[#05050a] rounded-lg text-sm font-semibold disabled:opacity-40 flex items-center gap-2">
-              {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 20px', background: C.gold, color: isDark ? '#05050a' : '#ffffff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: saving || !form.libelle || !form.montant ? 0.4 : 1 }}>
+              {saving ? <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Check size={14} />}
               Enregistrer
             </button>
           </div>
@@ -320,140 +290,127 @@ export const Finance = () => {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-[#22223a]">
-        <button onClick={() => setActiveTab('mois')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'mois' ? 'border-[#c9a84c] text-[#c9a84c]' : 'border-transparent text-[#5a587a] hover:text-[#e8e4d9]'}`}>
-          {MOIS[filterMois]} {filterAnnee}
-        </button>
-        <button onClick={() => setActiveTab('archive')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'archive' ? 'border-[#c9a84c] text-[#c9a84c]' : 'border-transparent text-[#5a587a] hover:text-[#e8e4d9]'}`}>
-          Archive {filterAnnee}
-        </button>
+      <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${C.border}` }}>
+        {(['mois', 'archive'] as const).map(tab => (
+          <button key={tab} onClick={() => setActiveTab(tab)} style={{
+            padding: '8px 16px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
+            background: 'transparent', border: 'none',
+            borderBottom: `2px solid ${activeTab === tab ? C.gold : 'transparent'}`,
+            color: activeTab === tab ? C.gold : C.muted,
+            transition: 'all 0.15s', marginBottom: -1,
+          }}>
+            {tab === 'mois' ? `${MOIS[filterMois]} ${filterAnnee}` : `Archive ${filterAnnee}`}
+          </button>
+        ))}
       </div>
 
       {loading ? (
-        <div className="text-center py-12 text-[#5a587a]">Chargement...</div>
+        <div style={{ textAlign: 'center', padding: '48px 0', color: C.muted }}>Chargement...</div>
       ) : activeTab === 'mois' ? (
         <>
+          {/* ── FACTURES EN RETARD ── */}
+          {facturesImpayees.length > 0 && (
+            <div style={{ background: isDark ? 'rgba(201,168,76,0.06)' : 'rgba(201,168,76,0.08)', border: `1px solid rgba(201,168,76,0.3)`, borderRadius: 14, padding: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <AlertCircle size={16} color={C.orange} />
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: C.orange, margin: 0 }}>
+                  {facturesImpayees.length} facture{facturesImpayees.length > 1 ? 's' : ''} non payée{facturesImpayees.length > 1 ? 's' : ''} — mois précédents
+                </h3>
+                <span style={{ fontSize: 12, color: C.muted }}>
+                  Total : {fmt(facturesImpayees.reduce((s, m) => s + (parseFloat(String(m.Montant)) || 0), 0))}
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                {facturesImpayees.map(m => <MouvementRow key={m.id} m={m} showRetard={true} />)}
+              </div>
+            </div>
+          )}
+
           {/* Cartes résumé */}
-          <div className="grid grid-cols-4 gap-4">
-            <div className="bg-[#0a0a15] rounded-xl border border-[#22223a] p-5">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-9 h-9 bg-[#4caf7d22] rounded-lg flex items-center justify-center">
-                  <TrendingUp className="w-4 h-4 text-[#4caf7d]" />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+            {[
+              { label: 'Entrées', value: entrees, color: C.green, icon: TrendingUp },
+              { label: 'Dépenses', value: depenses, color: C.red, icon: TrendingDown },
+              { label: 'Charges fixes', value: chargesFixes, color: C.orange, icon: DollarSign, sub: `${budget.length} postes` },
+              { label: 'Balance', value: balance, color: balance >= 0 ? C.green : C.red, icon: TrendingUp, sub: 'Entrées − dépenses − fixes' },
+            ].map((card, i) => {
+              const Icon = card.icon;
+              return (
+                <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 10, background: card.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Icon size={16} color={card.color} />
+                    </div>
+                    <span style={{ fontSize: 12, color: C.muted }}>{card.label}</span>
+                  </div>
+                  <p style={{ fontSize: 22, fontWeight: 700, color: card.color, margin: 0 }}>{fmt(card.value)}</p>
+                  {card.sub && <p style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{card.sub}</p>}
                 </div>
-                <span className="text-xs text-[#5a587a]">Entrées</span>
-              </div>
-              <p className="text-2xl font-bold text-[#4caf7d]">{fmt(entrees)}</p>
-            </div>
-            <div className="bg-[#0a0a15] rounded-xl border border-[#22223a] p-5">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-9 h-9 bg-[#d9555522] rounded-lg flex items-center justify-center">
-                  <TrendingDown className="w-4 h-4 text-[#d95555]" />
-                </div>
-                <span className="text-xs text-[#5a587a]">Dépenses</span>
-              </div>
-              <p className="text-2xl font-bold text-[#d95555]">{fmt(depenses)}</p>
-            </div>
-            <div className="bg-[#0a0a15] rounded-xl border border-[#22223a] p-5">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-9 h-9 bg-[#c9a84c22] rounded-lg flex items-center justify-center">
-                  <DollarSign className="w-4 h-4 text-[#c9a84c]" />
-                </div>
-                <span className="text-xs text-[#5a587a]">Charges fixes</span>
-              </div>
-              <p className="text-2xl font-bold text-[#c9a84c]">{fmt(chargesFixes)}</p>
-              <p className="text-xs text-[#5a587a] mt-1">{budget.length} postes</p>
-            </div>
-            <div className="bg-[#0a0a15] rounded-xl border border-[#22223a] p-5">
-              <div className="flex items-center gap-3 mb-3">
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${balance >= 0 ? 'bg-[#4caf7d22]' : 'bg-[#d9555522]'}`}>
-                  <TrendingUp className={`w-4 h-4 ${balance >= 0 ? 'text-[#4caf7d]' : 'text-[#d95555]'}`} />
-                </div>
-                <span className="text-xs text-[#5a587a]">Balance</span>
-              </div>
-              <p className={`text-2xl font-bold ${balance >= 0 ? 'text-[#4caf7d]' : 'text-[#d95555]'}`}>{fmt(balance)}</p>
-              <p className="text-xs text-[#5a587a] mt-1">Entrées − dépenses − fixes</p>
-            </div>
+              );
+            })}
           </div>
 
           {/* Mouvements + sidebar */}
-          <div className="grid grid-cols-3 gap-6">
-            <div className="col-span-2 bg-[#0a0a15] rounded-xl border border-[#22223a] p-6">
-              <h2 className="text-base font-semibold text-[#e8e4d9] mb-4">Mouvements du mois</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 22 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 600, color: C.text, marginBottom: 16, marginTop: 0 }}>Mouvements du mois</h2>
               {mouvementsMois.length === 0 ? (
-                <div className="text-center py-8 text-[#5a587a] text-sm">Aucun mouvement ce mois-ci</div>
+                <div style={{ textAlign: 'center', padding: '32px 0', color: C.muted, fontSize: 13 }}>Aucun mouvement ce mois-ci</div>
               ) : (
-                <div className="space-y-2">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                   {mouvementsMois.map(m => <MouvementRow key={m.id} m={m} />)}
                 </div>
               )}
             </div>
-            <div className="space-y-6">
-              <div className="bg-[#0a0a15] rounded-xl border border-[#22223a] p-5">
-                <h3 className="text-sm font-semibold text-[#e8e4d9] mb-4">Charges fixes</h3>
-                <div className="space-y-2">
-                  {budget.slice(0, 8).map(b => (
-                    <div key={b.id} className="flex items-center justify-between">
-                      <span className="text-xs text-[#5a587a]">{b['Libellé']}</span>
-                      <span className="text-xs font-semibold text-[#c9a84c]">{fmt(parseFloat(String(b.Mensuel)) || 0)}</span>
-                    </div>
-                  ))}
-                  {budget.length > 8 && <p className="text-xs text-[#5a587a] text-center">+ {budget.length - 8} autres</p>}
-                </div>
-                <div className="border-t border-[#22223a] mt-3 pt-3 flex justify-between">
-                  <span className="text-xs font-semibold text-[#e8e4d9]">Total</span>
-                  <span className="text-xs font-bold text-[#c9a84c]">{fmt(chargesFixes)}</span>
-                </div>
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 22 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 16, marginTop: 0 }}>Charges fixes</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {budget.slice(0, 10).map(b => (
+                  <div key={b.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, color: C.muted }}>{b['Libellé']}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: C.orange }}>{fmt(parseFloat(String(b.Mensuel)) || 0)}</span>
+                  </div>
+                ))}
+                {budget.length > 10 && <p style={{ fontSize: 11, color: C.muted, textAlign: 'center' }}>+ {budget.length - 10} autres</p>}
+              </div>
+              <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 14, paddingTop: 14, display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>Total</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.orange }}>{fmt(chargesFixes)}</span>
               </div>
             </div>
           </div>
         </>
       ) : (
-        /* Archive */
-        <div className="bg-[#0a0a15] rounded-xl border border-[#22223a] p-6">
-          <div className="flex items-center justify-between mb-6">
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: 22 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <div>
-              <h2 className="text-base font-semibold text-[#e8e4d9]">Archive {filterAnnee}</h2>
-              <p className="text-xs text-[#5a587a] mt-1">{mouvementsAnnee.length} mouvements</p>
+              <h2 style={{ fontSize: 15, fontWeight: 600, color: C.text, margin: 0 }}>Archive {filterAnnee}</h2>
+              <p style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{mouvementsAnnee.length} mouvements</p>
             </div>
-            <div className="flex items-center gap-3">
+            <div style={{ display: 'flex', gap: 10 }}>
               <input type="text" placeholder="Rechercher..." value={recherche} onChange={e => setRecherche(e.target.value)}
-                className="bg-[#0f0f1a] border border-[#22223a] rounded-lg px-3 py-2 text-sm text-[#e8e4d9] focus:outline-none focus:border-[#c9a84c] w-48" />
-              <button onClick={exportCSV}
-                className="px-4 py-2 bg-[#22223a] text-[#e8e4d9] rounded-lg text-sm font-semibold flex items-center gap-2 hover:bg-[#2a2a4a]">
-                <Download className="w-4 h-4" /> Export CSV
+                style={{ ...inputStyle, width: 200 }} />
+              <button onClick={exportCSV} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, cursor: 'pointer', fontSize: 13 }}>
+                <Download size={13} /> Export CSV
               </button>
             </div>
           </div>
-
-          {/* Résumé annuel */}
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="bg-[#0f0f1a] rounded-lg p-4">
-              <p className="text-xs text-[#5a587a] mb-1">Total entrées {filterAnnee}</p>
-              <p className="text-xl font-bold text-[#4caf7d]">
-                {fmt(mouvementsAnnee.filter(m => getVal(m.Type) === 'Entrée').reduce((s, m) => s + (parseFloat(String(m.Montant)) || 0), 0))}
-              </p>
-            </div>
-            <div className="bg-[#0f0f1a] rounded-lg p-4">
-              <p className="text-xs text-[#5a587a] mb-1">Total dépenses {filterAnnee}</p>
-              <p className="text-xl font-bold text-[#d95555]">
-                {fmt(mouvementsAnnee.filter(m => getVal(m.Type) === 'Dépense').reduce((s, m) => s + (parseFloat(String(m.Montant)) || 0), 0))}
-              </p>
-            </div>
-            <div className="bg-[#0f0f1a] rounded-lg p-4">
-              <p className="text-xs text-[#5a587a] mb-1">Factures à payer</p>
-              <p className="text-xl font-bold text-[#c9a84c]">
-                {mouvementsAnnee.filter(m => getVal(m.Type) === 'Dépense' && !m['Date paiement']).length}
-              </p>
-            </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 20 }}>
+            {[
+              { label: `Total entrées ${filterAnnee}`, value: mouvementsAnnee.filter(m => getVal(m.Type) === 'Entrée').reduce((s, m) => s + (parseFloat(String(m.Montant)) || 0), 0), color: C.green },
+              { label: `Total dépenses ${filterAnnee}`, value: mouvementsAnnee.filter(m => getVal(m.Type) === 'Dépense').reduce((s, m) => s + (parseFloat(String(m.Montant)) || 0), 0), color: C.red },
+              { label: 'Factures à payer', value: mouvementsAnnee.filter(m => getVal(m.Type) === 'Dépense' && !m['Date paiement']).length, color: C.orange, isCount: true },
+            ].map((c, i) => (
+              <div key={i} style={{ background: isDark ? '#05050a' : '#f5f3ee', border: `1px solid ${C.border}`, borderRadius: 10, padding: 16 }}>
+                <p style={{ fontSize: 11, color: C.muted, margin: '0 0 6px' }}>{c.label}</p>
+                <p style={{ fontSize: 20, fontWeight: 700, color: c.color, margin: 0 }}>{(c as any).isCount ? c.value : fmt(c.value as number)}</p>
+              </div>
+            ))}
           </div>
-
-          {/* Liste complète */}
           {mouvementsAnnee.length === 0 ? (
-            <div className="text-center py-8 text-[#5a587a] text-sm">Aucun mouvement en {filterAnnee}</div>
+            <div style={{ textAlign: 'center', padding: '32px 0', color: C.muted, fontSize: 13 }}>Aucun mouvement en {filterAnnee}</div>
           ) : (
-            <div className="space-y-2">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
               {mouvementsAnnee.map(m => <MouvementRow key={m.id} m={m} />)}
             </div>
           )}
