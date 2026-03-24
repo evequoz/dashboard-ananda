@@ -1,5 +1,6 @@
-import { LayoutDashboard, Mail, Wrench, DollarSign, Calendar, CheckSquare, LogOut, FileText } from 'lucide-react';
+import { LayoutDashboard, Mail, Wrench, DollarSign, Calendar, CheckSquare, LogOut, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../App';
 
 interface SidebarProps {
   currentPage: string;
@@ -8,74 +9,130 @@ interface SidebarProps {
 
 export const Sidebar = ({ currentPage, onPageChange }: SidebarProps) => {
   const { user, canAccess, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   const menuItems = [
-    { id: 'overview', label: 'Aperçu',   icon: LayoutDashboard, page: 'overview' },
-    { id: 'agenda',   label: 'Agenda',   icon: Calendar,        page: 'agenda'   },
-    { id: 'tasks',    label: 'Tâches',   icon: CheckSquare,     page: 'tasks'    },
-    { id: 'poste',    label: 'Mails',    icon: Mail,            page: 'poste'    },
-    { id: 'finance',  label: 'Finance',  icon: DollarSign,      page: 'finance'  },
-    { id: 'tools',    label: 'Outils',   icon: Wrench,          page: 'tools'    },
+    { id: 'overview', label: 'Aperçu',  icon: LayoutDashboard, page: 'overview' },
+    { id: 'agenda',   label: 'Agenda',  icon: Calendar,        page: 'agenda'   },
+    { id: 'tasks',    label: 'Tâches',  icon: CheckSquare,     page: 'tasks'    },
+    { id: 'poste',    label: 'Mails',   icon: Mail,            page: 'poste'    },
+    { id: 'finance',  label: 'Finance', icon: DollarSign,      page: 'finance'  },
+    { id: 'tools',    label: 'Outils',  icon: Wrench,          page: 'tools'    },
   ];
 
   const visibleItems = menuItems.filter(item => canAccess(item.page as any));
   const roleLabel = user?.role === 'admin' ? 'Administrateur' : 'Assistante';
+  const isDark = theme === 'dark';
 
   return (
-    <aside className="w-64 bg-gradient-to-b from-[#0a0a15] to-[#0f0f1a] border-r border-[#22223a] flex flex-col h-screen sticky top-0">
-      <div className="p-6 border-b border-[#22223a]">
-        <h1 className="text-2xl font-bold bg-gradient-to-r from-[#c9a84c] to-[#e8c97a] bg-clip-text text-transparent">
+    <aside style={{
+      width: '240px',
+      background: isDark ? '#0a0a15' : '#1a1826',
+      borderRight: `1px solid ${isDark ? '#22223a' : '#2a2840'}`,
+      display: 'flex', flexDirection: 'column', height: '100vh',
+      position: 'sticky', top: 0, flexShrink: 0,
+      transition: 'background 0.3s',
+    }}>
+      {/* Logo */}
+      <div style={{ padding: '24px 20px', borderBottom: `1px solid ${isDark ? '#22223a' : '#2a2840'}` }}>
+        <h1 style={{
+          fontSize: 20, fontWeight: 700,
+          background: 'linear-gradient(135deg, #c9a84c, #e8c97a)',
+          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+          margin: 0,
+        }}>
           Ananda Admin
         </h1>
-        <p className="text-xs text-[#5a587a] mt-1">Tableau de bord</p>
+        <p style={{ fontSize: 11, color: '#5a587a', marginTop: 4 }}>Tableau de bord</p>
       </div>
 
-      <nav className="flex-1 p-4 space-y-2">
-        {visibleItems.map((item) => {
+      {/* Nav */}
+      <nav style={{ flex: 1, padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {visibleItems.map(item => {
           const Icon = item.icon;
           const isActive = currentPage === item.id;
           return (
-            <button
-              key={item.id}
-              onClick={() => onPageChange(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                isActive
-                  ? 'bg-gradient-to-r from-[#c9a84c]/20 to-[#e8c97a]/20 border border-[#c9a84c]/40 text-[#e8c97a]'
-                  : 'text-[#5a587a] hover:bg-[#22223a] hover:text-[#e8e4d9]'
-              }`}
+            <button key={item.id} onClick={() => onPageChange(item.id)} style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '10px 14px', borderRadius: 10, width: '100%',
+              border: isActive ? '1px solid rgba(201,168,76,0.35)' : '1px solid transparent',
+              background: isActive ? 'rgba(201,168,76,0.12)' : 'transparent',
+              color: isActive ? '#e8c97a' : '#6060a0',
+              cursor: 'pointer', fontSize: 13, fontWeight: isActive ? 600 : 400,
+              transition: 'all 0.15s', textAlign: 'left',
+            }}
+            onMouseEnter={e => { if (!isActive) { (e.currentTarget as HTMLButtonElement).style.color = '#c0c0e0'; (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.05)'; } }}
+            onMouseLeave={e => { if (!isActive) { (e.currentTarget as HTMLButtonElement).style.color = '#6060a0'; (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; } }}
             >
-              <Icon className="w-5 h-5" />
-              <span className="font-medium">{item.label}</span>
+              <Icon size={16} />
+              <span>{item.label}</span>
             </button>
           );
         })}
       </nav>
 
-      <div className="px-4 pb-3">
-        <div className="bg-[#0a0a15] rounded-lg p-3 border border-[#22223a]">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-2 h-2 bg-[#4caf7d] rounded-full animate-pulse" />
-            <span className="text-xs text-[#4caf7d] font-semibold">Système en ligne</span>
+      {/* Statut système */}
+      <div style={{ padding: '0 12px 12px' }}>
+        <div style={{ padding: '10px 14px', background: isDark ? '#05050a' : '#0f0f1e', borderRadius: 10, border: `1px solid ${isDark ? '#22223a' : '#2a2840'}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#4caf7d', animation: 'pulse 2s infinite' }} />
+            <span style={{ fontSize: 11, fontWeight: 600, color: '#4caf7d' }}>Système en ligne</span>
           </div>
-          <p className="text-xs text-[#5a587a]">Dernière synchro : il y a 2 min</p>
+          <p style={{ fontSize: 10, color: '#5a587a', margin: 0 }}>Dernière synchro : il y a 2 min</p>
         </div>
       </div>
 
-      <div className="p-4 border-t border-[#22223a]">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-[#c9a84c]/15 border border-[#c9a84c]/30 flex items-center justify-center text-[11px] font-semibold text-[#c9a84c] flex-shrink-0">
+      {/* Footer — toggle + user */}
+      <div style={{ padding: '12px', borderTop: `1px solid ${isDark ? '#22223a' : '#2a2840'}` }}>
+        {/* Toggle thème */}
+        <button onClick={toggleTheme} style={{
+          display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+          padding: '9px 14px', marginBottom: 8, borderRadius: 10,
+          border: `1px solid ${isDark ? '#22223a' : '#2a2840'}`,
+          background: 'transparent', color: '#6060a0',
+          cursor: 'pointer', fontSize: 12, transition: 'all 0.15s',
+        }}
+        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#c9a84c'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(201,168,76,0.3)'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = '#6060a0'; (e.currentTarget as HTMLButtonElement).style.borderColor = isDark ? '#22223a' : '#2a2840'; }}
+        >
+          {isDark ? <Sun size={14} /> : <Moon size={14} />}
+          <span>{isDark ? 'Mode clair' : 'Mode sombre'}</span>
+          {/* Indicateur visuel */}
+          <div style={{
+            marginLeft: 'auto', width: 32, height: 18, borderRadius: 99,
+            background: isDark ? '#22223a' : 'rgba(201,168,76,0.3)',
+            border: `1px solid ${isDark ? '#33335a' : 'rgba(201,168,76,0.5)'}`,
+            position: 'relative', transition: 'all 0.3s',
+          }}>
+            <div style={{
+              position: 'absolute', top: 2,
+              left: isDark ? 2 : 14,
+              width: 12, height: 12, borderRadius: '50%',
+              background: isDark ? '#5a587a' : '#c9a84c',
+              transition: 'all 0.3s',
+            }} />
+          </div>
+        </button>
+
+        {/* User */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
+            background: 'rgba(201,168,76,0.15)', border: '1px solid rgba(201,168,76,0.3)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 11, fontWeight: 700, color: '#c9a84c',
+          }}>
             {user?.avatar}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm text-[#e8e4d9] truncate font-medium">{user?.name}</p>
-            <p className="text-[10px] text-[#c9a84c]/70 tracking-widest uppercase">{roleLabel}</p>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 12, color: '#c0c0e0', margin: 0, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.name}</p>
+            <p style={{ fontSize: 10, color: '#c9a84c', margin: 0, opacity: 0.7, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{roleLabel}</p>
           </div>
-          <button
-            onClick={logout}
-            title="Se déconnecter"
-            className="text-[#5a587a] hover:text-red-400 transition-colors p-1"
+          <button onClick={logout} title="Se déconnecter" style={{ background: 'none', border: 'none', color: '#5a587a', cursor: 'pointer', padding: 4, transition: 'color 0.15s' }}
+            onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.color = '#d95555'}
+            onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.color = '#5a587a'}
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut size={15} />
           </button>
         </div>
       </div>
