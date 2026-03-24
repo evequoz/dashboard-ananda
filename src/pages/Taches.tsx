@@ -218,7 +218,7 @@ function TaskModal({ onClose, onSave, onUpdate, mode, task, defaultStatut = 'À 
         <div className="flex justify-end gap-3 mt-5">
           <button onClick={onClose} className="px-4 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Annuler</button>
           <button onClick={save} disabled={saving || !form.Titre.trim()}
-            className="px-5 py-2 rounded-lg bg-gradient-to-r from-[#c9a84c]/20 to-[#e8c97a]/20 border border-[#c9a84c]/40 text-[#e8c97a] text-sm font-medium hover:from-[#c9a84c]/30 transition-all disabled:opacity-40">
+            className="px-5 py-2 rounded-lg bg-gradient-to-r from-[#c9a84c]/20 to-[#e8c97a]/20 border border-[#c9a84c]/40 text-[var(--gold-soft)] text-sm font-medium hover:from-[#c9a84c]/30 transition-all disabled:opacity-40">
             {saving ? 'Enregistrement...' : mode === 'edit' ? 'Mettre à jour' : 'Enregistrer'}
           </button>
         </div>
@@ -349,7 +349,7 @@ function TaskCard({ task, subTasks, onStatusChange, onEdit, onDelete, onAddSubTa
                   ? <CheckCircle2 className="w-3.5 h-3.5 text-[#4caf7d]" />
                   : <Circle className="w-3.5 h-3.5 text-[#33335a] hover:text-[var(--text-muted)]" />}
               </button>
-              <span className={`text-xs flex-1 ${getVal(sub.Statut) === 'Fait' ? 'line-through text-[var(--text-muted)]' : 'text-[#c8c4b8]'}`}>
+              <span className={`text-xs flex-1 ${getVal(sub.Statut) === 'Fait' ? 'line-through text-[var(--text-muted)]' : 'text-[var(--text-primary)]'}`}>
                 {sub.Titre || '(Sans titre)'}
               </span>
               <button onClick={() => onEdit(sub)}
@@ -506,18 +506,29 @@ function TodayView({ tasks, onStatusChange, onEdit, onDelete, onAddSubTask }: {
 }
 
 // ─── VUE CALENDRIER ──────────────────────────────────────────
-function CalendarView({ tasks, onStatusChange, onEdit }: {
+function CalendarView({ tasks, onStatusChange, onEdit, onDelete }: {
   tasks: Task[];
   onStatusChange: (id: number, statut: string) => void;
   onEdit: (task: Task) => void;
+  onDelete?: (id: number) => void;
 }) {
-  const [cursor, setCursor] = useState(new Date());
-  const [selected, setSelected] = useState<string | null>(null);
-  const year = cursor.getFullYear();
-  const month = cursor.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDay = new Date(year, month, 1).getDay();
-  const startOffset = firstDay === 0 ? 6 : firstDay - 1;
+  const [mode, setMode] = useState<'week' | '15days'>('week');
+  const [offset, setOffset] = useState(0);
+
+  const todayDate = new Date(); todayDate.setHours(0, 0, 0, 0);
+  const days = mode === 'week' ? 7 : 15;
+
+  const startDate = new Date(todayDate);
+  if (mode === 'week') {
+    const dow = todayDate.getDay() === 0 ? 6 : todayDate.getDay() - 1;
+    startDate.setDate(todayDate.getDate() - dow + offset * 7);
+  } else {
+    startDate.setDate(todayDate.getDate() + offset * 15);
+  }
+
+  const dateRange = Array.from({ length: days }, (_, i) => {
+    const d = new Date(startDate); d.setDate(startDate.getDate() + i); return d;
+  });
 
   const parentTasks = tasks.filter(t => !getParentId(t));
   const tasksByDate: Record<string, Task[]> = {};
@@ -529,75 +540,106 @@ function CalendarView({ tasks, onStatusChange, onEdit }: {
     }
   });
 
-  const selectedTasks = selected ? (tasksByDate[selected] || []) : [];
+  const s = dateRange[0]; const e = dateRange[dateRange.length - 1];
+  const periodLabel = s.getMonth() === e.getMonth()
+    ? `${s.getDate()} – ${e.getDate()} ${e.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}`
+    : `${s.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} – ${e.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+
+  const maxPerDay = mode === 'week' ? 5 : 3;
 
   return (
-    <div className={`grid gap-4 ${selected ? 'grid-cols-[1fr_300px]' : 'grid-cols-1'}`}>
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <button onClick={() => setCursor(new Date(year, month - 1, 1))}
-            className="p-2 rounded-lg border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all">
+    <div className="space-y-4">
+      {/* Contrôles */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-1 bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg p-1">
+          {(['week', '15days'] as const).map(id => (
+            <button key={id} onClick={() => { setMode(id); setOffset(0); }}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all
+                ${mode === id ? 'bg-[var(--border)] text-[var(--gold-soft)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
+              {id === 'week' ? 'Semaine' : '15 jours'}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-[var(--text-primary)] capitalize">{periodLabel}</span>
+          <button onClick={() => setOffset(0)}
+            className="px-2.5 py-1.5 rounded-lg border border-[var(--border)] text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[#c9a84c]/40 transition-all">
+            Aujourd'hui
+          </button>
+          <button onClick={() => setOffset(o => o - 1)}
+            className="p-1.5 rounded-lg border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all">
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <span className="text-sm font-semibold text-[var(--text-primary)] capitalize">
-            {cursor.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
-          </span>
-          <button onClick={() => setCursor(new Date(year, month + 1, 1))}
-            className="p-2 rounded-lg border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all">
+          <button onClick={() => setOffset(o => o + 1)}
+            className="p-1.5 rounded-lg border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all">
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
-        <div className="grid grid-cols-7 gap-1 mb-1">
-          {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(d => (
-            <div key={d} className="text-center text-xs text-[var(--text-muted)] font-medium py-1">{d}</div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-1">
-          {Array.from({ length: startOffset }).map((_, i) => <div key={`e${i}`} />)}
-          {Array.from({ length: daysInMonth }).map((_, i) => {
-            const day = i + 1;
-            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const dayTasks = tasksByDate[dateStr] || [];
-            const isToday = dateStr === todayStr();
-            const isPast = dateStr < todayStr();
-            const isSelected = dateStr === selected;
-            const hasPending = dayTasks.some(t => getVal(t.Statut) !== 'Fait');
-            const hasDone = dayTasks.some(t => getVal(t.Statut) === 'Fait');
-            return (
-              <button key={day} onClick={() => setSelected(isSelected ? null : dateStr)}
-                className={`aspect-square rounded-lg flex flex-col items-center justify-start pt-1.5 px-1 transition-all
-                  ${isSelected ? 'bg-[#c9a84c]/20 border border-[#c9a84c]/40' : 'hover:bg-[var(--border)] border border-transparent'}
-                  ${isToday && !isSelected ? 'border border-[#c9a84c]/30' : ''}`}>
-                <span className={`font-medium text-[11px] ${isToday ? 'text-[#c9a84c]' : isPast ? 'text-[#33335a]' : 'text-[var(--text-primary)]'}`}>{day}</span>
+      </div>
+
+      {/* Grille */}
+      <div className={`grid gap-2 ${mode === 'week' ? 'grid-cols-7' : 'grid-cols-5'}`}>
+        {dateRange.map(date => {
+          const dateStr = date.toISOString().split('T')[0];
+          const dayTasks = tasksByDate[dateStr] || [];
+          const isToday = dateStr === todayStr();
+          const isPast = date < todayDate;
+          const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+          const pending = dayTasks.filter(t => getVal(t.Statut) !== 'Fait').length;
+          const done = dayTasks.filter(t => getVal(t.Statut) === 'Fait').length;
+
+          return (
+            <div key={dateStr} className={`rounded-xl border p-2 transition-all ${
+              isToday ? 'border-[#c9a84c]/50' : 'border-[var(--border)]'
+            } ${isWeekend && !isToday ? 'opacity-60' : ''}`}
+              style={{ background: isToday ? 'rgba(201,168,76,0.06)' : 'var(--bg-card)', minHeight: mode === 'week' ? 130 : 100 }}>
+
+              {/* En-tête */}
+              <div className="mb-2">
+                <div className={`text-[10px] font-bold uppercase tracking-wider ${isToday ? 'text-[#c9a84c]' : 'text-[var(--text-muted)]'}`}>
+                  {date.toLocaleDateString('fr-FR', { weekday: 'short' })}
+                </div>
+                <div className={`font-bold leading-none mt-0.5 ${mode === 'week' ? 'text-xl' : 'text-base'} ${
+                  isToday ? 'text-[#c9a84c]' : isPast ? 'text-[var(--text-muted)]' : 'text-[var(--text-primary)]'
+                }`}>
+                  {date.getDate()}
+                </div>
                 {dayTasks.length > 0 && (
-                  <div className="flex gap-0.5 mt-0.5 justify-center">
-                    {hasPending && <span className="w-1.5 h-1.5 rounded-full bg-[#c9a84c]" />}
-                    {hasDone && <span className="w-1.5 h-1.5 rounded-full bg-[#4caf7d]" />}
+                  <div className="flex gap-1 mt-0.5 flex-wrap">
+                    {pending > 0 && <span className="text-[9px] text-[#c9a84c] font-semibold">{pending} à faire</span>}
+                    {done > 0 && <span className="text-[9px] text-[#4caf7d] font-semibold">{done} ✓</span>}
                   </div>
                 )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      {selected && (
-        <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-semibold text-[var(--text-primary)] capitalize">
-              {new Date(selected).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
-            </p>
-            <button onClick={() => setSelected(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X className="w-4 h-4" /></button>
-          </div>
-          {selectedTasks.length === 0
-            ? <p className="text-xs text-[var(--text-muted)]">Aucune tâche ce jour</p>
-            : <div className="space-y-2">
-                {selectedTasks.map(t => (
-                  <TaskCard key={t.id} task={t} onStatusChange={onStatusChange} onEdit={onEdit} compact />
-                ))}
               </div>
-          }
-        </div>
-      )}
+
+              {/* Tâches */}
+              <div className="space-y-0.5">
+                {dayTasks.slice(0, maxPerDay).map(t => {
+                  const statut = getVal(t.Statut);
+                  const prio = getVal(t.Priorité);
+                  const isDone = statut === 'Fait';
+                  const isInProgress = statut === 'En cours';
+                  return (
+                    <button key={t.id} onClick={() => onEdit(t)}
+                      className={`w-full text-left px-1.5 py-0.5 rounded text-[10px] leading-snug transition-all hover:opacity-80 ${isDone ? 'line-through' : ''}`}
+                      style={{
+                        background: isInProgress ? 'rgba(201,168,76,0.12)' : 'var(--bg-surface)',
+                        border: `1px solid ${prio === 'Haute' ? 'rgba(245,158,11,0.4)' : 'var(--border)'}`,
+                        color: isDone ? 'var(--text-muted)' : 'var(--text-primary)',
+                      }}>
+                      {prio === 'Haute' && <span style={{ color: '#f59e0b', fontSize: 8, marginRight: 3 }}>●</span>}
+                      {t.Titre || '—'}
+                    </button>
+                  );
+                })}
+                {dayTasks.length > maxPerDay && (
+                  <p className="text-[9px] text-[var(--text-muted)] pl-1">+{dayTasks.length - maxPerDay} autres</p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -684,7 +726,7 @@ export const Taches = () => {
               return (
                 <button key={v.id} onClick={() => setView(v.id)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all
-                    ${view === v.id ? 'bg-[#22223a] text-[#e8c97a]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
+                    ${view === v.id ? 'bg-[var(--border)] text-[var(--gold-soft)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}>
                   <Icon className="w-3.5 h-3.5" />{v.label}
                 </button>
               );
@@ -694,7 +736,7 @@ export const Taches = () => {
             <RefreshCw className="w-4 h-4" />
           </button>
           <button onClick={() => openCreate('À faire')}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-[#c9a84c]/20 to-[#e8c97a]/20 border border-[#c9a84c]/40 text-[#e8c97a] hover:from-[#c9a84c]/30 transition-all text-sm font-medium">
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-[#c9a84c]/20 to-[#e8c97a]/20 border border-[#c9a84c]/40 text-[var(--gold-soft)] hover:from-[#c9a84c]/30 transition-all text-sm font-medium">
             <Plus className="w-4 h-4" />Nouvelle tâche
           </button>
         </div>
@@ -710,7 +752,7 @@ export const Taches = () => {
         <>
           {view === 'today' && <TodayView tasks={tasks} onStatusChange={updateStatut} onEdit={openEdit} onDelete={deleteTask} onAddSubTask={openAddSubTask} />}
           {view === 'kanban' && <KanbanView tasks={tasks} onStatusChange={updateStatut} onAddInCol={openCreate} onEdit={openEdit} onDelete={deleteTask} onAddSubTask={openAddSubTask} />}
-          {view === 'calendar' && <CalendarView tasks={tasks} onStatusChange={updateStatut} onEdit={openEdit} />}
+          {view === 'calendar' && <CalendarView tasks={tasks} onStatusChange={updateStatut} onEdit={openEdit} onDelete={deleteTask} />}
         </>
       )}
 
