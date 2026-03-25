@@ -586,6 +586,7 @@ const AdminContactCard = ({ contact, isSelected, onSelect }: { contact: AdminCon
 const AdminTab = ({ onCompose }: { onCompose: (email: string) => void }) => {
   const [contacts, setContacts]   = useState<AdminContact[]>([]);
   const [loading, setLoading]     = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [query, setQuery]         = useState('');
   const [selected, setSelected]   = useState<AdminContact | null>(null);
   const [showForm, setShowForm]     = useState(false);
@@ -596,20 +597,42 @@ const AdminTab = ({ onCompose }: { onCompose: (email: string) => void }) => {
   const fetchContacts = useCallback(async () => {
     if (!TABLE_ADMIN) { setLoading(false); return; }
     setLoading(true);
+    setFetchError(null);
     try {
-      const res = await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_ADMIN}/?user_field_names=true&size=500&order_by=Nom`, { headers: HEADERS });
+      // Pas de order_by dans l'URL → tri côté client pour éviter les erreurs 400
+      const res = await fetch(
+        `${BASEROW_URL}/database/rows/table/${TABLE_ADMIN}/?user_field_names=true&size=500`,
+        { headers: HEADERS }
+      );
+      if (!res.ok) {
+        const errText = await res.text().catch(() => 'réponse non lisible');
+        setFetchError(`Erreur ${res.status} — ${errText.slice(0, 200)}`);
+        setContacts([]);
+        return;
+      }
       const data = await res.json();
-      setContacts(data.results || []);
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
+      if (!data.results) {
+        setFetchError('Réponse Baserow inattendue (champ "results" absent) — vérifie le token et l\'ID de table');
+        setContacts([]);
+        return;
+      }
+      setContacts(data.results);
+    } catch (e: any) {
+      setFetchError(`Erreur réseau : ${e?.message ?? String(e)}`);
+      setContacts([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { fetchContacts(); }, [fetchContacts]);
 
-  const filtered = contacts.filter(c => {
-    const q = query.toLowerCase();
-    return !q || adminName(c).toLowerCase().includes(q) || c.Email?.toLowerCase().includes(q) || c.Entreprise?.toLowerCase().includes(q);
-  });
+  const filtered = contacts
+    .filter(c => {
+      const q = query.toLowerCase();
+      return !q || adminName(c).toLowerCase().includes(q) || c.Email?.toLowerCase().includes(q) || c.Entreprise?.toLowerCase().includes(q);
+    })
+    .sort((a, b) => adminName(a).localeCompare(adminName(b), 'fr'));
 
   const handleSave = async (data: Partial<AdminContact>) => {
     if (!TABLE_ADMIN) { alert('Configurer TABLE_ADMIN dans Contacts.tsx'); return; }
@@ -685,6 +708,12 @@ const AdminTab = ({ onCompose }: { onCompose: (email: string) => void }) => {
           {!TABLE_ADMIN && (
             <div className="mt-2 px-3 py-2 bg-[#d95555]/10 border border-[#d95555]/20 rounded-lg text-[10px] text-[#d95555]">
               ⚠️ TABLE_ADMIN non configuré dans Contacts.tsx
+            </div>
+          )}
+          {fetchError && (
+            <div className="mt-2 px-3 py-2 bg-[#d95555]/10 border border-[#d95555]/20 rounded-lg text-[10px] text-[#d95555] font-mono break-all flex items-start gap-2">
+              <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
+              {fetchError}
             </div>
           )}
         </div>
