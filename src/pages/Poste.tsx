@@ -27,6 +27,19 @@ interface BaserowFile {
   thumbnails?: { small?: { url: string }; tiny?: { url: string } };
 }
 
+interface Attachment {
+  filename: string;
+  content: string; // base64
+  contentType: string;
+  size: number;
+}
+
+const formatSize = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+};
+
 interface Email {
   id: number;
   Sujet: string;
@@ -129,11 +142,54 @@ const TaskPopup = ({ email, onConfirm, onClose }: TaskPopupProps) => {
   );
 };
 
+// ── Sélecteur de pièces jointes (réutilisable) ──
+const AttachmentPicker = ({ attachments, onChange }: {
+  attachments: Attachment[];
+  onChange: (list: Attachment[]) => void;
+}) => {
+  const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const b64 = (reader.result as string).split(',')[1];
+        onChange([...attachments, { filename: file.name, content: b64, contentType: file.type || 'application/octet-stream', size: file.size }]);
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+  return (
+    <div className="flex flex-col gap-2">
+      {attachments.length > 0 && (
+        <div className="flex flex-wrap gap-2 p-2 bg-[var(--bg-surface)] rounded-xl border border-[var(--border)]">
+          {attachments.map((att, i) => (
+            <div key={i} className="flex items-center gap-1.5 px-2 py-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-lg text-xs">
+              <Paperclip className="w-3 h-3 text-[var(--text-muted)]" />
+              <span className="text-[var(--text-primary)] max-w-[140px] truncate">{att.filename}</span>
+              <span className="text-[var(--text-muted)]">{formatSize(att.size)}</span>
+              <button onClick={() => onChange(attachments.filter((_, j) => j !== i))}
+                className="text-[var(--text-muted)] hover:text-[#d95555] transition-all ml-1">
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer transition-all w-fit">
+        <Paperclip className="w-3.5 h-3.5" />
+        Joindre un fichier
+        <input type="file" multiple className="hidden" onChange={handleFiles} />
+      </label>
+    </div>
+  );
+};
+
 // ── Modal Répondre ──
 interface ReplyModalProps {
   email: Email;
   accountColor: string;
-  onSend: (text: string) => void;
+  onSend: (text: string, attachments: Attachment[]) => void;
   onClose: () => void;
   sending: boolean;
   sendStatus: 'idle' | 'success' | 'error';
@@ -147,11 +203,9 @@ const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus 
 
   const [text, setText] = useState(suggestions[0]?.value || '');
   const [activeTab, setActiveTab] = useState(0);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
 
-  const selectSuggestion = (idx: number) => {
-    setActiveTab(idx);
-    setText(suggestions[idx].value);
-  };
+  const selectSuggestion = (idx: number) => { setActiveTab(idx); setText(suggestions[idx].value); };
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -177,40 +231,34 @@ const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus 
           </button>
         </div>
 
-        {/* Suggestions IA — 3 onglets */}
+        {/* Suggestions IA */}
         {suggestions.length > 0 && (
           <div className="px-6 pt-4 shrink-0">
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="w-3.5 h-3.5 text-[#7b5ea7]" />
               <span className="text-xs font-bold text-[#9b7ec7]">Suggestions IA — dans ton style</span>
             </div>
-
-            {/* Onglets */}
             <div className="flex gap-2 mb-3">
               {suggestions.map((s, i) => (
                 <button key={i} onClick={() => selectSuggestion(i)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
                     activeTab === i
-                      ? 'bg-[#7b5ea7]/30 border-[#7b5ea7]/50 text-[#c9b8e8]'
-                      : 'bg-[var(--bg-surface)] border-[var(--border)] text-[var(--text-muted)] hover:text-[#a0a0c0] hover:border-[#33335a]'
+                      ? 'bg-[#7b5ea7]/30 border-[#7b5ea7]/50 text-[#9b7ec7]'
+                      : 'bg-[var(--bg-surface)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                   }`}>
                   {s.label}
                 </button>
               ))}
             </div>
-
-            {/* Aperçu suggestion sélectionnée */}
-            <div className="p-4 bg-[#7b5ea7]/08 border border-[#7b5ea7]/20 rounded-xl mb-3 max-h-36 overflow-y-auto">
+            <div className="p-4 bg-[var(--bg-surface)] border border-[#7b5ea7]/20 rounded-xl mb-3 max-h-36 overflow-y-auto">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold text-[#7b5ea7] uppercase tracking-wider">
-                  {suggestions[activeTab]?.label}
-                </span>
+                <span className="text-[10px] font-bold text-[#7b5ea7] uppercase tracking-wider">{suggestions[activeTab]?.label}</span>
                 <button onClick={() => setText(suggestions[activeTab].value)}
-                  className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold bg-[#7b5ea7]/20 border border-[#7b5ea7]/30 text-[#9b7ec7] hover:bg-[#7b5ea7]/40 transition-all">
+                  className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold bg-[#7b5ea7]/20 border border-[#7b5ea7]/30 text-[#7b5ea7] hover:bg-[#7b5ea7]/40 transition-all">
                   Utiliser <ChevronRight className="w-3 h-3" />
                 </button>
               </div>
-              <p className="text-xs text-[#b0a0d0] leading-relaxed whitespace-pre-wrap">
+              <p className="text-xs text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">
                 {suggestions[activeTab]?.value}
               </p>
             </div>
@@ -219,35 +267,111 @@ const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus 
 
         {/* Zone d'écriture */}
         <div className="flex-1 px-6 pb-2 min-h-0">
-          <textarea
-            value={text}
-            onChange={e => setText(e.target.value)}
-            className="w-full h-full min-h-[200px] bg-[var(--bg-main)] border border-[var(--border)] rounded-xl p-4 text-sm text-[var(--text-primary)] resize-none focus:outline-none focus:border-[#c9a84c]/40 transition-all leading-relaxed"
-            placeholder="Rédigez ou modifiez votre réponse..."
-            autoFocus
-          />
+          <textarea value={text} onChange={e => setText(e.target.value)}
+            className="w-full h-full min-h-[180px] bg-[var(--bg-main)] border border-[var(--border)] rounded-xl p-4 text-sm text-[var(--text-primary)] resize-none focus:outline-none focus:border-[#c9a84c]/40 transition-all leading-relaxed"
+            placeholder="Rédigez ou modifiez votre réponse..." autoFocus />
+        </div>
+
+        {/* Pièces jointes */}
+        <div className="px-6 pb-2 shrink-0">
+          <AttachmentPicker attachments={attachments} onChange={setAttachments} />
         </div>
 
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--border)] shrink-0">
           <div>
-            {sendStatus === 'success' && (
-              <span className="text-xs text-[#4caf7d] flex items-center gap-1.5">
-                <CheckCircle className="w-3.5 h-3.5" /> Email envoyé
-              </span>
-            )}
-            {sendStatus === 'error' && (
-              <span className="text-xs text-[#d95555] flex items-center gap-1.5">
-                <AlertCircle className="w-3.5 h-3.5" /> Erreur d'envoi
-              </span>
-            )}
+            {sendStatus === 'success' && <span className="text-xs text-[#4caf7d] flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5" /> Envoyé</span>}
+            {sendStatus === 'error' && <span className="text-xs text-[#d95555] flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5" /> Erreur d'envoi</span>}
           </div>
           <div className="flex gap-3">
-            <button onClick={onClose}
-              className="px-5 py-2 rounded-lg text-sm text-[#a0a0c0] hover:text-[var(--text-primary)] border border-[var(--border)] hover:border-[#5a587a] transition-all">
-              Annuler
+            <button onClick={onClose} className="px-5 py-2 rounded-lg text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[var(--border)] transition-all">Annuler</button>
+            <button onClick={() => onSend(text, attachments)} disabled={sending || !text.trim()}
+              className="flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all hover:scale-105 disabled:opacity-40 disabled:hover:scale-100"
+              style={{ background: `linear-gradient(135deg, ${accountColor}, ${accountColor}cc)`, color: '#05050a' }}>
+              {sending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              {sending ? 'Envoi...' : 'Envoyer'}
             </button>
-            <button onClick={() => onSend(text)} disabled={sending || !text.trim()}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Modal Nouveau mail ──
+interface ComposeModalProps {
+  activeAccount: string;
+  accountColor: string;
+  onSend: (to: string, subject: string, body: string, attachments: Attachment[]) => void;
+  onClose: () => void;
+  sending: boolean;
+  sendStatus: 'idle' | 'success' | 'error';
+}
+const ComposeModal = ({ activeAccount, accountColor, onSend, onClose, sending, sendStatus }: ComposeModalProps) => {
+  const [to, setTo] = useState('');
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col"
+        style={{ width: '820px', maxHeight: '92vh' }}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: `${accountColor}20`, border: `1px solid ${accountColor}30` }}>
+              <Send className="w-4 h-4" style={{ color: accountColor }} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-[var(--text-primary)]">Nouveau mail</h3>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">Depuis : {activeAccount}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--border)] transition-all">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Champs À / Sujet */}
+        <div className="px-6 pt-4 space-y-0 shrink-0">
+          <div className="flex items-center gap-3 border-b border-[var(--border)] py-2.5">
+            <span className="text-xs font-semibold text-[var(--text-muted)] w-14 shrink-0">À</span>
+            <input type="email" value={to} onChange={e => setTo(e.target.value)} autoFocus
+              className="flex-1 bg-transparent text-sm text-[var(--text-primary)] focus:outline-none placeholder:text-[var(--text-muted)]"
+              placeholder="destinataire@email.com" />
+          </div>
+          <div className="flex items-center gap-3 border-b border-[var(--border)] py-2.5">
+            <span className="text-xs font-semibold text-[var(--text-muted)] w-14 shrink-0">Sujet</span>
+            <input type="text" value={subject} onChange={e => setSubject(e.target.value)}
+              className="flex-1 bg-transparent text-sm text-[var(--text-primary)] focus:outline-none placeholder:text-[var(--text-muted)]"
+              placeholder="Objet de l'email" />
+          </div>
+        </div>
+
+        {/* Corps */}
+        <div className="flex-1 px-6 py-3 min-h-0">
+          <textarea value={body} onChange={e => setBody(e.target.value)}
+            className="w-full h-full min-h-[200px] bg-transparent text-sm text-[var(--text-primary)] resize-none focus:outline-none leading-relaxed placeholder:text-[var(--text-muted)]"
+            placeholder="Rédigez votre message..." />
+        </div>
+
+        {/* Pièces jointes */}
+        <div className="px-6 pb-2 shrink-0">
+          <AttachmentPicker attachments={attachments} onChange={setAttachments} />
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--border)] shrink-0">
+          <div>
+            {sendStatus === 'success' && <span className="text-xs text-[#4caf7d] flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5" /> Envoyé !</span>}
+            {sendStatus === 'error' && <span className="text-xs text-[#d95555] flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5" /> Erreur d'envoi</span>}
+          </div>
+          <div className="flex gap-3">
+            <button onClick={onClose} className="px-5 py-2 rounded-lg text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[var(--border)] transition-all">Annuler</button>
+            <button onClick={() => onSend(to, subject, body, attachments)} disabled={sending || !to.trim() || !body.trim()}
               className="flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all hover:scale-105 disabled:opacity-40 disabled:hover:scale-100"
               style={{ background: `linear-gradient(135deg, ${accountColor}, ${accountColor}cc)`, color: '#05050a' }}>
               {sending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -274,6 +398,7 @@ export const Poste = () => {
   const [showTaskPopup, setShowTaskPopup] = useState(false);
   const [showFullContent, setShowFullContent] = useState(false);
   const [taskSuccess, setTaskSuccess] = useState(false);
+  const [composeMode, setComposeMode] = useState(false);
 
   const fetchEmails = useCallback(async () => {
     try {
@@ -333,7 +458,7 @@ export const Poste = () => {
     } catch (e) { console.error(e); }
   };
 
-  const sendReply = async (text: string) => {
+  const sendReply = async (text: string, attachments: Attachment[] = []) => {
     if (!selectedEmail || !text.trim()) return;
     setSending(true);
     try {
@@ -345,12 +470,46 @@ export const Poste = () => {
           subject: `Re: ${selectedEmail.Sujet || ''}`,
           body: text,
           from: selectedEmail.Compte,
+          attachments: attachments.map(a => ({
+            filename: a.filename,
+            content: a.content,
+            contentType: a.contentType,
+            encoding: 'base64',
+          })),
         }),
       });
       setSendStatus('success');
       await markAsTreated(selectedEmail);
       setReplyMode(false);
       setTimeout(() => setSendStatus('idle'), 3000);
+    } catch {
+      setSendStatus('error');
+      setTimeout(() => setSendStatus('idle'), 3000);
+    } finally { setSending(false); }
+  };
+
+  const sendNewEmail = async (to: string, subject: string, body: string, attachments: Attachment[]) => {
+    if (!to.trim() || !body.trim()) return;
+    setSending(true);
+    try {
+      await fetch(N8N_SEND_WEBHOOK, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to,
+          subject,
+          body,
+          from: activeAccount,
+          attachments: attachments.map(a => ({
+            filename: a.filename,
+            content: a.content,
+            contentType: a.contentType,
+            encoding: 'base64',
+          })),
+        }),
+      });
+      setSendStatus('success');
+      setTimeout(() => { setSendStatus('idle'); setComposeMode(false); }, 2000);
     } catch {
       setSendStatus('error');
       setTimeout(() => setSendStatus('idle'), 3000);
@@ -382,6 +541,16 @@ export const Poste = () => {
           accountColor={activeAccountData.color}
           onSend={sendReply}
           onClose={() => { setReplyMode(false); setSendStatus('idle'); }}
+          sending={sending}
+          sendStatus={sendStatus}
+        />
+      )}
+      {composeMode && (
+        <ComposeModal
+          activeAccount={activeAccount}
+          accountColor={activeAccountData.color}
+          onSend={sendNewEmail}
+          onClose={() => { setComposeMode(false); setSendStatus('idle'); }}
           sending={sending}
           sendStatus={sendStatus}
         />
@@ -428,6 +597,11 @@ export const Poste = () => {
             }`}>
             {showTreated ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
             {showTreated ? 'Masquer traités' : 'Traités'}
+          </button>
+          <button onClick={() => { setComposeMode(true); setSendStatus('idle'); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105"
+            style={{ background: `linear-gradient(135deg, ${activeAccountData.color}, ${activeAccountData.color}cc)`, color: '#05050a' }}>
+            <Plus className="w-3.5 h-3.5" /> Nouveau mail
           </button>
           <button onClick={fetchEmails} disabled={refreshing}
             className="p-1.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] text-[#a0a0c0] hover:text-[var(--text-primary)] transition-all">
@@ -612,8 +786,7 @@ export const Poste = () => {
                               Utiliser <ChevronRight className="w-3 h-3" />
                             </button>
                           </div>
-                          <p className="text-xs leading-relaxed whitespace-pre-wrap"
-                            style={{ color: s.color === '#c9a84c' ? '#d4c890' : s.color === '#4caf7d' ? '#90d4b0' : '#b090d4' }}>
+                          <p className="text-xs leading-relaxed whitespace-pre-wrap text-[var(--text-primary)]">
                             {selectedEmail[s.key] as string}
                           </p>
                         </div>
