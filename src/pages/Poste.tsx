@@ -152,11 +152,18 @@ const AttachmentPicker = ({ attachments, onChange }: {
 }) => {
   const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    // On collecte TOUS les fichiers avant d'appeler onChange une seule fois
+    // (évite le bug de stale closure avec plusieurs fichiers simultanés)
+    const newAtts: Attachment[] = [];
+    let done = 0;
     files.forEach(file => {
       const reader = new FileReader();
       reader.onload = () => {
         const b64 = (reader.result as string).split(',')[1];
-        onChange([...attachments, { filename: file.name, content: b64, contentType: file.type || 'application/octet-stream', size: file.size }]);
+        newAtts.push({ filename: file.name, content: b64, contentType: file.type || 'application/octet-stream', size: file.size });
+        done++;
+        if (done === files.length) onChange([...attachments, ...newAtts]);
       };
       reader.readAsDataURL(file);
     });
@@ -192,7 +199,7 @@ const AttachmentPicker = ({ attachments, onChange }: {
 interface ReplyModalProps {
   email: Email;
   accountColor: string;
-  onSend: (text: string, attachments: Attachment[]) => void;
+  onSend: (text: string, cc: string, bcc: string, attachments: Attachment[]) => void;
   onClose: () => void;
   sending: boolean;
   sendStatus: 'idle' | 'success' | 'error';
@@ -206,6 +213,10 @@ const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus 
 
   const [text, setText] = useState(suggestions[0]?.value || '');
   const [activeTab, setActiveTab] = useState(0);
+  const [cc, setCc] = useState('');
+  const [bcc, setBcc] = useState('');
+  const [showCc, setShowCc] = useState(false);
+  const [showBcc, setShowBcc] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   const selectSuggestion = (idx: number) => { setActiveTab(idx); setText(suggestions[idx].value); };
@@ -216,22 +227,50 @@ const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus 
         style={{ width: '820px', maxHeight: '92vh' }}>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-              style={{ background: `${accountColor}20`, border: `1px solid ${accountColor}30` }}>
-              <Send className="w-4 h-4" style={{ color: accountColor }} />
+        <div className="px-6 pt-4 pb-0 border-b border-[var(--border)] shrink-0">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: `${accountColor}20`, border: `1px solid ${accountColor}30` }}>
+                <Send className="w-4 h-4" style={{ color: accountColor }} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-[var(--text-primary)]">Répondre</h3>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                  → {email['Expéditeur']?.replace(/<.*>/, '').replace(/"/g, '').trim()}
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-sm font-bold text-[var(--text-primary)]">Répondre</h3>
-              <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                → {email['Expéditeur']?.replace(/<.*>/, '').replace(/"/g, '').trim()}
-              </p>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setShowCc(v => !v)}
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold border transition-all ${showCc ? 'bg-[var(--border)] text-[var(--text-primary)] border-[var(--border)]' : 'text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text-primary)]'}`}>
+                CC
+              </button>
+              <button onClick={() => setShowBcc(v => !v)}
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold border transition-all ${showBcc ? 'bg-[var(--border)] text-[var(--text-primary)] border-[var(--border)]' : 'text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text-primary)]'}`}>
+                BCC
+              </button>
+              <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--border)] transition-all">
+                <X className="w-4 h-4" />
+              </button>
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--border)] transition-all">
-            <X className="w-4 h-4" />
-          </button>
+          {showCc && (
+            <div className="flex items-center gap-3 border-t border-[var(--border)] py-2">
+              <span className="text-xs font-semibold text-[var(--text-muted)] w-14 shrink-0">CC</span>
+              <input value={cc} onChange={e => setCc(e.target.value)}
+                className="flex-1 bg-transparent text-sm text-[var(--text-primary)] focus:outline-none placeholder:text-[var(--text-muted)]"
+                placeholder="copie@email.com, autre@email.com" />
+            </div>
+          )}
+          {showBcc && (
+            <div className="flex items-center gap-3 border-t border-[var(--border)] py-2">
+              <span className="text-xs font-semibold text-[var(--text-muted)] w-14 shrink-0">BCC</span>
+              <input value={bcc} onChange={e => setBcc(e.target.value)}
+                className="flex-1 bg-transparent text-sm text-[var(--text-primary)] focus:outline-none placeholder:text-[var(--text-muted)]"
+                placeholder="copie-cachée@email.com" />
+            </div>
+          )}
         </div>
 
         {/* Suggestions IA */}
@@ -288,7 +327,7 @@ const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus 
           </div>
           <div className="flex gap-3">
             <button onClick={onClose} className="px-5 py-2 rounded-lg text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[var(--border)] transition-all">Annuler</button>
-            <button onClick={() => onSend(text, attachments)} disabled={sending || !text.trim()}
+            <button onClick={() => onSend(text, cc, bcc, attachments)} disabled={sending || !text.trim()}
               className="flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all hover:scale-105 disabled:opacity-40 disabled:hover:scale-100"
               style={{ background: `linear-gradient(135deg, ${accountColor}, ${accountColor}cc)`, color: '#05050a' }}>
               {sending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -305,13 +344,17 @@ const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus 
 interface ComposeModalProps {
   activeAccount: string;
   accountColor: string;
-  onSend: (to: string, subject: string, body: string, attachments: Attachment[]) => void;
+  onSend: (to: string, cc: string, bcc: string, subject: string, body: string, attachments: Attachment[]) => void;
   onClose: () => void;
   sending: boolean;
   sendStatus: 'idle' | 'success' | 'error';
 }
 const ComposeModal = ({ activeAccount, accountColor, onSend, onClose, sending, sendStatus }: ComposeModalProps) => {
   const [to, setTo] = useState('');
+  const [cc, setCc] = useState('');
+  const [bcc, setBcc] = useState('');
+  const [showCc, setShowCc] = useState(false);
+  const [showBcc, setShowBcc] = useState(false);
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -338,14 +381,40 @@ const ComposeModal = ({ activeAccount, accountColor, onSend, onClose, sending, s
           </button>
         </div>
 
-        {/* Champs À / Sujet */}
+        {/* Champs À / CC / BCC / Sujet */}
         <div className="px-6 pt-4 space-y-0 shrink-0">
           <div className="flex items-center gap-3 border-b border-[var(--border)] py-2.5">
             <span className="text-xs font-semibold text-[var(--text-muted)] w-14 shrink-0">À</span>
-            <input type="email" value={to} onChange={e => setTo(e.target.value)} autoFocus
+            <input value={to} onChange={e => setTo(e.target.value)} autoFocus
               className="flex-1 bg-transparent text-sm text-[var(--text-primary)] focus:outline-none placeholder:text-[var(--text-muted)]"
-              placeholder="destinataire@email.com" />
+              placeholder="email1@ex.com, email2@ex.com" />
+            <div className="flex gap-1.5 shrink-0">
+              <button onClick={() => setShowCc(v => !v)}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all ${showCc ? 'bg-[var(--border)] text-[var(--text-primary)] border-[var(--border)]' : 'text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text-primary)]'}`}>
+                CC
+              </button>
+              <button onClick={() => setShowBcc(v => !v)}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all ${showBcc ? 'bg-[var(--border)] text-[var(--text-primary)] border-[var(--border)]' : 'text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text-primary)]'}`}>
+                BCC
+              </button>
+            </div>
           </div>
+          {showCc && (
+            <div className="flex items-center gap-3 border-b border-[var(--border)] py-2.5">
+              <span className="text-xs font-semibold text-[var(--text-muted)] w-14 shrink-0">CC</span>
+              <input value={cc} onChange={e => setCc(e.target.value)}
+                className="flex-1 bg-transparent text-sm text-[var(--text-primary)] focus:outline-none placeholder:text-[var(--text-muted)]"
+                placeholder="copie@email.com, autre@email.com" />
+            </div>
+          )}
+          {showBcc && (
+            <div className="flex items-center gap-3 border-b border-[var(--border)] py-2.5">
+              <span className="text-xs font-semibold text-[var(--text-muted)] w-14 shrink-0">BCC</span>
+              <input value={bcc} onChange={e => setBcc(e.target.value)}
+                className="flex-1 bg-transparent text-sm text-[var(--text-primary)] focus:outline-none placeholder:text-[var(--text-muted)]"
+                placeholder="copie-cachée@email.com" />
+            </div>
+          )}
           <div className="flex items-center gap-3 border-b border-[var(--border)] py-2.5">
             <span className="text-xs font-semibold text-[var(--text-muted)] w-14 shrink-0">Sujet</span>
             <input type="text" value={subject} onChange={e => setSubject(e.target.value)}
@@ -374,7 +443,7 @@ const ComposeModal = ({ activeAccount, accountColor, onSend, onClose, sending, s
           </div>
           <div className="flex gap-3">
             <button onClick={onClose} className="px-5 py-2 rounded-lg text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[var(--border)] transition-all">Annuler</button>
-            <button onClick={() => onSend(to, subject, body, attachments)} disabled={sending || !to.trim() || !body.trim()}
+            <button onClick={() => onSend(to, cc, bcc, subject, body, attachments)} disabled={sending || !to.trim() || !body.trim()}
               className="flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all hover:scale-105 disabled:opacity-40 disabled:hover:scale-100"
               style={{ background: `linear-gradient(135deg, ${accountColor}, ${accountColor}cc)`, color: '#05050a' }}>
               {sending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -562,7 +631,7 @@ export const Poste = () => {
     } catch (e) { console.error(e); }
   };
 
-  const sendReply = async (text: string, attachments: Attachment[] = []) => {
+  const sendReply = async (text: string, cc: string, bcc: string, attachments: Attachment[] = []) => {
     if (!selectedEmail || !text.trim()) return;
     setSending(true);
     try {
@@ -574,6 +643,8 @@ export const Poste = () => {
           subject: `Re: ${selectedEmail.Sujet || ''}`,
           body: text,
           from: selectedEmail.Compte,
+          ...(cc.trim()  && { cc:  cc.trim()  }),
+          ...(bcc.trim() && { bcc: bcc.trim() }),
           attachments: attachments.map(a => ({
             filename: a.filename,
             content: a.content,
@@ -592,7 +663,7 @@ export const Poste = () => {
     } finally { setSending(false); }
   };
 
-  const sendNewEmail = async (to: string, subject: string, body: string, attachments: Attachment[]) => {
+  const sendNewEmail = async (to: string, cc: string, bcc: string, subject: string, body: string, attachments: Attachment[]) => {
     if (!to.trim() || !body.trim()) return;
     setSending(true);
     try {
@@ -604,6 +675,8 @@ export const Poste = () => {
           subject,
           body,
           from: activeAccount,
+          ...(cc.trim()  && { cc:  cc.trim()  }),
+          ...(bcc.trim() && { bcc: bcc.trim() }),
           attachments: attachments.map(a => ({
             filename: a.filename,
             content: a.content,
