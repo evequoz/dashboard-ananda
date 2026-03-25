@@ -599,24 +599,30 @@ const AdminTab = ({ onCompose }: { onCompose: (email: string) => void }) => {
     setLoading(true);
     setFetchError(null);
     try {
-      // Pas de order_by dans l'URL → tri côté client pour éviter les erreurs 400
-      const res = await fetch(
-        `${BASEROW_URL}/database/rows/table/${TABLE_ADMIN}/?user_field_names=true&size=500`,
-        { headers: HEADERS }
-      );
-      if (!res.ok) {
-        const errText = await res.text().catch(() => 'réponse non lisible');
-        setFetchError(`Erreur ${res.status} — ${errText.slice(0, 200)}`);
-        setContacts([]);
-        return;
+      // Pagination automatique — Baserow limite à 200 par page
+      const all: AdminContact[] = [];
+      let url: string | null =
+        `${BASEROW_URL}/database/rows/table/${TABLE_ADMIN}/?user_field_names=true&size=200`;
+
+      while (url) {
+        const res = await fetch(url, { headers: HEADERS });
+        if (!res.ok) {
+          const errText = await res.text().catch(() => 'réponse non lisible');
+          setFetchError(`Erreur ${res.status} — ${errText.slice(0, 200)}`);
+          setContacts([]);
+          return;
+        }
+        const data = await res.json();
+        if (!data.results) {
+          setFetchError('Réponse Baserow inattendue (champ "results" absent) — vérifie le token et l\'ID de table');
+          setContacts([]);
+          return;
+        }
+        all.push(...data.results);
+        url = data.next ?? null; // null = dernière page
       }
-      const data = await res.json();
-      if (!data.results) {
-        setFetchError('Réponse Baserow inattendue (champ "results" absent) — vérifie le token et l\'ID de table');
-        setContacts([]);
-        return;
-      }
-      setContacts(data.results);
+
+      setContacts(all);
     } catch (e: any) {
       setFetchError(`Erreur réseau : ${e?.message ?? String(e)}`);
       setContacts([]);
