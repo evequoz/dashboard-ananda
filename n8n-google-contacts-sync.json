@@ -1,0 +1,114 @@
+{
+  "name": "Synchronisation Google Contacts → Baserow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "sync-google-contacts",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "gc-node-1",
+      "name": "Déclencheur Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "sync-google-contacts"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://people.googleapis.com/v1/people/me/connections",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "personFields",
+              "value": "names,emailAddresses,phoneNumbers,organizations"
+            },
+            {
+              "name": "pageSize",
+              "value": "1000"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "gc-node-2",
+      "name": "Google People API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [420, 300],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "REMPLACER_PAR_ID_CREDENTIAL",
+          "name": "Google OAuth2 (People API)"
+        }
+      },
+      "notes": "⚠️ Configurer le credential OAuth2 Google avec le scope : https://www.googleapis.com/auth/contacts.readonly"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "jsCode": "// ── Synchronisation Google Contacts → Baserow ────────────────────\n// Ce nœud lit tous les contacts Google reçus et les upserte dans\n// la table contacts_admin (ID 544) de Baserow.\n// Logique :\n//   - Si l'email existe déjà → PATCH (mise à jour Prénom, Nom, Tél, Entreprise)\n//   - Sinon → POST (création avec Catégorie=Admin)\n\nconst data = $input.first().json;\nconst connections = data.connections || [];\n\nconst BASE  = 'https://baserow.ananda-communaute.cloud/api';\nconst TOKEN = 'GBLdzaCZvQUVXkCqSls3WX3dT3uVg0H8';\nconst TABLE = 544;\nconst h     = {\n  'Authorization': `Token ${TOKEN}`,\n  'Content-Type': 'application/json'\n};\n\nlet created = 0;\nlet updated = 0;\nlet skipped = 0;\n\nfor (const person of connections) {\n  // ── Extraire les champs ──\n  const email     = (person.emailAddresses?.[0]?.value || '').trim();\n  if (!email) { skipped++; continue; }\n\n  const prénom    = person.names?.[0]?.givenName  || '';\n  const nom       = person.names?.[0]?.familyName || '';\n  const téléphone = person.phoneNumbers?.[0]?.value || '';\n  const entreprise= person.organizations?.[0]?.name || '';\n\n  // ── Vérifier si le contact existe déjà dans Baserow ──\n  const searchUrl = `${BASE}/database/rows/table/${TABLE}/?user_field_names=true&filter__Email__equal=${encodeURIComponent(email)}`;\n  const searchRes  = await fetch(searchUrl, { headers: h });\n  const searchData = await searchRes.json();\n\n  if (searchData.count > 0) {\n    // ── Mise à jour (ne pas écraser l'email ni les Notes) ──\n    const rowId = searchData.results[0].id;\n    await fetch(\n      `${BASE}/database/rows/table/${TABLE}/${rowId}/?user_field_names=true`,\n      {\n        method: 'PATCH',\n        headers: h,\n        body: JSON.stringify({ Prénom: prénom, Nom: nom, Téléphone: téléphone, Entreprise: entreprise })\n      }\n    );\n    updated++;\n  } else {\n    // ── Création ──\n    await fetch(\n      `${BASE}/database/rows/table/${TABLE}/?user_field_names=true`,\n      {\n        method: 'POST',\n        headers: h,\n        body: JSON.stringify({\n          Prénom:     prénom,\n          Nom:        nom,\n          Email:      email,\n          Téléphone:  téléphone,\n          Entreprise: entreprise,\n          Catégorie:  'Admin'\n        })\n      }\n    );\n    created++;\n  }\n}\n\nreturn [{\n  json: {\n    ok:        true,\n    total:     connections.length,\n    created,\n    updated,\n    skipped,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "gc-node-3",
+      "name": "Upsert Baserow (boucle)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "gc-node-4",
+      "name": "Réponse",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Déclencheur Webhook": {
+      "main": [
+        [{ "node": "Google People API", "type": "main", "index": 0 }]
+      ]
+    },
+    "Google People API": {
+      "main": [
+        [{ "node": "Upsert Baserow (boucle)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Upsert Baserow (boucle)": {
+      "main": [
+        [{ "node": "Réponse", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "notes": "CONFIGURATION REQUISE :\n1. Créer un credential n8n de type 'OAuth2 API' pour Google\n   - Authorization URL : https://accounts.google.com/o/oauth2/auth\n   - Token URL : https://oauth2.googleapis.com/token\n   - Scope : https://www.googleapis.com/auth/contacts.readonly\n   - Client ID / Secret : depuis Google Cloud Console (API People activée)\n2. Assigner ce credential au nœud 'Google People API'\n3. Activer le workflow\n4. URL webhook : https://n8n.ananda-communaute.cloud/webhook/sync-google-contacts"
+  }
+}

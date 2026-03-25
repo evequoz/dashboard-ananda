@@ -3,7 +3,7 @@ import {
   Search, User, Mail, Phone, Calendar, ExternalLink,
   X, Loader2, Users, ChevronRight, Send, RefreshCw,
   CheckCircle, AlertCircle, Plus, Pencil, Trash2,
-  Building2, Tag, FileText, Upload, Clock, Inbox,
+  Building2, Tag, FileText, Cloud, Clock, Inbox,
 } from 'lucide-react';
 
 // ── Constants ─────────────────────────────────────────────────────
@@ -12,6 +12,7 @@ const N8N_WEBHOOK       = 'https://n8n.ananda-communaute.cloud/webhook/send-emai
 const BASEROW_URL       = 'https://baserow.ananda-communaute.cloud/api';
 const BASEROW_TOKEN     = 'GBLdzaCZvQUVXkCqSls3WX3dT3uVg0H8';
 const TABLE_ADMIN       = 544; // contacts_admin
+const N8N_GOOGLE_SYNC   = 'https://n8n.ananda-communaute.cloud/webhook/sync-google-contacts';
 const TABLE_EMAILS      = 534;
 const TABLE_SENT        = 0;   // ⚠️ Remplacer par l'ID Baserow de emails_envoyes
 const ACCOUNTS          = ['serge@eh-me.com', 'admin@eh-me.com', 'serge@seme.ch'];
@@ -552,151 +553,7 @@ const AdminContactDetail = ({ contact, onClose, onCompose, onEdit, onDelete }: {
   );
 };
 
-// ── Import CSV ──
-const parseCsv = (text: string): Record<string, string>[] => {
-  const lines = text.split(/\r?\n/).filter(l => l.trim());
-  if (lines.length < 2) return [];
-  const parseRow = (row: string): string[] => {
-    const cols: string[] = []; let cur = ''; let inQ = false;
-    for (let i = 0; i < row.length; i++) {
-      const c = row[i];
-      if (c === '"') { if (inQ && row[i+1] === '"') { cur += '"'; i++; } else { inQ = !inQ; } }
-      else if (c === ',' && !inQ) { cols.push(cur); cur = ''; }
-      else { cur += c; }
-    }
-    cols.push(cur);
-    return cols;
-  };
-  const headers = parseRow(lines[0]);
-  return lines.slice(1).map(line => {
-    const vals = parseRow(line);
-    return Object.fromEntries(headers.map((h, i) => [h.trim(), (vals[i] || '').trim()]));
-  });
-};
-
-const mapGoogleContact = (row: Record<string, string>): Partial<AdminContact> => ({
-  Prénom:    row['Given Name'] || '',
-  Nom:       row['Family Name'] || '',
-  Email:     row['E-mail 1 - Value'] || row['E-mail Address'] || '',
-  Téléphone: row['Phone 1 - Value'] || row['Mobile Phone'] || '',
-  Entreprise: row['Organization 1 - Name'] || row['Company'] || '',
-  Notes:     row['Notes'] || '',
-});
-
-const CsvImportModal = ({ onClose, onImported }: { onClose: () => void; onImported: () => void }) => {
-  const [rows, setRows] = useState<Partial<AdminContact>[]>([]);
-  const [importing, setImporting] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [done, setDone] = useState(false);
-
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const text = ev.target?.result as string;
-      const parsed = parseCsv(text).map(mapGoogleContact).filter(r => r.Email?.trim());
-      setRows(parsed);
-    };
-    reader.readAsText(file, 'UTF-8');
-  };
-
-  const doImport = async () => {
-    if (!TABLE_ADMIN || rows.length === 0) { alert('Configurer TABLE_ADMIN d\'abord'); return; }
-    setImporting(true);
-    let count = 0;
-    for (const row of rows) {
-      try {
-        await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_ADMIN}/?user_field_names=true`, {
-          method: 'POST', headers: HEADERS, body: JSON.stringify(row),
-        });
-      } catch { /* continue */ }
-      count++;
-      setProgress(Math.round((count / rows.length) * 100));
-    }
-    setDone(true); setImporting(false); onImported();
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col w-[640px] max-h-[85vh]">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#4caf7d]/20 border border-[#4caf7d]/30 flex items-center justify-center">
-              <Upload className="w-4 h-4 text-[#4caf7d]" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-[var(--text-primary)]">Import CSV — Google Contacts</h3>
-              <p className="text-xs text-[var(--text-muted)]">Exporte tes contacts Google au format CSV, puis importe ici</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--border)] transition-all"><X className="w-4 h-4" /></button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-          {!done ? (
-            <>
-              <label className="flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed border-[var(--border)] rounded-xl cursor-pointer hover:border-[#4caf7d]/50 transition-all">
-                <Upload className="w-8 h-8 text-[var(--text-muted)]" />
-                <div className="text-center">
-                  <p className="text-sm font-semibold text-[var(--text-primary)]">Choisir un fichier CSV</p>
-                  <p className="text-xs text-[var(--text-muted)] mt-1">Export Google Contacts (CSV)</p>
-                </div>
-                <input type="file" accept=".csv" className="hidden" onChange={handleFile} />
-              </label>
-
-              {rows.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-[var(--text-muted)] mb-2">{rows.length} contacts détectés (avec email) — aperçu :</p>
-                  <div className="space-y-1 max-h-48 overflow-y-auto">
-                    {rows.slice(0, 10).map((r, i) => (
-                      <div key={i} className="flex items-center gap-3 px-3 py-2 bg-[var(--bg-surface)] rounded-lg border border-[var(--border)] text-xs">
-                        <span className="font-semibold text-[var(--text-primary)] truncate w-32">{[r.Prénom, r.Nom].filter(Boolean).join(' ') || '—'}</span>
-                        <span className="text-[var(--text-muted)] truncate flex-1">{r.Email}</span>
-                        {r.Entreprise && <span className="text-[var(--text-muted)] truncate w-24">{r.Entreprise}</span>}
-                      </div>
-                    ))}
-                    {rows.length > 10 && <p className="text-[10px] text-[var(--text-muted)] text-center">... et {rows.length - 10} autres</p>}
-                  </div>
-                </div>
-              )}
-
-              {importing && (
-                <div>
-                  <div className="flex items-center justify-between text-xs text-[var(--text-muted)] mb-1">
-                    <span>Import en cours…</span><span>{progress}%</span>
-                  </div>
-                  <div className="h-2 bg-[var(--border)] rounded-full overflow-hidden">
-                    <div className="h-full bg-[#4caf7d] transition-all duration-300" style={{ width: `${progress}%` }} />
-                  </div>
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="flex flex-col items-center gap-4 py-10">
-              <CheckCircle className="w-12 h-12 text-[#4caf7d]" />
-              <div className="text-center">
-                <p className="text-base font-bold text-[var(--text-primary)]">{rows.length} contacts importés !</p>
-                <p className="text-sm text-[var(--text-muted)] mt-1">Ils sont maintenant dans ta liste Admin/Pro</p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-[var(--border)] shrink-0">
-          <button onClick={onClose} className="px-5 py-2 rounded-lg text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[var(--border)] transition-all">{done ? 'Fermer' : 'Annuler'}</button>
-          {!done && (
-            <button onClick={doImport} disabled={importing || rows.length === 0}
-              className="flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold bg-[#4caf7d]/20 border border-[#4caf7d]/40 text-[#4caf7d] hover:bg-[#4caf7d]/30 transition-all disabled:opacity-40">
-              {importing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-              {importing ? `${progress}%…` : `Importer ${rows.length} contacts`}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
+// (import CSV supprimé — remplacé par synchronisation Google via n8n)
 
 // ── Carte contact Admin ──
 const AdminContactCard = ({ contact, isSelected, onSelect }: { contact: AdminContact; isSelected: boolean; onSelect: () => void }) => {
@@ -731,9 +588,10 @@ const AdminTab = ({ onCompose }: { onCompose: (email: string) => void }) => {
   const [loading, setLoading]     = useState(true);
   const [query, setQuery]         = useState('');
   const [selected, setSelected]   = useState<AdminContact | null>(null);
-  const [showForm, setShowForm]   = useState(false);
+  const [showForm, setShowForm]     = useState(false);
   const [editTarget, setEditTarget] = useState<AdminContact | undefined>(undefined);
-  const [showCsv, setShowCsv]     = useState(false);
+  const [syncing, setSyncing]       = useState(false);
+  const [syncResult, setSyncResult] = useState<{ created: number; updated: number; total: number } | null>(null);
 
   const fetchContacts = useCallback(async () => {
     if (!TABLE_ADMIN) { setLoading(false); return; }
@@ -774,10 +632,20 @@ const AdminTab = ({ onCompose }: { onCompose: (email: string) => void }) => {
     setSelected(null); await fetchContacts();
   };
 
+  const syncGoogle = async () => {
+    setSyncing(true); setSyncResult(null);
+    try {
+      const res  = await fetch(N8N_GOOGLE_SYNC);
+      const data = await res.json();
+      setSyncResult({ created: data.created ?? 0, updated: data.updated ?? 0, total: data.total ?? 0 });
+      await fetchContacts();
+    } catch { setSyncResult(null); alert('Erreur lors de la synchronisation Google Contacts.'); }
+    finally { setSyncing(false); }
+  };
+
   return (
     <div className="flex flex-1 overflow-hidden">
       {showForm && <AdminContactForm initial={editTarget} onSave={handleSave} onClose={() => { setShowForm(false); setEditTarget(undefined); }} />}
-      {showCsv  && <CsvImportModal onClose={() => setShowCsv(false)} onImported={fetchContacts} />}
 
       {/* Colonne liste */}
       <div className={`flex flex-col border-r border-[var(--border)] bg-[var(--bg-main)] shrink-0 transition-all ${selected ? 'w-[380px]' : 'w-full'}`}>
@@ -794,12 +662,23 @@ const AdminTab = ({ onCompose }: { onCompose: (email: string) => void }) => {
               <Plus className="w-4 h-4" /> Nouveau
             </button>
           </div>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <span className="text-xs text-[var(--text-muted)]">{filtered.length} contact{filtered.length !== 1 ? 's' : ''}</span>
-            <button onClick={() => setShowCsv(true)}
-              className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all">
-              <Upload className="w-3.5 h-3.5" /> Importer CSV
-            </button>
+            <div className="flex items-center gap-3">
+              {syncResult && (
+                <span className="text-[10px] text-[#4caf7d] flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3" />
+                  {syncResult.created} ajouté{syncResult.created !== 1 ? 's' : ''}, {syncResult.updated} mis à jour
+                </span>
+              )}
+              <button onClick={syncGoogle} disabled={syncing}
+                className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all disabled:opacity-50">
+                {syncing
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <Cloud className="w-3.5 h-3.5" />}
+                {syncing ? 'Sync…' : 'Sync Google'}
+              </button>
+            </div>
           </div>
           {!TABLE_ADMIN && (
             <div className="mt-2 px-3 py-2 bg-[#d95555]/10 border border-[#d95555]/20 rounded-lg text-[10px] text-[#d95555]">
