@@ -1,4 +1,4 @@
-import { LayoutDashboard, Mail, Wrench, DollarSign, Calendar, CheckSquare, LogOut, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, Mail, Users, DollarSign, Calendar, CheckSquare, LogOut, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../App';
 
@@ -17,7 +17,7 @@ export const Sidebar = ({ currentPage, onPageChange }: SidebarProps) => {
     { id: 'tasks',    label: 'Tâches',  icon: CheckSquare,     page: 'tasks'    },
     { id: 'poste',    label: 'Mails',   icon: Mail,            page: 'poste'    },
     { id: 'finance',  label: 'Finance', icon: DollarSign,      page: 'finance'  },
-    { id: 'tools',    label: 'Outils',  icon: Wrench,          page: 'tools'    },
+    { id: 'contacts', label: 'Contacts', icon: Users,           page: 'contacts' },
   ];
 
   const visibleItems = menuItems.filter(item => canAccess(item.page as any));

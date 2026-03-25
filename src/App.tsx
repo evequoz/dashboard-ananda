@@ -5,7 +5,7 @@ import { Header } from './components/Header';
 import { Overview } from './pages/Overview';
 import { Poste } from './pages/Poste';
 import { Finance } from './pages/Finance';
-import { Tools } from './pages/Tools';
+import { Contacts } from './pages/Contacts';
 import { CalendarPage } from './pages/CalendarPage';
 import { Taches } from './pages/Taches';
 import LoginPage from './pages/LoginPage';
@@ -82,7 +82,7 @@ function AppContent() {
       case 'tasks':    return <Taches />;
       case 'poste':    return <Poste />;
       case 'finance':  return <Finance />;
-      case 'tools':    return <Tools />;
+      case 'contacts': return <Contacts />;
       default:         return <Overview />;
     }
   };

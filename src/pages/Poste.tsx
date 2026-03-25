@@ -3,8 +3,11 @@ import {
   Mail, Inbox, Briefcase, RefreshCw, CheckCircle,
   AlertCircle, Clock, ChevronRight, Send, Plus,
   Eye, EyeOff, Sparkles, X, Paperclip, Trash2,
-  FileText, ExternalLink
+  FileText, ExternalLink, User, Users
 } from 'lucide-react';
+
+const SYSTEME_KEY = import.meta.env.VITE_SYSTEME_API_KEY || '';
+const SYSTEME_BASE = 'https://api.systeme.io/api';
 
 const BASEROW_URL = 'https://baserow.ananda-communaute.cloud/api';
 const BASEROW_TOKEN = 'GBLdzaCZvQUVXkCqSls3WX3dT3uVg0H8';
@@ -384,6 +387,109 @@ const ComposeModal = ({ activeAccount, accountColor, onSend, onClose, sending, s
   );
 };
 
+// ── Panneau contact Systeme.io ──
+interface SysContact { id: number; email: string; firstName?: string; lastName?: string; phone?: string; tags?: Array<{ id: number; name: string }>; createdAt?: string; [k: string]: any; }
+
+const ContactSidePanel = ({ senderRaw }: { senderRaw: string }) => {
+  const [contact, setContact] = useState<SysContact | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+
+  useEffect(() => {
+    setContact(null); setNotFound(false); setLoading(true);
+    const match = senderRaw.match(/<(.+?)>/);
+    const email = (match ? match[1] : senderRaw).trim();
+    if (!email || !SYSTEME_KEY) { setLoading(false); setNotFound(true); return; }
+    fetch(`${SYSTEME_BASE}/contacts?email=${encodeURIComponent(email)}`, {
+      headers: { 'X-API-Key': SYSTEME_KEY },
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.items && d.items.length > 0) setContact(d.items[0]);
+        else setNotFound(true);
+      })
+      .catch(() => setNotFound(true))
+      .finally(() => setLoading(false));
+  }, [senderRaw]);
+
+  const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+  const name = contact ? [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.email : '';
+
+  return (
+    <div className="w-56 shrink-0 border-l border-[var(--border)] bg-[var(--bg-surface)] flex flex-col overflow-y-auto">
+      <div className="px-3 py-3 border-b border-[var(--border)]">
+        <div className="flex items-center gap-1.5">
+          <Users className="w-3.5 h-3.5 text-[#c9a84c]" />
+          <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Contact</span>
+        </div>
+      </div>
+
+      {loading && (
+        <div className="flex items-center justify-center py-8">
+          <RefreshCw className="w-4 h-4 text-[var(--text-muted)] animate-spin" />
+        </div>
+      )}
+
+      {!loading && notFound && (
+        <div className="flex flex-col items-center justify-center py-8 gap-2 px-3">
+          <User className="w-7 h-7 text-[var(--text-muted)] opacity-40" />
+          <p className="text-[10px] text-[var(--text-muted)] text-center">Contact inconnu dans Systeme.io</p>
+        </div>
+      )}
+
+      {!loading && contact && (
+        <div className="px-3 py-3 space-y-3">
+          {/* Avatar + nom */}
+          <div className="flex flex-col items-center gap-2 pb-3 border-b border-[var(--border)]">
+            <div className="w-10 h-10 rounded-full bg-[#c9a84c]/15 border border-[#c9a84c]/30 flex items-center justify-center text-sm font-bold text-[#c9a84c]">
+              {(contact.firstName?.[0] || contact.email[0]).toUpperCase()}
+            </div>
+            <div className="text-center">
+              <p className="text-xs font-semibold text-[var(--text-primary)] leading-tight">{name}</p>
+              <p className="text-[10px] text-[var(--text-muted)] break-all mt-0.5">{contact.email}</p>
+            </div>
+          </div>
+
+          {/* Infos */}
+          <div className="space-y-1.5">
+            {contact.phone && (
+              <div>
+                <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase">Téléphone</p>
+                <p className="text-[10px] text-[var(--text-primary)]">{contact.phone}</p>
+              </div>
+            )}
+            <div>
+              <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase">Inscrit</p>
+              <p className="text-[10px] text-[var(--text-primary)]">{fmtDate(contact.createdAt)}</p>
+            </div>
+          </div>
+
+          {/* Tags */}
+          {contact.tags && contact.tags.length > 0 && (
+            <div>
+              <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase mb-1.5">Tags</p>
+              <div className="flex flex-wrap gap-1">
+                {contact.tags.slice(0, 6).map(t => (
+                  <span key={t.id} className="px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-[#7b5ea7]/15 text-[#9b7ec7] border border-[#7b5ea7]/20 leading-tight">
+                    {t.name}
+                  </span>
+                ))}
+                {contact.tags.length > 6 && <span className="text-[9px] text-[var(--text-muted)]">+{contact.tags.length - 6}</span>}
+              </div>
+            </div>
+          )}
+
+          {/* Lien Systeme.io */}
+          <a href={`https://app.systeme.io/contacts/${contact.id}`} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all">
+            <ExternalLink className="w-3 h-3" /> Voir dans Systeme.io
+          </a>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── Composant principal ──
 export const Poste = () => {
   const [activeAccount, setActiveAccount] = useState(ACCOUNTS[0].email);
@@ -670,16 +776,17 @@ export const Poste = () => {
         </div>
 
         {/* Détail email */}
-        <div className="flex-1 flex flex-col bg-[var(--bg-main)] overflow-hidden">
+        <div className="flex-1 flex bg-[var(--bg-main)] overflow-hidden">
           {!selectedEmail ? (
-            <div className="flex flex-col items-center justify-center h-full gap-4">
+            <div className="flex flex-col items-center justify-center h-full gap-4 flex-1">
               <div className="w-16 h-16 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border)] flex items-center justify-center">
-                <Mail className="w-8 h-8 text-[#22223a]" />
+                <Mail className="w-8 h-8 text-[var(--text-muted)]" />
               </div>
-              <p className="text-[#a0a0c0] text-sm">Sélectionnez un email</p>
+              <p className="text-[var(--text-muted)] text-sm">Sélectionnez un email</p>
             </div>
           ) : (
-            <div className="flex flex-col h-full overflow-hidden">
+            <>
+            <div className="flex-1 flex flex-col h-full overflow-hidden">
 
               {/* Header */}
               <div className="px-6 py-3 border-b border-[var(--border)] shrink-0 bg-[var(--bg-surface)]">
@@ -818,6 +925,8 @@ export const Poste = () => {
                 )}
               </div>
             </div>
+            <ContactSidePanel senderRaw={selectedEmail['Expéditeur'] || ''} />
+            </>
           )}
         </div>
       </div>
