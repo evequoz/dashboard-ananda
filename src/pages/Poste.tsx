@@ -3,7 +3,7 @@ import {
   Mail, Inbox, Briefcase, RefreshCw, CheckCircle,
   AlertCircle, Clock, ChevronRight, Send, Plus,
   Eye, EyeOff, Sparkles, X, Paperclip, Trash2,
-  FileText, ExternalLink, User, Users, Ban, SendHorizonal
+  FileText, ExternalLink, User, Users, SendHorizonal
 } from 'lucide-react';
 
 // Proxy n8n → évite les problèmes CORS avec l'API Systeme.io
@@ -14,7 +14,6 @@ const BASEROW_TOKEN = 'GBLdzaCZvQUVXkCqSls3WX3dT3uVg0H8';
 const TABLE_EMAILS    = 534;
 const TABLE_TACHES    = 536;
 const TABLE_SENT      = 545; // emails_envoyes
-const TABLE_BLACKLIST = 546; // blacklist
 const TABLE_ADMIN     = 544; // contacts_admin
 const N8N_SEND_WEBHOOK = 'https://n8n.ananda-communaute.cloud/webhook/send-email';
 
@@ -73,11 +72,6 @@ interface SentEmail {
   Corps: string;
   Date: string;
   Compte: string;
-}
-
-interface BlacklistEntry {
-  id: number;
-  Email: string;
 }
 
 const ACCOUNTS = [
@@ -685,7 +679,6 @@ export const Poste = () => {
   const [viewMode, setViewMode] = useState<'inbox' | 'sent'>('inbox');
   const [sentEmails, setSentEmails] = useState<SentEmail[]>([]);
   const [selectedSent, setSelectedSent] = useState<SentEmail | null>(null);
-  const [blacklist, setBlacklist] = useState<BlacklistEntry[]>([]);
   const replyModeRef = useRef(false);
   replyModeRef.current = replyMode;
 
@@ -711,16 +704,7 @@ export const Poste = () => {
     } catch (e) { console.error(e); }
   }, []);
 
-  const fetchBlacklist = useCallback(async () => {
-    if (!TABLE_BLACKLIST) return;
-    try {
-      const res = await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_BLACKLIST}/?user_field_names=true&size=500`, { headers: HEADERS });
-      const data = await res.json();
-      setBlacklist(data.results || []);
-    } catch (e) { console.error(e); }
-  }, []);
-
-  useEffect(() => { fetchEmails(); fetchBlacklist(); fetchSentEmails(); }, [fetchEmails, fetchBlacklist, fetchSentEmails]);
+  useEffect(() => { fetchEmails(); fetchSentEmails(); }, [fetchEmails, fetchSentEmails]);
   useEffect(() => {
     const t = setInterval(fetchEmails, 2 * 60 * 1000);
     return () => clearInterval(t);
@@ -746,11 +730,6 @@ export const Poste = () => {
 
   const unreadCount = (acc: string) => emails.filter(e => e.Compte === acc && !e.Traité).length;
   const totalUnread = emails.filter(e => !e.Traité).length;
-  const isBlocked = (sender: string) => {
-    const email = sender.match(/<(.+?)>/)?.[1] || sender;
-    return blacklist.some(b => b.Email.toLowerCase() === email.toLowerCase());
-  };
-
   const markAsTreated = async (email: Email) => {
     try {
       await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_EMAILS}/${email.id}/?user_field_names=true`,
@@ -790,23 +769,6 @@ export const Poste = () => {
         body: JSON.stringify({ De: from, 'À': to, CC: cc, BCC: bcc, Sujet: subject, Corps: body, Date: new Date().toISOString(), Compte: from }),
       });
       fetchSentEmails();
-    } catch (e) { console.error(e); }
-  };
-
-  // Bloquer un expéditeur
-  const blockSender = async (email: Email) => {
-    if (!TABLE_BLACKLIST) { alert('Table blacklist non configurée (voir TABLE_BLACKLIST dans Poste.tsx)'); return; }
-    const raw = email['Expéditeur'] || '';
-    const addr = raw.match(/<(.+?)>/)?.[1] || raw;
-    if (isBlocked(raw)) { alert(`${addr} est déjà bloqué.`); return; }
-    if (!confirm(`Bloquer ${addr} ?\nSes prochains emails ne seront plus importés.`)) return;
-    try {
-      const res = await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_BLACKLIST}/?user_field_names=true`, {
-        method: 'POST', headers: HEADERS,
-        body: JSON.stringify({ Email: addr, Nom: raw.replace(/<.*>/, '').replace(/"/g, '').trim(), 'Bloqué le': new Date().toISOString() }),
-      });
-      const entry: BlacklistEntry = await res.json();
-      setBlacklist(prev => [...prev, entry]);
     } catch (e) { console.error(e); }
   };
 
@@ -1013,7 +975,6 @@ export const Poste = () => {
             ) : filteredEmails.map(email => {
               const isSelected = selectedEmail?.id === email.id;
               const emailFiles: BaserowFile[] = email['Fichier'] || [];
-              const blocked = isBlocked(email['Expéditeur'] || '');
               return (
                 <button key={email.id} onClick={() => openEmail(email)}
                   className={`w-full text-left p-3 border-b border-[var(--border)]/50 transition-all hover:bg-[var(--bg-surface)] ${
@@ -1031,7 +992,6 @@ export const Poste = () => {
                           {email['Expéditeur']?.replace(/<.*>/, '').replace(/"/g, '').trim() || 'Inconnu'}
                         </p>
                         <div className="flex items-center gap-0.5 shrink-0">
-                          {blocked && <Ban className="w-3 h-3 text-[#d95555]" title="Bloqué" />}
                           {emailFiles.length > 0 && <Paperclip className="w-3 h-3 text-[var(--text-muted)]" />}
                           {hasSuggestions(email) && <Sparkles className="w-3 h-3 text-[#7b5ea7]" />}
                           {email['Action requise'] && <AlertCircle className="w-3 h-3 text-[#d95555]" />}
@@ -1177,15 +1137,6 @@ export const Poste = () => {
                       <ExternalLink className="w-3 h-3 shrink-0 opacity-50" />
                     </a>
                   ))}
-                  <button onClick={() => blockSender(selectedEmail)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
-                      isBlocked(selectedEmail['Expéditeur'] || '')
-                        ? 'bg-[#d95555]/20 border-[#d95555]/40 text-[#d95555] cursor-default'
-                        : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-muted)] hover:bg-[#d95555]/10 hover:border-[#d95555]/30 hover:text-[#d95555]'
-                    }`}>
-                    <Ban className="w-3.5 h-3.5" />
-                    {isBlocked(selectedEmail['Expéditeur'] || '') ? 'Bloqué' : 'Bloquer'}
-                  </button>
                   <button onClick={() => deleteEmail(selectedEmail)}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#d95555]/10 border border-[#d95555]/20 text-[#d95555] hover:bg-[#d95555]/20 transition-all ml-auto">
                     <Trash2 className="w-3.5 h-3.5" /> Supprimer
