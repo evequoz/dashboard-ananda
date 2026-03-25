@@ -591,7 +591,7 @@ const AdminTab = ({ onCompose }: { onCompose: (email: string) => void }) => {
   const [showForm, setShowForm]     = useState(false);
   const [editTarget, setEditTarget] = useState<AdminContact | undefined>(undefined);
   const [syncing, setSyncing]       = useState(false);
-  const [syncResult, setSyncResult] = useState<{ created: number; updated: number; total: number } | null>(null);
+  const [syncResult, setSyncResult] = useState<{ ok: boolean; message?: string; created?: number; updated?: number } | null>(null);
 
   const fetchContacts = useCallback(async () => {
     if (!TABLE_ADMIN) { setLoading(false); return; }
@@ -637,7 +637,7 @@ const AdminTab = ({ onCompose }: { onCompose: (email: string) => void }) => {
     try {
       const res  = await fetch(N8N_GOOGLE_SYNC);
       const data = await res.json();
-      setSyncResult({ created: data.created ?? 0, updated: data.updated ?? 0, total: data.total ?? 0 });
+      setSyncResult({ ok: data.ok ?? true, message: data.message, created: data.created, updated: data.updated });
       await fetchContacts();
     } catch { setSyncResult(null); alert('Erreur lors de la synchronisation Google Contacts.'); }
     finally { setSyncing(false); }
@@ -668,7 +668,9 @@ const AdminTab = ({ onCompose }: { onCompose: (email: string) => void }) => {
               {syncResult && (
                 <span className="text-[10px] text-[#4caf7d] flex items-center gap-1">
                   <CheckCircle className="w-3 h-3" />
-                  {syncResult.created} ajouté{syncResult.created !== 1 ? 's' : ''}, {syncResult.updated} mis à jour
+                  {syncResult.message
+                    ? syncResult.message
+                    : `${syncResult.created ?? 0} ajouté${(syncResult.created ?? 0) !== 1 ? 's' : ''}, ${syncResult.updated ?? 0} mis à jour`}
                 </span>
               )}
               <button onClick={syncGoogle} disabled={syncing}
