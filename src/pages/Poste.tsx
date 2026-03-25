@@ -13,8 +13,9 @@ const BASEROW_URL = 'https://baserow.ananda-communaute.cloud/api';
 const BASEROW_TOKEN = 'GBLdzaCZvQUVXkCqSls3WX3dT3uVg0H8';
 const TABLE_EMAILS    = 534;
 const TABLE_TACHES    = 536;
-const TABLE_SENT      = 0;   // ⚠️ Remplacer par l'ID Baserow de ta table emails_envoyes
-const TABLE_BLACKLIST = 0;   // ⚠️ Remplacer par l'ID Baserow de ta table blacklist
+const TABLE_SENT      = 545; // emails_envoyes
+const TABLE_BLACKLIST = 546; // blacklist
+const TABLE_ADMIN     = 0;   // ⚠️ Remplacer par l'ID Baserow de ta table contacts_admin
 const N8N_SEND_WEBHOOK = 'https://n8n.ananda-communaute.cloud/webhook/send-email';
 
 const HEADERS = {
@@ -475,31 +476,72 @@ const ComposeModal = ({ activeAccount, accountColor, onSend, onClose, sending, s
   );
 };
 
-// ── Panneau contact Systeme.io ──
-interface SysContact { id: number; email: string; firstName?: string; lastName?: string; phone?: string; tags?: Array<{ id: number; name: string }>; createdAt?: string; [k: string]: any; }
+// ── Panneau contact (Systeme.io + fallback contacts_admin) ──
+interface SysContact {
+  id: number; email: string; firstName?: string; lastName?: string;
+  phone?: string; tags?: Array<{ id: number; name: string }>; createdAt?: string; [k: string]: any;
+}
+interface AdminContact {
+  id: number; Prénom: string; Nom: string; Email: string; Téléphone: string;
+  Entreprise: string; Catégorie: { value: string } | null; Notes: string;
+}
+
+const fmtDateShort = (d?: string) =>
+  d ? new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
 
 const ContactSidePanel = ({ senderRaw }: { senderRaw: string }) => {
-  const [contact, setContact] = useState<SysContact | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [sysContact,   setSysContact]   = useState<SysContact | null>(null);
+  const [adminContact, setAdminContact] = useState<AdminContact | null>(null);
+  const [loading,  setLoading]  = useState(true);
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
-    setContact(null); setNotFound(false); setLoading(true);
+    setSysContact(null); setAdminContact(null); setNotFound(false); setLoading(true);
     const match = senderRaw.match(/<(.+?)>/);
     const email = (match ? match[1] : senderRaw).trim();
     if (!email) { setLoading(false); setNotFound(true); return; }
+
+    // 1) Cherche dans Systeme.io via proxy n8n
     fetch(`${SYSTEME_PROXY}?email=${encodeURIComponent(email)}`)
       .then(r => r.json())
-      .then(d => {
-        if (d.items && d.items.length > 0) setContact(d.items[0]);
-        else setNotFound(true);
+      .then(async d => {
+        if (d.items && d.items.length > 0) {
+          setSysContact(d.items[0]);
+          return;
+        }
+        // 2) Fallback : cherche dans contacts_admin Baserow
+        if (TABLE_ADMIN > 0) {
+          try {
+            const r2 = await fetch(
+              `${BASEROW_URL}/database/rows/table/${TABLE_ADMIN}/?filter__Email__equal=${encodeURIComponent(email)}&user_field_names=true`,
+              { headers: HEADERS }
+            );
+            const d2 = await r2.json();
+            if (d2.results && d2.results.length > 0) {
+              setAdminContact(d2.results[0]);
+              return;
+            }
+          } catch { /* ignore */ }
+        }
+        setNotFound(true);
       })
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
   }, [senderRaw]);
 
-  const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-  const name = contact ? [contact.firstName, contact.lastName].filter(Boolean).join(' ') || contact.email : '';
+  const sysName = sysContact
+    ? [sysContact.firstName, sysContact.lastName].filter(Boolean).join(' ') || sysContact.email
+    : '';
+  const adminName = adminContact
+    ? [adminContact.Prénom, adminContact.Nom].filter(Boolean).join(' ') || adminContact.Email
+    : '';
+
+  const catColors: Record<string, string> = {
+    Fournisseur: '#3b82f6', Partenaire: '#10b981', Admin: '#f59e0b',
+    Comptable: '#8b5cf6', Autre: '#6b7280',
+  };
+  const catVal = adminContact?.Catégorie?.value || '';
+  const catColor = catColors[catVal] || '#6b7280';
 
   return (
     <div className="w-56 shrink-0 border-l border-[var(--border)] bg-[var(--bg-surface)] flex flex-col overflow-y-auto">
@@ -519,57 +561,106 @@ const ContactSidePanel = ({ senderRaw }: { senderRaw: string }) => {
       {!loading && notFound && (
         <div className="flex flex-col items-center justify-center py-8 gap-2 px-3">
           <User className="w-7 h-7 text-[var(--text-muted)] opacity-40" />
-          <p className="text-[10px] text-[var(--text-muted)] text-center">Contact inconnu dans Systeme.io</p>
+          <p className="text-[10px] text-[var(--text-muted)] text-center">Inconnu dans Systeme.io ni dans les contacts</p>
         </div>
       )}
 
-      {!loading && contact && (
+      {/* ── Fiche Systeme.io ── */}
+      {!loading && sysContact && (
         <div className="px-3 py-3 space-y-3">
-          {/* Avatar + nom */}
           <div className="flex flex-col items-center gap-2 pb-3 border-b border-[var(--border)]">
             <div className="w-10 h-10 rounded-full bg-[#c9a84c]/15 border border-[#c9a84c]/30 flex items-center justify-center text-sm font-bold text-[#c9a84c]">
-              {(contact.firstName?.[0] || contact.email[0]).toUpperCase()}
+              {(sysContact.firstName?.[0] || sysContact.email[0]).toUpperCase()}
             </div>
             <div className="text-center">
-              <p className="text-xs font-semibold text-[var(--text-primary)] leading-tight">{name}</p>
-              <p className="text-[10px] text-[var(--text-muted)] break-all mt-0.5">{contact.email}</p>
+              <p className="text-xs font-semibold text-[var(--text-primary)] leading-tight">{sysName}</p>
+              <p className="text-[10px] text-[var(--text-muted)] break-all mt-0.5">{sysContact.email}</p>
+              <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[8px] font-bold bg-[#c9a84c]/10 text-[#c9a84c] border border-[#c9a84c]/20">
+                Systeme.io
+              </span>
             </div>
           </div>
 
-          {/* Infos */}
           <div className="space-y-1.5">
-            {contact.phone && (
+            {sysContact.phone && (
               <div>
                 <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase">Téléphone</p>
-                <p className="text-[10px] text-[var(--text-primary)]">{contact.phone}</p>
+                <p className="text-[10px] text-[var(--text-primary)]">{sysContact.phone}</p>
               </div>
             )}
             <div>
               <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase">Inscrit</p>
-              <p className="text-[10px] text-[var(--text-primary)]">{fmtDate(contact.createdAt)}</p>
+              <p className="text-[10px] text-[var(--text-primary)]">{fmtDateShort(sysContact.createdAt)}</p>
             </div>
           </div>
 
-          {/* Tags */}
-          {contact.tags && contact.tags.length > 0 && (
+          {sysContact.tags && sysContact.tags.length > 0 && (
             <div>
               <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase mb-1.5">Tags</p>
               <div className="flex flex-wrap gap-1">
-                {contact.tags.slice(0, 6).map(t => (
+                {sysContact.tags.slice(0, 6).map(t => (
                   <span key={t.id} className="px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-[#7b5ea7]/15 text-[#9b7ec7] border border-[#7b5ea7]/20 leading-tight">
                     {t.name}
                   </span>
                 ))}
-                {contact.tags.length > 6 && <span className="text-[9px] text-[var(--text-muted)]">+{contact.tags.length - 6}</span>}
+                {sysContact.tags.length > 6 && (
+                  <span className="text-[9px] text-[var(--text-muted)]">+{sysContact.tags.length - 6}</span>
+                )}
               </div>
             </div>
           )}
 
-          {/* Lien Systeme.io */}
-          <a href={`https://app.systeme.io/contacts/${contact.id}`} target="_blank" rel="noopener noreferrer"
+          <a href={`https://app.systeme.io/contacts/${sysContact.id}`} target="_blank" rel="noopener noreferrer"
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all">
             <ExternalLink className="w-3 h-3" /> Voir dans Systeme.io
           </a>
+        </div>
+      )}
+
+      {/* ── Fiche Admin/Pro (fallback Baserow) ── */}
+      {!loading && adminContact && (
+        <div className="px-3 py-3 space-y-3">
+          <div className="flex flex-col items-center gap-2 pb-3 border-b border-[var(--border)]">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white"
+              style={{ backgroundColor: catColor }}>
+              {(adminContact.Prénom?.[0] || adminContact.Email?.[0] || '?').toUpperCase()}
+            </div>
+            <div className="text-center">
+              <p className="text-xs font-semibold text-[var(--text-primary)] leading-tight">{adminName}</p>
+              <p className="text-[10px] text-[var(--text-muted)] break-all mt-0.5">{adminContact.Email}</p>
+              {catVal && (
+                <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[8px] font-bold border"
+                  style={{ color: catColor, borderColor: `${catColor}40`, backgroundColor: `${catColor}15` }}>
+                  {catVal}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            {adminContact.Entreprise && (
+              <div>
+                <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase">Entreprise</p>
+                <p className="text-[10px] text-[var(--text-primary)]">{adminContact.Entreprise}</p>
+              </div>
+            )}
+            {adminContact.Téléphone && (
+              <div>
+                <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase">Téléphone</p>
+                <p className="text-[10px] text-[var(--text-primary)]">{adminContact.Téléphone}</p>
+              </div>
+            )}
+            {adminContact.Notes && (
+              <div>
+                <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase">Notes</p>
+                <p className="text-[10px] text-[var(--text-primary)] line-clamp-4 whitespace-pre-wrap">{adminContact.Notes}</p>
+              </div>
+            )}
+          </div>
+
+          <span className="flex items-center gap-1 text-[9px] text-[var(--text-muted)]">
+            <FileText className="w-2.5 h-2.5" /> Contact Admin/Pro
+          </span>
         </div>
       )}
     </div>
