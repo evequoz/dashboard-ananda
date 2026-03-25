@@ -1,5 +1,5 @@
 {
-  "name": "Synchronisation Google Contacts → Baserow",
+  "name": "Sync Google Contacts → Baserow (100% natif)",
   "nodes": [
     {
       "parameters": {
@@ -8,227 +8,142 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "n01",
+      "id": "s01",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [240, 300],
+      "position": [200, 300],
       "webhookId": "sync-google-contacts"
     },
+
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://people.googleapis.com/v1/people/me/connections",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "oAuth2Api",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            { "name": "personFields", "value": "names,emailAddresses,phoneNumbers,organizations" },
-            { "name": "pageSize",     "value": "1000" }
-          ]
-        },
+        "operation": "getAll",
+        "returnAll": true,
         "options": {}
       },
-      "id": "n02",
+      "id": "s02",
       "name": "Google Contacts",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [460, 300],
+      "type": "n8n-nodes-base.googleContacts",
+      "typeVersion": 1,
+      "position": [420, 300],
       "credentials": {
-        "oAuth2Api": {
-          "id": "REMPLACER_PAR_TON_CREDENTIAL_ID",
-          "name": "Google OAuth2 (People API)"
+        "googleContactsOAuth2Api": {
+          "id": "REMPLACER_GOOGLE_CRED_ID",
+          "name": "Google Contacts"
         }
       }
     },
-    {
-      "parameters": {
-        "fieldToSplitOut": "connections",
-        "options": {}
-      },
-      "id": "n03",
-      "name": "Extraire",
-      "type": "n8n-nodes-base.splitOut",
-      "typeVersion": 1,
-      "position": [680, 300]
-    },
+
     {
       "parameters": {
         "mode": "manual",
         "assignments": {
           "assignments": [
-            { "id": "a1", "name": "prenom",     "value": "={{ $json.names?.[0]?.givenName ?? '' }}",                "type": "string" },
-            { "id": "a2", "name": "nom",        "value": "={{ $json.names?.[0]?.familyName ?? '' }}",               "type": "string" },
-            { "id": "a3", "name": "email",      "value": "={{ ($json.emailAddresses?.[0]?.value ?? '').trim() }}",  "type": "string" },
-            { "id": "a4", "name": "telephone",  "value": "={{ $json.phoneNumbers?.[0]?.value ?? '' }}",             "type": "string" },
-            { "id": "a5", "name": "entreprise", "value": "={{ $json.organizations?.[0]?.name ?? '' }}",             "type": "string" }
+            {
+              "id": "m1",
+              "name": "prenom",
+              "value": "={{ $json.firstName ?? $json.givenName ?? $json.names?.[0]?.givenName ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "m2",
+              "name": "nom",
+              "value": "={{ $json.lastName ?? $json.familyName ?? $json.names?.[0]?.familyName ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "m3",
+              "name": "email",
+              "value": "={{ $json.email ?? $json.emailAddresses?.[0]?.value ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "m4",
+              "name": "telephone",
+              "value": "={{ $json.phone ?? $json.phoneNumber ?? $json.phoneNumbers?.[0]?.value ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "m5",
+              "name": "entreprise",
+              "value": "={{ $json.company ?? $json.organization ?? $json.organizations?.[0]?.name ?? '' }}",
+              "type": "string"
+            }
           ]
         },
         "options": {}
       },
-      "id": "n04",
-      "name": "Mapper",
+      "id": "s03",
+      "name": "Normaliser Champs",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [900, 300]
+      "position": [640, 300]
     },
+
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "loose" },
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
           "conditions": [
-            { "id": "c1", "leftValue": "={{ $json.email }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty" } }
+            {
+              "id": "f1",
+              "leftValue": "={{ $json.email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
           ],
           "combinator": "and"
         },
         "options": {}
       },
-      "id": "n05",
-      "name": "Filtrer",
+      "id": "s04",
+      "name": "A un email ?",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2.2,
-      "position": [1120, 300]
+      "position": [860, 300]
     },
+
     {
       "parameters": {
-        "batchSize": 1,
-        "options": {}
+        "operation": "create",
+        "tableId": 544,
+        "dataToSend": "defineBelow",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldName": "Prénom",     "fieldValue": "={{ $json.prenom }}" },
+            { "fieldName": "Nom",        "fieldValue": "={{ $json.nom }}" },
+            { "fieldName": "Email",      "fieldValue": "={{ $json.email }}" },
+            { "fieldName": "Téléphone",  "fieldValue": "={{ $json.telephone }}" },
+            { "fieldName": "Entreprise", "fieldValue": "={{ $json.entreprise }}" },
+            { "fieldName": "Catégorie",  "fieldValue": "Admin" }
+          ]
+        }
       },
-      "id": "n06",
-      "name": "Lots",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
-      "position": [1340, 300]
+      "id": "s05",
+      "name": "Baserow Créer",
+      "type": "n8n-nodes-base.baserow",
+      "typeVersion": 1,
+      "position": [1080, 300],
+      "credentials": {
+        "baserowApi": {
+          "id": "REMPLACER_BASEROW_CRED_ID",
+          "name": "Baserow"
+        }
+      }
     },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "https://baserow.ananda-communaute.cloud/api/database/rows/table/544/",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            { "name": "Authorization", "value": "Token GBLdzaCZvQUVXkCqSls3WX3dT3uVg0H8" }
-          ]
-        },
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            { "name": "user_field_names",     "value": "true" },
-            { "name": "filter__Email__equal", "value": "={{ $json.email }}" }
-          ]
-        },
-        "options": {}
-      },
-      "id": "n07",
-      "name": "Chercher",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [1560, 160]
-    },
-    {
-      "parameters": {
-        "mode": "manual",
-        "assignments": {
-          "assignments": [
-            { "id": "b1", "name": "_count",     "value": "={{ $json.count }}",                         "type": "number" },
-            { "id": "b2", "name": "_id",        "value": "={{ $json.results?.[0]?.id ?? 0 }}",          "type": "number" },
-            { "id": "b3", "name": "prenom",     "value": "={{ $('Lots').item.json.prenom }}",           "type": "string" },
-            { "id": "b4", "name": "nom",        "value": "={{ $('Lots').item.json.nom }}",              "type": "string" },
-            { "id": "b5", "name": "email",      "value": "={{ $('Lots').item.json.email }}",            "type": "string" },
-            { "id": "b6", "name": "telephone",  "value": "={{ $('Lots').item.json.telephone }}",        "type": "string" },
-            { "id": "b7", "name": "entreprise", "value": "={{ $('Lots').item.json.entreprise }}",       "type": "string" }
-          ]
-        },
-        "options": {}
-      },
-      "id": "n08",
-      "name": "Fusionner",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [1780, 160]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
-          "conditions": [
-            { "id": "d1", "leftValue": "={{ $json._count }}", "rightValue": 0, "operator": { "type": "number", "operation": "gt" } }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "n09",
-      "name": "Existe",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [2000, 160]
-    },
-    {
-      "parameters": {
-        "method": "PATCH",
-        "url": "={{ 'https://baserow.ananda-communaute.cloud/api/database/rows/table/544/' + $json._id + '/?user_field_names=true' }}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            { "name": "Authorization", "value": "Token GBLdzaCZvQUVXkCqSls3WX3dT3uVg0H8" }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "json",
-        "specifyBody": "keypair",
-        "bodyParameters": {
-          "parameters": [
-            { "name": "Prénom",     "value": "={{ $json.prenom }}" },
-            { "name": "Nom",        "value": "={{ $json.nom }}" },
-            { "name": "Téléphone",  "value": "={{ $json.telephone }}" },
-            { "name": "Entreprise", "value": "={{ $json.entreprise }}" }
-          ]
-        },
-        "options": {}
-      },
-      "id": "n10",
-      "name": "Modifier",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [2220, 60]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://baserow.ananda-communaute.cloud/api/database/rows/table/544/?user_field_names=true",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            { "name": "Authorization", "value": "Token GBLdzaCZvQUVXkCqSls3WX3dT3uVg0H8" }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "json",
-        "specifyBody": "keypair",
-        "bodyParameters": {
-          "parameters": [
-            { "name": "Prénom",     "value": "={{ $json.prenom }}" },
-            { "name": "Nom",        "value": "={{ $json.nom }}" },
-            { "name": "Email",      "value": "={{ $json.email }}" },
-            { "name": "Téléphone",  "value": "={{ $json.telephone }}" },
-            { "name": "Entreprise", "value": "={{ $json.entreprise }}" },
-            { "name": "Catégorie",  "value": "Admin" }
-          ]
-        },
-        "options": {}
-      },
-      "id": "n11",
-      "name": "Creer",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [2220, 280]
-    },
+
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={ \"ok\": true, \"message\": \"Synchronisation terminee\" }",
+        "responseBody": "={{ JSON.stringify({ ok: true, synced: $input.all().length }) }}",
         "options": {
           "responseHeaders": {
             "entries": [
@@ -237,54 +152,22 @@
           }
         }
       },
-      "id": "n12",
-      "name": "Reponse",
+      "id": "s06",
+      "name": "Réponse",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1560, 460]
+      "position": [1300, 300]
     }
   ],
+
   "connections": {
-    "Webhook": {
-      "main": [[{ "node": "Google Contacts", "type": "main", "index": 0 }]]
-    },
-    "Google Contacts": {
-      "main": [[{ "node": "Extraire", "type": "main", "index": 0 }]]
-    },
-    "Extraire": {
-      "main": [[{ "node": "Mapper", "type": "main", "index": 0 }]]
-    },
-    "Mapper": {
-      "main": [[{ "node": "Filtrer", "type": "main", "index": 0 }]]
-    },
-    "Filtrer": {
-      "main": [[{ "node": "Lots", "type": "main", "index": 0 }]]
-    },
-    "Lots": {
-      "main": [
-        [{ "node": "Chercher", "type": "main", "index": 0 }],
-        [{ "node": "Reponse",  "type": "main", "index": 0 }]
-      ]
-    },
-    "Chercher": {
-      "main": [[{ "node": "Fusionner", "type": "main", "index": 0 }]]
-    },
-    "Fusionner": {
-      "main": [[{ "node": "Existe", "type": "main", "index": 0 }]]
-    },
-    "Existe": {
-      "main": [
-        [{ "node": "Modifier", "type": "main", "index": 0 }],
-        [{ "node": "Creer",    "type": "main", "index": 0 }]
-      ]
-    },
-    "Modifier": {
-      "main": [[{ "node": "Lots", "type": "main", "index": 0 }]]
-    },
-    "Creer": {
-      "main": [[{ "node": "Lots", "type": "main", "index": 0 }]]
-    }
+    "Webhook":           { "main": [[{ "node": "Google Contacts",    "type": "main", "index": 0 }]] },
+    "Google Contacts":   { "main": [[{ "node": "Normaliser Champs",  "type": "main", "index": 0 }]] },
+    "Normaliser Champs": { "main": [[{ "node": "A un email ?",       "type": "main", "index": 0 }]] },
+    "A un email ?":      { "main": [[{ "node": "Baserow Créer",      "type": "main", "index": 0 }]] },
+    "Baserow Créer":     { "main": [[{ "node": "Réponse",            "type": "main", "index": 0 }]] }
   },
+
   "active": false,
   "settings": {
     "executionOrder": "v1",
