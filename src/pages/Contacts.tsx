@@ -5,10 +5,9 @@ import {
   CheckCircle, AlertCircle,
 } from 'lucide-react';
 
-const SYSTEME_BASE   = 'https://api.systeme.io/api';
-const SYSTEME_KEY    = import.meta.env.VITE_SYSTEME_API_KEY || '';
+// Proxy n8n → évite les problèmes CORS avec l'API Systeme.io
+const SYSTEME_PROXY  = 'https://n8n.ananda-communaute.cloud/webhook/systeme-proxy';
 const N8N_WEBHOOK    = 'https://n8n.ananda-communaute.cloud/webhook/send-email';
-const SYSTEME_HDR    = { 'X-API-Key': SYSTEME_KEY, 'Content-Type': 'application/json' };
 const ACCOUNTS       = ['serge@eh-me.com', 'admin@eh-me.com', 'serge@seme.ch'];
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -298,7 +297,7 @@ export const Contacts = () => {
     try {
       const isEmail = q.includes('@');
       const param   = isEmail ? `email=${encodeURIComponent(q)}` : `firstName=${encodeURIComponent(q)}`;
-      const res     = await fetch(`${SYSTEME_BASE}/contacts?${param}`, { headers: SYSTEME_HDR });
+      const res     = await fetch(`${SYSTEME_PROXY}?${param}`);
       if (!res.ok) throw new Error(`Erreur API Systeme.io : ${res.status}`);
       const data = await res.json();
       setResults(data.items || []);

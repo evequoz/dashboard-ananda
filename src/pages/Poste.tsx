@@ -6,8 +6,8 @@ import {
   FileText, ExternalLink, User, Users
 } from 'lucide-react';
 
-const SYSTEME_KEY = import.meta.env.VITE_SYSTEME_API_KEY || '';
-const SYSTEME_BASE = 'https://api.systeme.io/api';
+// Proxy n8n → évite les problèmes CORS avec l'API Systeme.io
+const SYSTEME_PROXY = 'https://n8n.ananda-communaute.cloud/webhook/systeme-proxy';
 
 const BASEROW_URL = 'https://baserow.ananda-communaute.cloud/api';
 const BASEROW_TOKEN = 'GBLdzaCZvQUVXkCqSls3WX3dT3uVg0H8';
@@ -399,10 +399,8 @@ const ContactSidePanel = ({ senderRaw }: { senderRaw: string }) => {
     setContact(null); setNotFound(false); setLoading(true);
     const match = senderRaw.match(/<(.+?)>/);
     const email = (match ? match[1] : senderRaw).trim();
-    if (!email || !SYSTEME_KEY) { setLoading(false); setNotFound(true); return; }
-    fetch(`${SYSTEME_BASE}/contacts?email=${encodeURIComponent(email)}`, {
-      headers: { 'X-API-Key': SYSTEME_KEY },
-    })
+    if (!email) { setLoading(false); setNotFound(true); return; }
+    fetch(`${SYSTEME_PROXY}?email=${encodeURIComponent(email)}`)
       .then(r => r.json())
       .then(d => {
         if (d.items && d.items.length > 0) setContact(d.items[0]);

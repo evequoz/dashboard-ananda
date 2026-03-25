@@ -1,0 +1,107 @@
+{
+  "name": "Systeme.io — Proxy API",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "systeme-proxy",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [180, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Construit l'URL Systeme.io selon les paramètres reçus\nconst query = $input.first().json.query || {};\n\nlet url = 'https://api.systeme.io/api/contacts';\n\nif (query.id) {\n  // Fiche d'un contact précis\n  url += '/' + query.id;\n} else if (query.email) {\n  // Recherche par email\n  url += '?email=' + encodeURIComponent(query.email);\n} else if (query.firstName) {\n  // Recherche par prénom\n  url += '?firstName=' + encodeURIComponent(query.firstName);\n} else if (query.lastName) {\n  // Recherche par nom de famille\n  url += '?lastName=' + encodeURIComponent(query.lastName);\n}\n\nreturn [{ json: { url } }];"
+      },
+      "id": "a1000001-0000-0000-0000-000000000002",
+      "name": "Build URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "w130n52fzzuarfrme1drd8f3f7kxkv4e7gyy7x0q5pp0plutdtobzozsc2gb09po"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1000001-0000-0000-0000-000000000003",
+      "name": "Appel Systeme.io",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [620, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET, OPTIONS"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type"
+              }
+            ]
+          }
+        }
+      },
+      "id": "a1000001-0000-0000-0000-000000000004",
+      "name": "Répondre",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [840, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [{ "node": "Build URL", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build URL": {
+      "main": [
+        [{ "node": "Appel Systeme.io", "type": "main", "index": 0 }]
+      ]
+    },
+    "Appel Systeme.io": {
+      "main": [
+        [{ "node": "Répondre", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
