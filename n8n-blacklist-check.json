@@ -1,0 +1,115 @@
+{
+  "name": "Blacklist Check — Réception Email",
+  "_comment": "Insérer ces 3 nœuds entre 'Edit Fields' et le nœud d'insertion Baserow. Relier: Edit Fields → Vérifier Blacklist → Expéditeur bloqué ? → (branche FALSE, output 1) → ton nœud Baserow Insert.",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://baserow.ananda-communaute.cloud/api/database/rows/table/546/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Token GBLdzaCZvQUVXkCqSls3WX3dT3uVg0H8"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "user_field_names",
+              "value": "true"
+            },
+            {
+              "name": "filter__Email__equal",
+              "value": "={{ $json.from }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b2000001-0000-0000-0000-000000000001",
+      "name": "Vérifier Blacklist",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [400, 300],
+      "notes": "GET /api/database/rows/table/546/ ?filter__Email__equal={{ $json.from }}\nRetourne { count: N, results: [...] }"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond-blacklist-001",
+              "leftValue": "={{ $json.count }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b2000001-0000-0000-0000-000000000002",
+      "name": "Expéditeur bloqué ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [620, 300],
+      "notes": "TRUE (output 0) → bloqué, arrêt\nFALSE (output 1) → continuer vers Baserow Insert"
+    },
+    {
+      "parameters": {
+        "errorMessage": "Expéditeur bloqué — email ignoré (blacklist Baserow)"
+      },
+      "id": "b2000001-0000-0000-0000-000000000003",
+      "name": "Bloqué — Arrêt",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [840, 160],
+      "notes": "Branche TRUE : l'expéditeur est dans la blacklist, le workflow s'arrête ici."
+    }
+  ],
+  "connections": {
+    "Vérifier Blacklist": {
+      "main": [
+        [
+          {
+            "node": "Expéditeur bloqué ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Expéditeur bloqué ?": {
+      "main": [
+        [
+          {
+            "node": "Bloqué — Arrêt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
