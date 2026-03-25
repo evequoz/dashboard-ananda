@@ -15,7 +15,7 @@ const TABLE_EMAILS    = 534;
 const TABLE_TACHES    = 536;
 const TABLE_SENT      = 545; // emails_envoyes
 const TABLE_BLACKLIST = 546; // blacklist
-const TABLE_ADMIN     = 0;   // ⚠️ Remplacer par l'ID Baserow de ta table contacts_admin
+const TABLE_ADMIN     = 544; // contacts_admin
 const N8N_SEND_WEBHOOK = 'https://n8n.ananda-communaute.cloud/webhook/send-email';
 
 const HEADERS = {
