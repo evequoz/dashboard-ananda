@@ -95,6 +95,10 @@ export const Overview = () => {
   }, []);
 
   const toggleTache = async (id: string) => { setTaches(p => p.filter(t => t.id !== id)); await updateTacheStatut(id, true); };
+  const openTaskInTasksPage = (id: string) => {
+    localStorage.setItem('dashboard-open-task-id', id);
+    window.dispatchEvent(new CustomEvent('dashboard:navigate', { detail: { page: 'tasks' } }));
+  };
   const marquerTraite = async (id: number) => { setEmails(p => p.filter(e => e.id !== id)); try { await updateInboxEmail(id, { Traité: true }); } catch {} };
   const supprimerEmail = async (id: number) => { setEmails(p => p.filter(e => e.id !== id)); try { await deleteInboxEmail(id); } catch {} };
   const ajouterTache = async () => {
@@ -112,6 +116,10 @@ export const Overview = () => {
   const urgentes = taches.filter(t => t.priorite === 'Haute').length;
   const unread = emails.length;
   const todayEvents = events.filter(e => isSameDay(new Date(e.start?.dateTime || e.start?.date), today));
+  const todayIso = new Date().toISOString().split('T')[0];
+  const urgentTasks = tachesFiltrees.filter(t => !t.completed && t.priorite === 'Haute');
+  const dueTodayTasks = tachesFiltrees.filter(t => !t.completed && !!t.dateEcheance && t.dateEcheance.split('T')[0] === todayIso);
+  const waitingTasks = tachesFiltrees.filter(t => !t.completed && t.priorite !== 'Haute' && (!t.dateEcheance || t.dateEcheance.split('T')[0] > todayIso));
 
   const eventsByDay: Record<string, any[]> = {};
   events.forEach(e => { const k = new Date(e.start?.dateTime || e.start?.date).toDateString(); if (!eventsByDay[k]) eventsByDay[k] = []; eventsByDay[k].push(e); });
@@ -253,13 +261,81 @@ export const Overview = () => {
                   <p style={{ fontSize: 13, color: '#5dc98d', margin: 0, fontWeight: 600 }}>Tout est fait ✓</p>
                 </div>
               ) : tachesFiltrees.map(t => (
-                <div key={t.id} onClick={() => toggleTache(t.id)} className="ov-task" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer', transition: 'all 0.15s' }}>
-                  <div style={{ width: 17, height: 17, borderRadius: 5, border: '2px solid var(--border-hover)', flexShrink: 0 }} />
+                <div key={t.id} onClick={() => openTaskInTasksPage(t.id)} className="ov-task" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer', transition: 'all 0.15s' }}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleTache(t.id); }}
+                    title="Marquer terminée"
+                    style={{ width: 17, height: 17, borderRadius: 5, border: '2px solid var(--border-hover)', flexShrink: 0, background: 'transparent', cursor: 'pointer' }}
+                  />
                   <span style={{ fontSize: 13, color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.text}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0 }}>
                     {t.priorite === 'Haute' && <Flag size={13} color="#e07070" />}
                     {t.projet && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, border: `1px solid ${pc(t.projet).color}50`, background: pc(t.projet).bg, color: pc(t.projet).color }}>{t.projet}</span>}
                   </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8, marginBottom: 12 }}>
+              {[
+                { title: 'Urgent', items: urgentTasks, color: '#e07070', bg: 'rgba(220,80,80,0.08)' },
+                { title: "À faire aujourd'hui", items: dueTodayTasks, color: '#d4b060', bg: 'rgba(212,176,96,0.08)' },
+                { title: 'En attente', items: waitingTasks, color: '#9aa0c8', bg: 'rgba(128,128,160,0.08)' },
+              ].map(block => (
+                <div key={block.title} style={{ border: '1px solid var(--border)', borderRadius: 10, background: block.bg, padding: '10px 12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: block.color, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                      {block.title}
+                    </span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{block.items.length}</span>
+                  </div>
+                  {block.items.length === 0 ? (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Aucune tâche</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {block.items.slice(0, 2).map(item => (
+                        <div key={`${block.title}-${item.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <button
+                            onClick={() => openTaskInTasksPage(item.id)}
+                            style={{
+                              flex: 1,
+                              minWidth: 0,
+                              fontSize: 12,
+                              color: 'var(--text-primary)',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              background: 'transparent',
+                              border: 'none',
+                              textAlign: 'left',
+                              cursor: 'pointer',
+                              padding: 0,
+                            }}
+                            title="Ouvrir dans Tâches"
+                          >
+                            {item.text}
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleTache(item.id);
+                            }}
+                            style={{
+                              border: '1px solid var(--border)',
+                              background: 'var(--bg-card)',
+                              borderRadius: 7,
+                              fontSize: 10,
+                              color: 'var(--text-muted)',
+                              padding: '4px 8px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Terminer
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

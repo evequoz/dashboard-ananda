@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Plus, RefreshCw, CheckCircle2, Circle, AlertTriangle,
   RotateCcw, Calendar, Columns, Clock, ChevronLeft,
-  ChevronRight, X, ChevronDown, ChevronRight as ChevronR, Pencil, Trash2
+  ChevronRight, X, ChevronDown, ChevronRight as ChevronR, Pencil, Trash2, Sparkles
 } from 'lucide-react';
 import { createTaskLegacy, deleteTaskLegacy, listTaskRows, updateTaskLegacy } from '../data/supabaseApi';
+import { generateTaskPlan, type PlannedTask } from '../lib/taskPlannerService';
 
 const PROJETS = ['', 'Formation', 'Cours en ligne', 'Admin', 'Recrutement', 'Publications', 'Routines'];
 const PRIORITES = ['Normale', 'Haute', 'Basse'];
@@ -40,6 +41,18 @@ interface ModalState {
   task?: Task | null;
 }
 
+interface PlannerModalProps {
+  onClose: () => void;
+  onApply: (tasks: PlannedTask[]) => Promise<void>;
+}
+
+interface PlanHistoryEntry {
+  id: string;
+  goal: string;
+  createdAt: string;
+  tasks: PlannedTask[];
+}
+
 function todayStr() { return new Date().toISOString().split('T')[0]; }
 function getVal(f: any): string {
   if (!f) return '';
@@ -55,6 +68,22 @@ function getParentId(t: Task): number | null {
   const p = t['Tâche parente'];
   if (!p || !Array.isArray(p) || p.length === 0) return null;
   return p[0].id ?? null;
+}
+
+function normalizePriority(value?: string): 'Basse' | 'Normale' | 'Haute' {
+  if (value === 'Basse' || value === 'Haute') return value;
+  return 'Normale';
+}
+
+function buildChildrenMap(tasks: Task[]) {
+  const map: Record<number, Task[]> = {};
+  for (const task of tasks) {
+    const parentId = getParentId(task);
+    if (parentId === null) continue;
+    if (!map[parentId]) map[parentId] = [];
+    map[parentId].push(task);
+  }
+  return map;
 }
 
 function PrioBadge({ prio }: { prio: string }) {
@@ -217,15 +246,156 @@ function TaskModal({ onClose, onSave, onUpdate, mode, task, defaultStatut = 'À 
   );
 }
 
+function PlannerModal({ onClose, onApply }: PlannerModalProps) {
+  const [goal, setGoal] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [error, setError] = useState('');
+  const [plan, setPlan] = useState<PlannedTask[] | null>(null);
+  const [history, setHistory] = useState<PlanHistoryEntry[]>([]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('dashboard-ai-task-plans');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) setHistory(parsed);
+    } catch {
+      // Ignore corrupted history.
+    }
+  }, []);
+
+  const saveHistory = (entry: PlanHistoryEntry) => {
+    const next = [entry, ...history].slice(0, 10);
+    setHistory(next);
+    localStorage.setItem('dashboard-ai-task-plans', JSON.stringify(next));
+  };
+
+  const generate = async () => {
+    if (!goal.trim()) return;
+    setLoading(true);
+    setError('');
+    try {
+      const generated = await generateTaskPlan(goal.trim());
+      setPlan(generated.tasks || []);
+      saveHistory({
+        id: `${Date.now()}`,
+        goal: goal.trim(),
+        createdAt: new Date().toISOString(),
+        tasks: generated.tasks || [],
+      });
+    } catch (e: any) {
+      setError(e.message || "Erreur de génération IA.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const applyPlan = async () => {
+    if (!plan?.length) return;
+    setApplying(true);
+    setError('');
+    try {
+      await onApply(plan);
+      onClose();
+    } catch (e: any) {
+      setError(e.message || "Erreur lors de la création des tâches.");
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const renderNode = (task: PlannedTask, depth = 0) => (
+    <div className={`${depth > 0 ? 'ml-4 border-l border-[#2b2b45] pl-3' : ''}`}>
+      <div className="text-sm text-[var(--text-primary)] font-medium">{task.title}</div>
+      {task.description && <div className="text-xs text-[var(--text-muted)] mt-0.5">{task.description}</div>}
+      <div className="text-[10px] text-[var(--text-muted)] mt-1">
+        {normalizePriority(task.priority)}{task.project ? ` · ${task.project}` : ''}{task.due_date ? ` · ${task.due_date}` : ''}
+      </div>
+      {!!task.subtasks?.length && (
+        <div className="mt-2 space-y-2">
+          {task.subtasks.map((sub, idx) => <div key={`${sub.title}-${idx}`}>{renderNode(sub, depth + 1)}</div>)}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 w-full max-w-2xl shadow-2xl">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-[var(--text-primary)]">Planifier avec IA</h2>
+          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="space-y-3">
+          <textarea
+            value={goal}
+            onChange={e => setGoal(e.target.value)}
+            placeholder="Ex: Préparer le lancement de la formation de mai et organiser les relances email."
+            className="w-full h-24 bg-[var(--bg-card)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] resize-none focus:outline-none focus:border-[#c9a84c]/50"
+          />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={generate}
+              disabled={loading || !goal.trim()}
+              className="px-4 py-2 rounded-lg bg-gradient-to-r from-[#c9a84c]/20 to-[#e8c97a]/20 border border-[#c9a84c]/40 text-[var(--gold-soft)] text-sm font-medium disabled:opacity-40"
+            >
+              {loading ? 'Génération...' : 'Générer le plan'}
+            </button>
+            {plan && <span className="text-xs text-[var(--text-muted)]">{plan.length} tâche(s) principale(s)</span>}
+          </div>
+          {error && <div className="bg-red-950/40 border border-red-800/40 text-red-400 text-xs rounded-lg p-3">{error}</div>}
+          {plan && (
+            <div className="max-h-80 overflow-y-auto border border-[var(--border)] rounded-lg p-3 space-y-3">
+              {plan.map((task, idx) => <div key={`${task.title}-${idx}`}>{renderNode(task)}</div>)}
+            </div>
+          )}
+          {history.length > 0 && (
+            <div className="border border-[var(--border)] rounded-lg p-3">
+              <div className="text-xs text-[var(--text-muted)] mb-2">Historique (10 derniers)</div>
+              <div className="space-y-2 max-h-32 overflow-y-auto">
+                {history.map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => { setGoal(item.goal); setPlan(item.tasks); }}
+                    className="w-full text-left px-2 py-1.5 rounded-md bg-[var(--bg-card)] hover:bg-[var(--border)] border border-[var(--border)] transition-colors"
+                  >
+                    <div className="text-xs text-[var(--text-primary)] truncate">{item.goal}</div>
+                    <div className="text-[10px] text-[var(--text-muted)]">
+                      {new Date(item.createdAt).toLocaleString('fr-FR')} · {item.tasks.length} tâche(s)
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex justify-end gap-3 mt-5">
+          <button onClick={onClose} className="px-4 py-2 text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">Annuler</button>
+          <button
+            onClick={applyPlan}
+            disabled={applying || !plan?.length}
+            className="px-5 py-2 rounded-lg bg-gradient-to-r from-[#4caf7d]/20 to-[#6dd79a]/20 border border-[#4caf7d]/40 text-[#7de4a7] text-sm font-medium disabled:opacity-40"
+          >
+            {applying ? 'Création...' : 'Créer les tâches'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── CARTE TÂCHE ─────────────────────────────────────────────
-function TaskCard({ task, subTasks, onStatusChange, onEdit, onDelete, onAddSubTask, compact = false }: {
+function TaskCard({ task, getChildren, onStatusChange, onEdit, onDelete, onAddSubTask, compact = false, depth = 0 }: {
   task: Task;
-  subTasks?: Task[];
+  getChildren: (parentId: number) => Task[];
   onStatusChange: (id: number, statut: string) => void;
   onEdit: (task: Task) => void;
   onDelete?: (id: number) => void;
   onAddSubTask?: (parent: Task) => void;
   compact?: boolean;
+  depth?: number;
 }) {
   const [expanded, setExpanded] = useState(true);
   const statut = getVal(task.Statut);
@@ -234,7 +404,8 @@ function TaskCard({ task, subTasks, onStatusChange, onEdit, onDelete, onAddSubTa
   const rec = getVal(task.Récurrence);
   const overdue = isOverdue(task);
   const done = statut === 'Fait';
-  const hasSubs = subTasks && subTasks.length > 0;
+  const subTasks = getChildren(task.id);
+  const hasSubs = subTasks.length > 0;
   const doneSubs = subTasks?.filter(s => getVal(s.Statut) === 'Fait').length ?? 0;
 
   function nextStatut() {
@@ -296,7 +467,7 @@ function TaskCard({ task, subTasks, onStatusChange, onEdit, onDelete, onAddSubTa
               </span>
             )}
             {hasSubs && (
-              <span className="text-[10px] text-[var(--text-muted)]">{doneSubs}/{subTasks!.length} sous-tâches</span>
+              <span className="text-[10px] text-[var(--text-muted)]">{doneSubs}/{subTasks.length} sous-tâches</span>
             )}
           </div>
         </div>
@@ -323,7 +494,7 @@ function TaskCard({ task, subTasks, onStatusChange, onEdit, onDelete, onAddSubTa
         <div className="px-3 pb-1">
           <div className="w-full bg-[var(--bg-surface)] rounded-full h-1 overflow-hidden">
             <div className="bg-[#4caf7d] h-full rounded-full transition-all duration-300"
-              style={{ width: `${(doneSubs / subTasks!.length) * 100}%` }} />
+              style={{ width: `${(doneSubs / subTasks.length) * 100}%` }} />
           </div>
         </div>
       )}
@@ -331,21 +502,18 @@ function TaskCard({ task, subTasks, onStatusChange, onEdit, onDelete, onAddSubTa
       {/* Sous-tâches */}
       {hasSubs && expanded && !compact && (
         <div className="border-t border-[#1a1a2e] mx-3 mb-1 pt-2 space-y-1">
-          {subTasks!.map(sub => (
-            <div key={sub.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-surface)] transition-colors group/sub">
-              <button onClick={() => onStatusChange(sub.id, getVal(sub.Statut) === 'Fait' ? 'À faire' : 'Fait')}
-                className="flex-shrink-0 hover:scale-110 transition-all">
-                {getVal(sub.Statut) === 'Fait'
-                  ? <CheckCircle2 className="w-3.5 h-3.5 text-[#4caf7d]" />
-                  : <Circle className="w-3.5 h-3.5 text-[#33335a] hover:text-[var(--text-muted)]" />}
-              </button>
-              <span className={`text-xs flex-1 ${getVal(sub.Statut) === 'Fait' ? 'line-through text-[var(--text-muted)]' : 'text-[var(--text-primary)]'}`}>
-                {sub.Titre || '(Sans titre)'}
-              </span>
-              <button onClick={() => onEdit(sub)}
-                className="opacity-0 group-hover/sub:opacity-100 p-1 text-[#33335a] hover:text-[#c9a84c] transition-all">
-                <Pencil className="w-3 h-3" />
-              </button>
+          {subTasks.map(sub => (
+            <div key={sub.id} className="pl-3 border-l border-[#1f1f35]/80">
+              <TaskCard
+                task={sub}
+                getChildren={getChildren}
+                onStatusChange={onStatusChange}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onAddSubTask={onAddSubTask}
+                compact={false}
+                depth={depth + 1}
+              />
             </div>
           ))}
         </div>
@@ -376,9 +544,9 @@ function KanbanView({ tasks, onStatusChange, onAddInCol, onEdit, onDelete, onAdd
 }) {
   const dragId = useRef<number | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
+  const childrenMap = buildChildrenMap(tasks);
+  const getChildren = (pid: number) => childrenMap[pid] || [];
   const parentTasks = tasks.filter(t => !getParentId(t));
-  const subTasks = tasks.filter(t => getParentId(t) !== null);
-  const getSubTasks = (pid: number) => subTasks.filter(s => getParentId(s) === pid);
 
   return (
     <div className="grid grid-cols-3 gap-4">
@@ -417,7 +585,7 @@ function KanbanView({ tasks, onStatusChange, onAddInCol, onEdit, onDelete, onAdd
               {colTasks.map(t => (
                 <div key={t.id} draggable onDragStart={e => { dragId.current = t.id; e.dataTransfer.effectAllowed = 'move'; }}
                   className="cursor-grab active:cursor-grabbing active:opacity-50 transition-opacity">
-                  <TaskCard task={t} subTasks={getSubTasks(t.id)} onStatusChange={onStatusChange}
+                  <TaskCard task={t} getChildren={getChildren} onStatusChange={onStatusChange}
                     onEdit={onEdit} onDelete={onDelete} onAddSubTask={onAddSubTask} compact />
                 </div>
               ))}
@@ -438,9 +606,9 @@ function TodayView({ tasks, onStatusChange, onEdit, onDelete, onAddSubTask }: {
   onAddSubTask: (parent: Task) => void;
 }) {
   const today = todayStr();
+  const childrenMap = buildChildrenMap(tasks);
+  const getChildren = (pid: number) => childrenMap[pid] || [];
   const parentTasks = tasks.filter(t => !getParentId(t));
-  const subTasks = tasks.filter(t => getParentId(t) !== null);
-  const getSubTasks = (pid: number) => subTasks.filter(s => getParentId(s) === pid);
 
   const todayTasks = parentTasks.filter(t => {
     const d = t['Date échéance']?.split('T')[0];
@@ -458,7 +626,7 @@ function TodayView({ tasks, onStatusChange, onEdit, onDelete, onAddSubTask }: {
         <p className="text-xs font-medium uppercase tracking-widest mb-3" style={{ color }}>{title}</p>
         <div className="space-y-2">
           {items.map(t => (
-            <TaskCard key={t.id} task={t} subTasks={getSubTasks(t.id)}
+            <TaskCard key={t.id} task={t} getChildren={getChildren}
               onStatusChange={onStatusChange} onEdit={onEdit} onDelete={onDelete} onAddSubTask={onAddSubTask} />
           ))}
         </div>
@@ -641,6 +809,7 @@ export const Taches = () => {
   const [error, setError] = useState('');
   const [view, setView] = useState<View>('today');
   const [modal, setModal] = useState<ModalState>({ open: false, mode: 'create', statut: 'À faire', parent: null, task: null });
+  const [plannerOpen, setPlannerOpen] = useState(false);
 
   const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -653,6 +822,22 @@ export const Taches = () => {
   }, []);
 
   useEffect(() => { loadTasks(); }, [loadTasks]);
+
+  useEffect(() => {
+    const raw = localStorage.getItem('dashboard-open-task-id');
+    if (!raw || !tasks.length) return;
+    const targetId = Number(raw);
+    if (!Number.isFinite(targetId)) {
+      localStorage.removeItem('dashboard-open-task-id');
+      return;
+    }
+    const target = tasks.find(t => t.id === targetId);
+    if (target) {
+      setView('today');
+      openEdit(target);
+    }
+    localStorage.removeItem('dashboard-open-task-id');
+  }, [tasks]);
 
   async function updateStatut(id: number, statut: string) {
     setTasks(prev => prev.map(t => t.id === id ? { ...t, Statut: { id: 0, value: statut, color: '' }, Fait: statut === 'Fait' } : t));
@@ -691,6 +876,32 @@ export const Taches = () => {
     } catch { loadTasks(); }
   }
 
+  async function createPlannedTask(task: PlannedTask, parentId: number | null = null): Promise<void> {
+    const payload: Record<string, any> = {
+      Titre: task.title?.trim() || 'Tâche IA',
+      Description: task.description?.trim() || null,
+      Statut: 'À faire',
+      Priorité: normalizePriority(task.priority),
+      Projet: task.project?.trim() || null,
+      Fait: false,
+      'Date échéance': task.due_date || null,
+    };
+    if (parentId) payload['Tâche parente'] = [parentId];
+    const created = await createTaskLegacy(payload);
+    if (Array.isArray(task.subtasks) && task.subtasks.length > 0) {
+      for (const subTask of task.subtasks) {
+        await createPlannedTask(subTask, created.id);
+      }
+    }
+  }
+
+  async function applyPlan(tasksToCreate: PlannedTask[]) {
+    for (const task of tasksToCreate) {
+      await createPlannedTask(task, null);
+    }
+    await loadTasks();
+  }
+
   const VIEWS: { id: View; label: string; icon: any }[] = [
     { id: 'today', label: "Aujourd'hui", icon: Clock },
     { id: 'kanban', label: 'Kanban', icon: Columns },
@@ -719,6 +930,10 @@ export const Taches = () => {
           </div>
           <button onClick={loadTasks} className="p-2 rounded-lg border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[#33335a] transition-all">
             <RefreshCw className="w-4 h-4" />
+          </button>
+          <button onClick={() => setPlannerOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-[#3d3368]/40 to-[#6f5bb0]/30 border border-[#7e69c2]/40 text-[#d8ccff] hover:from-[#4b3d80]/50 transition-all text-sm font-medium">
+            <Sparkles className="w-4 h-4" />Découper avec IA
           </button>
           <button onClick={() => openCreate('À faire')}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-[#c9a84c]/20 to-[#e8c97a]/20 border border-[#c9a84c]/40 text-[var(--gold-soft)] hover:from-[#c9a84c]/30 transition-all text-sm font-medium">
@@ -750,6 +965,13 @@ export const Taches = () => {
           onClose={() => setModal({ open: false, mode: 'create', statut: 'À faire', parent: null, task: null })}
           onSave={handleSaved}
           onUpdate={handleUpdated}
+        />
+      )}
+
+      {plannerOpen && (
+        <PlannerModal
+          onClose={() => setPlannerOpen(false)}
+          onApply={applyPlan}
         />
       )}
     </div>
