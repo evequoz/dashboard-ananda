@@ -1228,7 +1228,10 @@ export const Poste = () => {
                   </button>
                   {selectedEmail['Tâche liée'] && (
                     <button
-                      onClick={() => alert(`Tâche liée: #${selectedEmail['Tâche liée']}\nOuvre la page Tâches et recherche cet identifiant.`)}
+                      onClick={() => {
+                        localStorage.setItem('dashboard-open-task-id', String(selectedEmail['Tâche liée']));
+                        window.dispatchEvent(new CustomEvent('dashboard:navigate', { detail: { page: 'tasks' } }));
+                      }}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#4caf7d]/12 border border-[#4caf7d]/30 text-[#4caf7d] hover:bg-[#4caf7d]/20 transition-all"
                     >
                       <ExternalLink className="w-3.5 h-3.5" /> Voir tâche liée #{selectedEmail['Tâche liée']}

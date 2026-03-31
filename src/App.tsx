@@ -65,6 +65,15 @@ function AppContent() {
     try { localStorage.setItem('ananda-theme', theme); } catch {}
   }, [theme]);
 
+  useEffect(() => {
+    const onNavigate = (evt: Event) => {
+      const custom = evt as CustomEvent<{ page?: string }>;
+      if (custom.detail?.page) setCurrentPage(custom.detail.page);
+    };
+    window.addEventListener('dashboard:navigate', onNavigate as EventListener);
+    return () => window.removeEventListener('dashboard:navigate', onNavigate as EventListener);
+  }, []);
+
   const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
 
   if (!user) return (
