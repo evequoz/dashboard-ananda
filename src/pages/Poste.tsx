@@ -11,7 +11,7 @@ import {
   updateInboxEmail,
   deleteInboxEmail,
   deleteInboxEmailsBulk,
-  createTaskLegacy,
+  createTaskFromEmail,
   createSentEmail,
   deleteSentEmailsBulk,
   deleteSentEmailsOlderThanDays,
@@ -60,6 +60,9 @@ interface Email {
   'Réponse 3': string;
   'A une pièce jointe': boolean;
   'Fichier': BaserowFile[];
+  'Tâche liée'?: number | null;
+  'Converti en tâche'?: boolean;
+  'Date conversion'?: string | null;
 }
 
 interface SentEmail {
@@ -794,17 +797,45 @@ export const Poste = () => {
     } catch (e) { console.error(e); }
   };
 
+  const getTaskDefaultsFromEmail = (email: Email) => {
+    const subject = (email.Sujet || '').toLowerCase();
+    const content = (email.Contenu || '').toLowerCase();
+    const haystack = `${subject} ${content}`;
+
+    let projet = 'Admin';
+    if (haystack.includes('facture') || haystack.includes('paiement') || haystack.includes('stripe')) projet = 'Admin';
+    if (haystack.includes('formation') || haystack.includes('cours')) projet = 'Formation';
+    if (haystack.includes('publication') || haystack.includes('post') || haystack.includes('réseau')) projet = 'Publications';
+
+    const priorite = email['Action requise'] ? 'Haute' : 'Normale';
+    const dueDate = new Date(Date.now() + (email['Action requise'] ? 24 : 48) * 60 * 60 * 1000).toISOString().split('T')[0];
+    return { projet, priorite, dueDate };
+  };
+
   const createTask = async (name: string, desc: string) => {
+    if (!selectedEmail) return;
     try {
-      await createTaskLegacy({
+      const defaults = getTaskDefaultsFromEmail(selectedEmail);
+      const { task, alreadyExisted } = await createTaskFromEmail(selectedEmail.id, {
         Titre: name,
         Description: desc,
         Statut: 'En cours',
-        Priorité: selectedEmail?.['Action requise'] ? 'Haute' : 'Normale',
+        Priorité: defaults.priorite,
+        Projet: defaults.projet,
+        'Date échéance': defaults.dueDate,
       });
+      setEmails(prev => prev.map(e => (
+        e.id === selectedEmail.id
+          ? { ...e, 'Tâche liée': Number(task.id), 'Converti en tâche': true, 'Date conversion': new Date().toISOString() }
+          : e
+      )));
+      setSelectedEmail(prev => prev ? { ...prev, 'Tâche liée': Number(task.id), 'Converti en tâche': true, 'Date conversion': new Date().toISOString() } : prev);
       setShowTaskPopup(false);
       setTaskSuccess(true);
       setTimeout(() => setTaskSuccess(false), 3000);
+      if (alreadyExisted) {
+        alert(`Une tâche existe déjà pour cet email (ID: ${task.id}).`);
+      }
     } catch (e) { console.error(e); }
   };
 
@@ -1050,6 +1081,7 @@ export const Poste = () => {
                         <div className="flex items-center gap-0.5 shrink-0">
                           {emailFiles.length > 0 && <Paperclip className="w-3 h-3 text-[var(--text-muted)]" />}
                           {hasSuggestions(email) && <Sparkles className="w-3 h-3 text-[#7b5ea7]" />}
+                          {email['Converti en tâche'] && <CheckCircle className="w-3 h-3 text-[#4caf7d]" />}
                           {email['Action requise'] && <AlertCircle className="w-3 h-3 text-[#d95555]" />}
                           {email.Traité && <CheckCircle className="w-3 h-3 text-[#4caf7d]" />}
                         </div>
@@ -1190,9 +1222,18 @@ export const Poste = () => {
                     </button>
                   )}
                   <button onClick={() => setShowTaskPopup(true)}
+                    disabled={!!selectedEmail['Converti en tâche']}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[var(--bg-card)] border border-[var(--border)] text-[#c8c4b8] hover:text-[var(--text-primary)] hover:border-[#c9a84c]/30 transition-all">
-                    <Plus className="w-3.5 h-3.5" /> Tâche
+                    <Plus className="w-3.5 h-3.5" /> {selectedEmail['Converti en tâche'] ? 'Déjà converti' : 'Tâche'}
                   </button>
+                  {selectedEmail['Tâche liée'] && (
+                    <button
+                      onClick={() => alert(`Tâche liée: #${selectedEmail['Tâche liée']}\nOuvre la page Tâches et recherche cet identifiant.`)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#4caf7d]/12 border border-[#4caf7d]/30 text-[#4caf7d] hover:bg-[#4caf7d]/20 transition-all"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" /> Voir tâche liée #{selectedEmail['Tâche liée']}
+                    </button>
+                  )}
                   {files.map((file, i) => (
                     <a key={i} href={file.url} target="_blank" rel="noopener noreferrer"
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-card)] border border-[var(--border)] text-[#a0a0c0] hover:text-[#c9a84c] hover:border-[#c9a84c]/40 transition-all">

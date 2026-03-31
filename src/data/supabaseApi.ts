@@ -12,6 +12,7 @@ const legacyTaskFromRow = (row: any) => ({
   'Date échéance': row.due_date,
   'Date faite': row.done_date,
   'Tâche parente': row.parent_task_id ? [{ id: row.parent_task_id }] : [],
+  'Email source id': row.source_email_id ?? null,
 });
 
 const legacyEmailFromRow = (row: any) => ({
@@ -29,6 +30,9 @@ const legacyEmailFromRow = (row: any) => ({
   'Réponse 3': row.reply_3,
   'A une pièce jointe': row.has_attachment,
   Fichier: row.attachments || [],
+  'Tâche liée': row.linked_task_id ?? null,
+  'Converti en tâche': !!row.converted_to_task,
+  'Date conversion': row.converted_at ?? null,
 });
 
 const legacySentFromRow = (row: any) => ({
@@ -94,6 +98,7 @@ export const createTaskLegacy = async (payload: Record<string, any>) => {
     due_date: payload['Date échéance'] ?? null,
     done_date: payload['Date faite'] ?? null,
     parent_task_id: Array.isArray(payload['Tâche parente']) ? payload['Tâche parente'][0] ?? null : null,
+    source_email_id: payload['Email source id'] ?? null,
   };
   const { data, error } = await supabase.from('tasks').insert(insert).select('*').single();
   if (error) throw error;
@@ -122,6 +127,44 @@ export const deleteTaskLegacy = async (id: number | string) => {
   if (error) throw error;
 };
 
+export const findTaskBySourceEmail = async (emailId: number) => {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('source_email_id', emailId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? legacyTaskFromRow(data) : null;
+};
+
+export const createTaskFromEmail = async (
+  emailId: number,
+  payload: Record<string, any>,
+) => {
+  const existing = await findTaskBySourceEmail(emailId);
+  if (existing) {
+    await updateInboxEmail(emailId, {
+      'Tâche liée': existing.id,
+      'Converti en tâche': true,
+      'Date conversion': new Date().toISOString(),
+    });
+    return { task: existing, alreadyExisted: true };
+  }
+
+  const created = await createTaskLegacy({
+    ...payload,
+    'Email source id': emailId,
+  });
+
+  await updateInboxEmail(emailId, {
+    'Tâche liée': created.id,
+    'Converti en tâche': true,
+    'Date conversion': new Date().toISOString(),
+  });
+
+  return { task: created, alreadyExisted: false };
+};
+
 export const listInboxEmails = async (size = 200) => {
   const { data, error } = await supabase.from('inbox_emails').select('*').order('id', { ascending: false }).limit(size);
   if (error) throw error;
@@ -133,6 +176,9 @@ export const updateInboxEmail = async (id: number, payload: Record<string, any>)
   if ('Traité' in payload) patch.processed = payload.Traité;
   if ('Sujet' in payload) patch.subject = payload.Sujet;
   if ('Résumé IA' in payload) patch.ai_summary = payload['Résumé IA'];
+  if ('Tâche liée' in payload) patch.linked_task_id = payload['Tâche liée'];
+  if ('Converti en tâche' in payload) patch.converted_to_task = payload['Converti en tâche'];
+  if ('Date conversion' in payload) patch.converted_at = payload['Date conversion'];
   const { error } = await supabase.from('inbox_emails').update(patch).eq('id', id);
   if (error) throw error;
 };
