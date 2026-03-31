@@ -33,6 +33,7 @@ const legacyEmailFromRow = (row: any) => ({
   'Tâche liée': row.linked_task_id ?? null,
   'Converti en tâche': !!row.converted_to_task,
   'Date conversion': row.converted_at ?? null,
+  'Supprimé le': row.deleted_at ?? null,
 });
 
 const legacySentFromRow = (row: any) => ({
@@ -45,6 +46,7 @@ const legacySentFromRow = (row: any) => ({
   Corps: row.body,
   Date: row.sent_at,
   Compte: row.account_email,
+  'Supprimé le': row.deleted_at ?? null,
 });
 
 const legacyAdminFromRow = (row: any) => ({
@@ -165,8 +167,10 @@ export const createTaskFromEmail = async (
   return { task: created, alreadyExisted: false };
 };
 
-export const listInboxEmails = async (size = 200) => {
-  const { data, error } = await supabase.from('inbox_emails').select('*').order('id', { ascending: false }).limit(size);
+export const listInboxEmails = async (size = 200, includeDeleted = false) => {
+  let query = supabase.from('inbox_emails').select('*').order('id', { ascending: false }).limit(size);
+  if (!includeDeleted) query = query.is('deleted_at', null);
+  const { data, error } = await query;
   if (error) throw error;
   return (data || []).map(legacyEmailFromRow);
 };
@@ -188,14 +192,38 @@ export const deleteInboxEmail = async (id: number) => {
   if (error) throw error;
 };
 
+export const moveInboxEmailToTrash = async (id: number) => {
+  const { error } = await supabase.from('inbox_emails').update({ deleted_at: new Date().toISOString() }).eq('id', id);
+  if (error) throw error;
+};
+
+export const moveInboxEmailsBulkToTrash = async (ids: number[]) => {
+  if (!ids.length) return;
+  const { error } = await supabase.from('inbox_emails').update({ deleted_at: new Date().toISOString() }).in('id', ids);
+  if (error) throw error;
+};
+
+export const restoreInboxEmail = async (id: number) => {
+  const { error } = await supabase.from('inbox_emails').update({ deleted_at: null }).eq('id', id);
+  if (error) throw error;
+};
+
+export const restoreInboxEmailsBulk = async (ids: number[]) => {
+  if (!ids.length) return;
+  const { error } = await supabase.from('inbox_emails').update({ deleted_at: null }).in('id', ids);
+  if (error) throw error;
+};
+
 export const deleteInboxEmailsBulk = async (ids: number[]) => {
   if (!ids.length) return;
   const { error } = await supabase.from('inbox_emails').delete().in('id', ids);
   if (error) throw error;
 };
 
-export const listSentEmails = async (size = 200) => {
-  const { data, error } = await supabase.from('sent_emails').select('*').order('id', { ascending: false }).limit(size);
+export const listSentEmails = async (size = 200, includeDeleted = false) => {
+  let query = supabase.from('sent_emails').select('*').order('id', { ascending: false }).limit(size);
+  if (!includeDeleted) query = query.is('deleted_at', null);
+  const { data, error } = await query;
   if (error) throw error;
   return (data || []).map(legacySentFromRow);
 };
@@ -220,9 +248,21 @@ export const deleteSentEmailsBulk = async (ids: number[]) => {
   if (error) throw error;
 };
 
+export const moveSentEmailsBulkToTrash = async (ids: number[]) => {
+  if (!ids.length) return;
+  const { error } = await supabase.from('sent_emails').update({ deleted_at: new Date().toISOString() }).in('id', ids);
+  if (error) throw error;
+};
+
+export const restoreSentEmailsBulk = async (ids: number[]) => {
+  if (!ids.length) return;
+  const { error } = await supabase.from('sent_emails').update({ deleted_at: null }).in('id', ids);
+  if (error) throw error;
+};
+
 export const deleteSentEmailsOlderThanDays = async (days: number, accountEmail?: string) => {
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-  let query = supabase.from('sent_emails').delete().lt('sent_at', cutoff);
+  let query = supabase.from('sent_emails').update({ deleted_at: new Date().toISOString() }).lt('sent_at', cutoff).is('deleted_at', null);
   if (accountEmail) query = query.eq('account_email', accountEmail);
   const { error } = await query;
   if (error) throw error;
