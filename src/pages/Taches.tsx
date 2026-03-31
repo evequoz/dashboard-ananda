@@ -605,6 +605,7 @@ function TodayView({ tasks, onStatusChange, onEdit, onDelete, onAddSubTask }: {
   onDelete: (id: number) => void;
   onAddSubTask: (parent: Task) => void;
 }) {
+  const [focusFilter, setFocusFilter] = useState<'all' | 'todo' | 'inprogress' | 'done' | 'overdue'>('all');
   const today = todayStr();
   const childrenMap = buildChildrenMap(tasks);
   const getChildren = (pid: number) => childrenMap[pid] || [];
@@ -619,6 +620,11 @@ function TodayView({ tasks, onStatusChange, onEdit, onDelete, onAddSubTask }: {
   const inprogress = parentTasks.filter(t => getVal(t.Statut) === 'En cours' && !isOverdue(t));
   const pending = todayTasks.filter(t => getVal(t.Statut) === 'À faire' && !isOverdue(t));
   const done = todayTasks.filter(t => getVal(t.Statut) === 'Fait');
+
+  const visibleOverdue = focusFilter === 'all' || focusFilter === 'overdue' ? overdue : [];
+  const visibleInProgress = focusFilter === 'all' || focusFilter === 'inprogress' ? inprogress : [];
+  const visiblePending = focusFilter === 'all' || focusFilter === 'todo' ? pending : [];
+  const visibleDone = focusFilter === 'all' || focusFilter === 'done' ? done : [];
 
   const Section = ({ title, items, color }: { title: string; items: Task[]; color: string }) =>
     items.length > 0 ? (
@@ -637,16 +643,28 @@ function TodayView({ tasks, onStatusChange, onEdit, onDelete, onAddSubTask }: {
     <div className="space-y-6">
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: 'À faire', value: pending.length, color: 'text-[var(--text-primary)]' },
-          { label: 'En cours', value: inprogress.length, color: 'text-[#c9a84c]' },
-          { label: 'Faites', value: done.length, color: 'text-[#4caf7d]' },
-          { label: 'En retard', value: overdue.length, color: overdue.length > 0 ? 'text-amber-400' : 'text-[var(--text-muted)]' },
+          { id: 'todo', label: 'À faire', value: pending.length, color: 'text-[var(--text-primary)]' },
+          { id: 'inprogress', label: 'En cours', value: inprogress.length, color: 'text-[#c9a84c]' },
+          { id: 'done', label: 'Faites', value: done.length, color: 'text-[#4caf7d]' },
+          { id: 'overdue', label: 'En retard', value: overdue.length, color: overdue.length > 0 ? 'text-amber-400' : 'text-[var(--text-muted)]' },
         ].map(s => (
-          <div key={s.label} className="bg-[var(--bg-surface)] rounded-xl border border-[var(--border)] p-3">
+          <button
+            key={s.label}
+            onClick={() => setFocusFilter(prev => prev === s.id ? 'all' : (s.id as 'todo' | 'inprogress' | 'done' | 'overdue'))}
+            className={`bg-[var(--bg-surface)] rounded-xl border p-3 text-left transition-all ${focusFilter === s.id ? 'border-[#c9a84c]/40' : 'border-[var(--border)] hover:border-[#33335a]'}`}
+          >
             <p className="text-xs text-[var(--text-muted)] mb-1">{s.label}</p>
             <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-          </div>
+          </button>
         ))}
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setFocusFilter('all')}
+          className={`px-3 py-1.5 rounded-lg text-xs border transition-all ${focusFilter === 'all' ? 'border-[#c9a84c]/40 text-[var(--gold-soft)] bg-[#c9a84c]/10' : 'border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
+        >
+          Toutes les tâches
+        </button>
       </div>
       {overdue.length === 0 && pending.length === 0 && inprogress.length === 0 && done.length === 0 && (
         <div className="text-center py-16">
@@ -655,10 +673,10 @@ function TodayView({ tasks, onStatusChange, onEdit, onDelete, onAddSubTask }: {
           <p className="text-[#33335a] text-xs mt-1">Clique sur "Nouvelle tâche" pour commencer</p>
         </div>
       )}
-      <Section title="En retard — à traiter" items={overdue} color="#f59e0b" />
-      <Section title="En cours" items={inprogress} color="#c9a84c" />
-      <Section title="À faire aujourd'hui" items={pending} color="#5a587a" />
-      <Section title="Faites" items={done} color="#4caf7d" />
+      <Section title="En retard — à traiter" items={visibleOverdue} color="#f59e0b" />
+      <Section title="En cours" items={visibleInProgress} color="#c9a84c" />
+      <Section title="À faire aujourd'hui" items={visiblePending} color="#5a587a" />
+      <Section title="Faites" items={visibleDone} color="#4caf7d" />
     </div>
   );
 }

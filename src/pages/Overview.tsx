@@ -66,6 +66,7 @@ export const Overview = () => {
   const [emails, setEmails] = useState<EmailItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtre, setFiltre] = useState('Tout');
+  const [focusFilter, setFocusFilter] = useState<'all' | 'urgent' | 'today' | 'waiting'>('all');
   const [newTask, setNewTask] = useState('');
   const [adding, setAdding] = useState(false);
 
@@ -120,6 +121,12 @@ export const Overview = () => {
   const urgentTasks = tachesFiltrees.filter(t => !t.completed && t.priorite === 'Haute');
   const dueTodayTasks = tachesFiltrees.filter(t => !t.completed && !!t.dateEcheance && t.dateEcheance.split('T')[0] === todayIso);
   const waitingTasks = tachesFiltrees.filter(t => !t.completed && t.priorite !== 'Haute' && (!t.dateEcheance || t.dateEcheance.split('T')[0] > todayIso));
+  const tachesAffichees = (() => {
+    if (focusFilter === 'urgent') return urgentTasks;
+    if (focusFilter === 'today') return dueTodayTasks;
+    if (focusFilter === 'waiting') return waitingTasks;
+    return tachesFiltrees;
+  })();
 
   const eventsByDay: Record<string, any[]> = {};
   events.forEach(e => { const k = new Date(e.start?.dateTime || e.start?.date).toDateString(); if (!eventsByDay[k]) eventsByDay[k] = []; eventsByDay[k].push(e); });
@@ -234,7 +241,7 @@ export const Overview = () => {
               </div>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Tâches à faire</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>{tachesFiltrees.length} tâche{tachesFiltrees.length !== 1 ? 's' : ''} en attente</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>{tachesAffichees.length} tâche{tachesAffichees.length !== 1 ? 's' : ''} en attente</div>
               </div>
             </div>
 
@@ -252,15 +259,44 @@ export const Overview = () => {
               </div>
             )}
 
+            <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 12 }}>
+              {[
+                { id: 'all', label: 'Toutes' },
+                { id: 'urgent', label: 'Urgent' },
+                { id: 'today', label: "Aujourd'hui" },
+                { id: 'waiting', label: 'En attente' },
+              ].map(item => {
+                const active = focusFilter === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setFocusFilter(item.id as 'all' | 'urgent' | 'today' | 'waiting')}
+                    className="ov-filtre"
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: 99,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      border: `1px solid ${active ? 'rgba(212,176,96,0.55)' : 'var(--border)'}`,
+                      background: active ? 'rgba(212,176,96,0.12)' : 'transparent',
+                      color: active ? '#d4b060' : 'var(--text-muted)',
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+
             <div className="ov-scroll" style={{ overflowY: 'auto', maxHeight: 210, display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 12 }}>
               {loading ? (
                 <p style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: '20px 0' }}>Chargement...</p>
-              ) : tachesFiltrees.length === 0 ? (
+              ) : tachesAffichees.length === 0 ? (
                 <div style={{ padding: '20px', textAlign: 'center', border: '1px dashed var(--border)', borderRadius: 10 }}>
                   <CheckCircle size={20} color="#4caf7d" style={{ margin: '0 auto 8px' }} />
                   <p style={{ fontSize: 13, color: '#5dc98d', margin: 0, fontWeight: 600 }}>Tout est fait ✓</p>
                 </div>
-              ) : tachesFiltrees.map(t => (
+              ) : tachesAffichees.map(t => (
                 <div key={t.id} onClick={() => openTaskInTasksPage(t.id)} className="ov-task" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer', transition: 'all 0.15s' }}>
                   <button
                     onClick={(e) => { e.stopPropagation(); toggleTache(t.id); }}
