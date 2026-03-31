@@ -1,16 +1,13 @@
 import { useState, useEffect } from 'react';
 import { DollarSign, TrendingUp, TrendingDown, PlusCircle, X, Check, RefreshCw, Download, AlertCircle } from 'lucide-react';
 import { useTheme } from '../App';
-
-const BASEROW_TOKEN = 'GBLdzaCZvQUVXkCqSls3WX3dT3uVg0H8';
-const BASEROW_URL = 'https://baserow.ananda-communaute.cloud/api';
-const FINANCE_TABLE = 543;
-const BUDGET_TABLE_ID = 542;
-
-const headers = {
-  Authorization: `Token ${BASEROW_TOKEN}`,
-  'Content-Type': 'application/json',
-};
+import {
+  listFinanceEntries,
+  listBudgetItems,
+  deleteFinanceEntry,
+  updateFinanceEntry,
+  createFinanceEntry,
+} from '../data/supabaseApi';
 
 const CATEGORIES = ['Formation', 'Logement', 'Assurance', 'Leasing', 'Social', 'Télécom', 'Doterra', 'Divers'];
 const SOURCES = ['Stripe', 'Systeme IO', 'Cash', 'Virement', 'Carte crédit', 'Carte Yul', 'Auto'];
@@ -72,14 +69,9 @@ export const Finance = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [finRes, budRes] = await Promise.all([
-        fetch(`${BASEROW_URL}/database/rows/table/${FINANCE_TABLE}/?user_field_names=true&size=200&order_by=-Date`, { headers }),
-        fetch(`${BASEROW_URL}/database/rows/table/${BUDGET_TABLE_ID}/?user_field_names=true&size=100`, { headers }),
-      ]);
-      const finData = await finRes.json();
-      const budData = await budRes.json();
-      setMouvements(finData.results || []);
-      setBudget((budData.results || []).filter((r: BudgetLigne) => r.Actif === true || r.Actif === 'VRAI'));
+      const [finData, budData] = await Promise.all([listFinanceEntries(), listBudgetItems()]);
+      setMouvements(finData || []);
+      setBudget((budData || []).filter((r: BudgetLigne) => r.Actif === true || r.Actif === 'VRAI'));
     } catch (e) { console.error(e); }
     setLoading(false);
   };
@@ -124,14 +116,12 @@ export const Finance = () => {
 
   const handleDelete = async (id: number) => {
     if (!confirm('Supprimer ce mouvement ?')) return;
-    await fetch(`${BASEROW_URL}/database/rows/table/${FINANCE_TABLE}/${id}/?user_field_names=true`, { method: 'DELETE', headers });
+    await deleteFinanceEntry(id);
     fetchData();
   };
 
   const handlePay = async (id: number) => {
-    await fetch(`${BASEROW_URL}/database/rows/table/${FINANCE_TABLE}/${id}/?user_field_names=true`, {
-      method: 'PATCH', headers, body: JSON.stringify({ 'Date paiement': new Date().toISOString().split('T')[0] }),
-    });
+    await updateFinanceEntry(id, { 'Date paiement': new Date().toISOString().split('T')[0] });
     fetchData();
   };
 
@@ -139,13 +129,9 @@ export const Finance = () => {
     if (!form.libelle || !form.montant) return;
     setSaving(true);
     try {
-      const url = editingId
-        ? `${BASEROW_URL}/database/rows/table/${FINANCE_TABLE}/${editingId}/?user_field_names=true`
-        : `${BASEROW_URL}/database/rows/table/${FINANCE_TABLE}/?user_field_names=true`;
-      await fetch(url, {
-        method: editingId ? 'PATCH' : 'POST', headers,
-        body: JSON.stringify({ Date: form.date, 'Date paiement': form.datePaiement || null, Libellé: form.libelle, Montant: parseFloat(form.montant) || 0, Type: formType, Source: form.source, Catégorie: form.categorie, Notes: form.notes, Validé: true }),
-      });
+      const payload = { Date: form.date, 'Date paiement': form.datePaiement || null, Libellé: form.libelle, Montant: parseFloat(form.montant) || 0, Type: formType, Source: form.source, Catégorie: form.categorie, Notes: form.notes, Validé: true };
+      if (editingId) await updateFinanceEntry(editingId, payload);
+      else await createFinanceEntry(payload);
       setForm({ date: now.toISOString().slice(0, 10), datePaiement: '', libelle: '', montant: '', source: 'Virement', categorie: 'Divers', notes: '' });
       setEditingId(null); setShowForm(false); fetchData();
     } catch (e) { console.error(e); }

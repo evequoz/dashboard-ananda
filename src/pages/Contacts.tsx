@@ -5,19 +5,22 @@ import {
   CheckCircle, AlertCircle, Plus, Pencil, Trash2,
   Building2, Tag, FileText, Cloud, Clock, Inbox,
 } from 'lucide-react';
+import {
+  listAdminContacts,
+  createAdminContact,
+  updateAdminContact,
+  deleteAdminContact,
+  listInboxEmails,
+  listSentEmails,
+  findAdminByEmail,
+} from '../data/supabaseApi';
 
 // ── Constants ─────────────────────────────────────────────────────
 const SYSTEME_PROXY     = 'https://n8n.ananda-communaute.cloud/webhook/systeme-proxy';
 const N8N_WEBHOOK       = 'https://n8n.ananda-communaute.cloud/webhook/send-email';
-const BASEROW_URL       = 'https://baserow.ananda-communaute.cloud/api';
-const BASEROW_TOKEN     = 'GBLdzaCZvQUVXkCqSls3WX3dT3uVg0H8';
-const TABLE_ADMIN       = 544; // contacts_admin
 const N8N_GOOGLE_SYNC   = 'https://n8n.ananda-communaute.cloud/webhook/sync-google-contacts';
-const TABLE_EMAILS      = 534;
-const TABLE_SENT        = 0;   // ⚠️ Remplacer par l'ID Baserow de emails_envoyes
 const ACCOUNTS          = ['serge@eh-me.com', 'admin@eh-me.com', 'serge@seme.ch'];
 const CATEGORIES        = ['Fournisseur', 'Partenaire', 'Admin', 'Comptable', 'Autre'];
-const HEADERS           = { Authorization: `Token ${BASEROW_TOKEN}`, 'Content-Type': 'application/json' };
 
 // ── Interfaces ────────────────────────────────────────────────────
 interface SysContact {
@@ -401,14 +404,10 @@ const EmailHistory = ({ email }: { email: string }) => {
     const fetchHistory = async () => {
       setLoading(true);
       try {
-        const enc = encodeURIComponent(email);
-        const [recRes, sentRes] = await Promise.all([
-          fetch(`${BASEROW_URL}/database/rows/table/${TABLE_EMAILS}/?user_field_names=true&size=20&order_by=-id&filter__Expéditeur__contains=${enc}`, { headers: HEADERS }),
-          TABLE_SENT ? fetch(`${BASEROW_URL}/database/rows/table/${TABLE_SENT}/?user_field_names=true&size=20&order_by=-id&filter__À__contains=${enc}`, { headers: HEADERS }) : null,
-        ]);
-        const recData = await recRes.json();
-        setReceived(recData.results || []);
-        if (sentRes) { const sentData = await sentRes.json(); setSent(sentData.results || []); }
+        const [recData, sentData] = await Promise.all([listInboxEmails(200), listSentEmails(200)]);
+        const lc = email.toLowerCase();
+        setReceived((recData || []).filter((r: any) => (r['Expéditeur'] || '').toLowerCase().includes(lc)).slice(0, 20));
+        setSent((sentData || []).filter((s: any) => (s['À'] || '').toLowerCase().includes(lc)).slice(0, 20));
       } catch { /* silently fail */ }
       finally { setLoading(false); }
     };
@@ -450,13 +449,9 @@ const AdminContactDetail = ({ contact, onClose, onCompose, onEdit, onDelete }: {
   const catColor = getCatColor(cat);
 
   const saveNotes = async () => {
-    if (!TABLE_ADMIN) return;
     setSavingNotes(true);
     try {
-      await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_ADMIN}/${contact.id}/?user_field_names=true`, {
-        method: 'PATCH', headers: HEADERS,
-        body: JSON.stringify({ Notes: notes }),
-      });
+      await updateAdminContact(contact.id, { Notes: notes });
       setEditingNotes(false);
     } catch { /* ignore */ }
     finally { setSavingNotes(false); }
@@ -595,34 +590,10 @@ const AdminTab = ({ onCompose }: { onCompose: (email: string) => void }) => {
   const [syncResult, setSyncResult] = useState<{ ok: boolean; message?: string; created?: number; updated?: number } | null>(null);
 
   const fetchContacts = useCallback(async () => {
-    if (!TABLE_ADMIN) { setLoading(false); return; }
     setLoading(true);
     setFetchError(null);
     try {
-      // Pagination automatique — Baserow limite à 200 par page
-      const all: AdminContact[] = [];
-      let url: string | null =
-        `${BASEROW_URL}/database/rows/table/${TABLE_ADMIN}/?user_field_names=true&size=200`;
-
-      while (url) {
-        const res = await fetch(url, { headers: HEADERS });
-        if (!res.ok) {
-          const errText = await res.text().catch(() => 'réponse non lisible');
-          setFetchError(`Erreur ${res.status} — ${errText.slice(0, 200)}`);
-          setContacts([]);
-          return;
-        }
-        const data = await res.json();
-        if (!data.results) {
-          setFetchError('Réponse Baserow inattendue (champ "results" absent) — vérifie le token et l\'ID de table');
-          setContacts([]);
-          return;
-        }
-        all.push(...data.results);
-        url = data.next ?? null; // null = dernière page
-      }
-
-      setContacts(all);
+      setContacts(await listAdminContacts());
     } catch (e: any) {
       setFetchError(`Erreur réseau : ${e?.message ?? String(e)}`);
       setContacts([]);
@@ -641,15 +612,10 @@ const AdminTab = ({ onCompose }: { onCompose: (email: string) => void }) => {
     .sort((a, b) => adminName(a).localeCompare(adminName(b), 'fr'));
 
   const handleSave = async (data: Partial<AdminContact>) => {
-    if (!TABLE_ADMIN) { alert('Configurer TABLE_ADMIN dans Contacts.tsx'); return; }
     if (editTarget) {
-      await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_ADMIN}/${editTarget.id}/?user_field_names=true`, {
-        method: 'PATCH', headers: HEADERS, body: JSON.stringify(data),
-      });
+      await updateAdminContact(editTarget.id, data);
     } else {
-      await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_ADMIN}/?user_field_names=true`, {
-        method: 'POST', headers: HEADERS, body: JSON.stringify(data),
-      });
+      await createAdminContact(data);
     }
     await fetchContacts();
     setShowForm(false); setEditTarget(undefined);
@@ -657,7 +623,7 @@ const AdminTab = ({ onCompose }: { onCompose: (email: string) => void }) => {
 
   const handleDelete = async (c: AdminContact) => {
     if (!confirm(`Supprimer ${adminName(c)} ?`)) return;
-    await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_ADMIN}/${c.id}/`, { method: 'DELETE', headers: HEADERS });
+    await deleteAdminContact(c.id);
     setSelected(null); await fetchContacts();
   };
 
@@ -711,11 +677,6 @@ const AdminTab = ({ onCompose }: { onCompose: (email: string) => void }) => {
               </button>
             </div>
           </div>
-          {!TABLE_ADMIN && (
-            <div className="mt-2 px-3 py-2 bg-[#d95555]/10 border border-[#d95555]/20 rounded-lg text-[10px] text-[#d95555]">
-              ⚠️ TABLE_ADMIN non configuré dans Contacts.tsx
-            </div>
-          )}
           {fetchError && (
             <div className="mt-2 px-3 py-2 bg-[#d95555]/10 border border-[#d95555]/20 rounded-lg text-[10px] text-[#d95555] font-mono break-all flex items-start gap-2">
               <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />

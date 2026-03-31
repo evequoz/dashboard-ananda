@@ -3,13 +3,14 @@ import {
   Calendar, Clock, CheckCircle, Mail, Plus,
   BookOpen, Lightbulb, FileText, Flag, Server, X, Trash2, ExternalLink
 } from 'lucide-react';
-import { getTachesAujourdhui, updateTacheStatut } from '../data/baserowApi';
-
-const BASEROW_URL = 'https://baserow.ananda-communaute.cloud/api';
-const API_TOKEN = 'GBLdzaCZvQUVXkCqSls3WX3dT3uVg0H8';
-const TABLE_TACHES = 536;
-const TABLE_EMAILS = 534;
-const HEADERS = { Authorization: `Token ${API_TOKEN}`, 'Content-Type': 'application/json' };
+import {
+  getTachesAujourdhui,
+  updateTacheStatut,
+  listInboxEmails,
+  updateInboxEmail,
+  deleteInboxEmail,
+  createTaskLegacy,
+} from '../data/supabaseApi';
 
 interface Tache {
   id: string; text: string; completed: boolean;
@@ -70,9 +71,8 @@ export const Overview = () => {
 
   const loadEmails = async () => {
     try {
-      const res = await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_EMAILS}/?user_field_names=true&size=50`, { headers: HEADERS });
-      const data = await res.json();
-      setEmails((data.results || []).filter((e: any) => !e.Traité).reverse());
+      const data = await listInboxEmails(50);
+      setEmails((data || []).filter((e: any) => !e.Traité).reverse());
     } catch {}
   };
 
@@ -95,13 +95,12 @@ export const Overview = () => {
   }, []);
 
   const toggleTache = async (id: string) => { setTaches(p => p.filter(t => t.id !== id)); await updateTacheStatut(id, true); };
-  const marquerTraite = async (id: number) => { setEmails(p => p.filter(e => e.id !== id)); try { await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_EMAILS}/${id}/?user_field_names=true`, { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ Traité: true }) }); } catch {} };
-  const supprimerEmail = async (id: number) => { setEmails(p => p.filter(e => e.id !== id)); try { await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_EMAILS}/${id}/`, { method: 'DELETE', headers: HEADERS }); } catch {} };
+  const marquerTraite = async (id: number) => { setEmails(p => p.filter(e => e.id !== id)); try { await updateInboxEmail(id, { Traité: true }); } catch {} };
+  const supprimerEmail = async (id: number) => { setEmails(p => p.filter(e => e.id !== id)); try { await deleteInboxEmail(id); } catch {} };
   const ajouterTache = async () => {
     if (!newTask.trim()) return;
     try {
-      const res = await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_TACHES}/?user_field_names=true`, { method: 'POST', headers: HEADERS, body: JSON.stringify({ Titre: newTask.trim(), Statut: 'À faire', Priorité: 'Normale', 'Date échéance': new Date().toISOString().split('T')[0] }) });
-      const row = await res.json();
+      const row = await createTaskLegacy({ Titre: newTask.trim(), Statut: 'À faire', Priorité: 'Normale', 'Date échéance': new Date().toISOString().split('T')[0] });
       setTaches(p => [...p, { id: row.id.toString(), text: newTask.trim(), completed: false, priorite: 'Normale', projet: '', dateEcheance: null }]);
       setNewTask(''); setAdding(false);
     } catch {}

@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { supabase } from "../lib/supabaseClient";
 
 // ============================================================
 // CONFIGURATION DES UTILISATEURS ET PERMISSIONS
@@ -9,6 +10,7 @@ export type Role = "admin" | "assistant";
 export type PageKey = "overview" | "agenda" | "poste" | "members" | "finance" | "tasks" | "contacts";
 
 export interface User {
+  id: string;
   email: string;
   name: string;
   role: Role;
@@ -21,23 +23,13 @@ const ROLE_PERMISSIONS: Record<Role, PageKey[]> = {
   assistant: ["overview", "agenda", "poste", "tasks", "contacts"],
 };
 
-// Comptes utilisateurs (à personnaliser)
-const USERS: Array<User & { password: string }> = [
-  {
-    email: "serge@eh-me.com",
-    password: "Nathananda&babaji1969", // ← CHANGER
-    name: "Serge Evequoz",
-    role: "admin",
-    avatar: "SE",
-  },
-  {
-    email: "admin@eh-me.com",
-    password: "Ananda&babaji1969", // ← CHANGER
-    name: "Assistante",
-    role: "assistant",
-    avatar: "AS",
-  },
-];
+type UserProfile = { name: string; role: Role; avatar: string };
+
+// Profil applicatif (sans mot de passe): l'authentification est gérée par Supabase.
+const USER_PROFILES: Record<string, UserProfile> = {
+  "serge@eh-me.com": { name: "Serge Evequoz", role: "admin", avatar: "SE" },
+  "admin@eh-me.com": { name: "Assistante", role: "assistant", avatar: "AS" },
+};
 
 // ============================================================
 // TYPES ET CONTEXTE
@@ -46,7 +38,7 @@ const USERS: Array<User & { password: string }> = [
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  logout: () => void;
+  logout: () => Promise<void>;
   canAccess: (page: PageKey) => boolean;
   isLoading: boolean;
 }
@@ -61,40 +53,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Restaurer la session depuis sessionStorage (expire à la fermeture)
+  const hydrateUser = buildUserFromAuth();
+
   useEffect(() => {
-    const stored = sessionStorage.getItem("ananda_user");
-    if (stored) {
-      try {
-        setUser(JSON.parse(stored));
-      } catch {
-        sessionStorage.removeItem("ananda_user");
+    let mounted = true;
+
+    const init = async () => {
+      const { data, error } = await supabase.auth.getSession();
+      if (!mounted) return;
+      if (error) {
+        setUser(null);
+        setIsLoading(false);
+        return;
       }
-    }
-    setIsLoading(false);
+
+      const sessionUser = data.session?.user ?? null;
+      setUser(sessionUser ? hydrateUser(sessionUser.id, sessionUser.email) : null);
+      setIsLoading(false);
+    };
+
+    init();
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      const sessionUser = session?.user ?? null;
+      setUser(sessionUser ? hydrateUser(sessionUser.id, sessionUser.email) : null);
+      setIsLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
-    // Simulation d'un délai réseau (anti brute-force visuel)
-    await new Promise((r) => setTimeout(r, 600));
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
 
-    const found = USERS.find(
-      (u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password
-    );
-
-    if (!found) {
-      return { success: false, error: "Email ou mot de passe incorrect" };
+    if (error || !data.user) {
+      return { success: false, error: error?.message || "Email ou mot de passe incorrect" };
     }
 
-    const { password: _, ...userData } = found;
-    setUser(userData);
-    sessionStorage.setItem("ananda_user", JSON.stringify(userData));
+    setUser(hydrateUser(data.user.id, data.user.email));
     return { success: true };
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    sessionStorage.removeItem("ananda_user");
   };
 
   const canAccess = (page: PageKey): boolean => {
@@ -107,6 +115,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
+}
+
+function buildUserFromAuth() {
+  return (id: string, email?: string | null): User => {
+    const normalizedEmail = (email || "").toLowerCase();
+    const known = USER_PROFILES[normalizedEmail];
+
+    if (known) {
+      return {
+        id,
+        email: normalizedEmail,
+        name: known.name,
+        role: known.role,
+        avatar: known.avatar,
+      };
+    }
+
+    const localPart = normalizedEmail.split("@")[0] || "Utilisateur";
+    const displayName = localPart
+      .split(/[._-]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+    const avatar = (displayName || "U")
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0])
+      .join("")
+      .toUpperCase();
+
+    return {
+      id,
+      email: normalizedEmail,
+      name: displayName || "Utilisateur",
+      role: "assistant",
+      avatar: avatar || "U",
+    };
+  };
 }
 
 // ============================================================

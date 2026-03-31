@@ -4,11 +4,7 @@ import {
   RotateCcw, Calendar, Columns, Clock, ChevronLeft,
   ChevronRight, X, ChevronDown, ChevronRight as ChevronR, Pencil, Trash2
 } from 'lucide-react';
-
-const BASEROW_URL = 'https://baserow.ananda-communaute.cloud/api';
-const TOKEN = 'GBLdzaCZvQUVXkCqSls3WX3dT3uVg0H8';
-const TABLE_ID = 536;
-const HEADERS = { 'Authorization': `Token ${TOKEN}`, 'Content-Type': 'application/json' };
+import { createTaskLegacy, deleteTaskLegacy, listTaskRows, updateTaskLegacy } from '../data/supabaseApi';
 
 const PROJETS = ['', 'Formation', 'Cours en ligne', 'Admin', 'Recrutement', 'Publications', 'Routines'];
 const PRIORITES = ['Normale', 'Haute', 'Basse'];
@@ -126,17 +122,11 @@ function TaskModal({ onClose, onSave, onUpdate, mode, task, defaultStatut = 'À 
       if (parentTask) body['Tâche parente'] = [parentTask.id];
 
       if (mode === 'edit' && task) {
-        const res = await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_ID}/${task.id}/?user_field_names=true`, {
-          method: 'PATCH', headers: HEADERS, body: JSON.stringify(body),
-        });
-        if (!res.ok) { const e = await res.json(); throw new Error(JSON.stringify(e)); }
-        onUpdate(await res.json());
+        const updated = await updateTaskLegacy(task.id, body);
+        onUpdate(updated);
       } else {
-        const res = await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_ID}/?user_field_names=true`, {
-          method: 'POST', headers: HEADERS, body: JSON.stringify(body),
-        });
-        if (!res.ok) { const e = await res.json(); throw new Error(JSON.stringify(e)); }
-        onSave(await res.json());
+        const created = await createTaskLegacy(body);
+        onSave(created);
       }
     } catch (e: any) { setError('Erreur : ' + e.message); setSaving(false); }
   }
@@ -657,9 +647,7 @@ export const Taches = () => {
   const loadTasks = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const res = await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_ID}/?user_field_names=true&size=200`, { headers: HEADERS });
-      if (!res.ok) throw new Error(`Erreur ${res.status}`);
-      setTasks((await res.json()).results || []);
+      setTasks(await listTaskRows());
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
   }, []);
@@ -669,10 +657,7 @@ export const Taches = () => {
   async function updateStatut(id: number, statut: string) {
     setTasks(prev => prev.map(t => t.id === id ? { ...t, Statut: { id: 0, value: statut, color: '' }, Fait: statut === 'Fait' } : t));
     try {
-      await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_ID}/${id}/?user_field_names=true`, {
-        method: 'PATCH', headers: HEADERS,
-        body: JSON.stringify({ Statut: statut, Fait: statut === 'Fait' }),
-      });
+      await updateTaskLegacy(id, { Statut: statut, Fait: statut === 'Fait' });
     } catch { loadTasks(); }
   }
 
@@ -702,7 +687,7 @@ export const Taches = () => {
     if (!confirm('Supprimer cette tâche ?')) return;
     setTasks(prev => prev.filter(t => t.id !== id));
     try {
-      await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_ID}/${id}/`, { method: 'DELETE', headers: HEADERS });
+      await deleteTaskLegacy(id);
     } catch { loadTasks(); }
   }
 

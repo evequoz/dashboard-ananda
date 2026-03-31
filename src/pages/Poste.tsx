@@ -5,22 +5,22 @@ import {
   Eye, EyeOff, Sparkles, X, Paperclip, Trash2,
   FileText, ExternalLink, User, Users, SendHorizonal
 } from 'lucide-react';
+import {
+  listInboxEmails,
+  listSentEmails,
+  updateInboxEmail,
+  deleteInboxEmail,
+  deleteInboxEmailsBulk,
+  createTaskLegacy,
+  createSentEmail,
+  deleteSentEmailsBulk,
+  deleteSentEmailsOlderThanDays,
+  findAdminByEmail,
+} from '../data/supabaseApi';
 
 // Proxy n8n → évite les problèmes CORS avec l'API Systeme.io
 const SYSTEME_PROXY = 'https://n8n.ananda-communaute.cloud/webhook/systeme-proxy';
-
-const BASEROW_URL = 'https://baserow.ananda-communaute.cloud/api';
-const BASEROW_TOKEN = 'GBLdzaCZvQUVXkCqSls3WX3dT3uVg0H8';
-const TABLE_EMAILS    = 534;
-const TABLE_TACHES    = 536;
-const TABLE_SENT      = 545; // emails_envoyes
-const TABLE_ADMIN     = 544; // contacts_admin
 const N8N_SEND_WEBHOOK = 'https://n8n.ananda-communaute.cloud/webhook/send-email';
-
-const HEADERS = {
-  Authorization: `Token ${BASEROW_TOKEN}`,
-  'Content-Type': 'application/json',
-};
 
 interface BaserowFile {
   url: string;
@@ -503,19 +503,10 @@ const ContactSidePanel = ({ senderRaw }: { senderRaw: string }) => {
           setSysContact(d.items[0]);
           return;
         }
-        // 2) Fallback : cherche dans contacts_admin Baserow
-        if (TABLE_ADMIN > 0) {
-          try {
-            const r2 = await fetch(
-              `${BASEROW_URL}/database/rows/table/${TABLE_ADMIN}/?filter__Email__equal=${encodeURIComponent(email)}&user_field_names=true`,
-              { headers: HEADERS }
-            );
-            const d2 = await r2.json();
-            if (d2.results && d2.results.length > 0) {
-              setAdminContact(d2.results[0]);
-              return;
-            }
-          } catch { /* ignore */ }
+        const admin = await findAdminByEmail(email);
+        if (admin) {
+          setAdminContact(admin as any);
+          return;
         }
         setNotFound(true);
       })
@@ -679,28 +670,24 @@ export const Poste = () => {
   const [viewMode, setViewMode] = useState<'inbox' | 'sent'>('inbox');
   const [sentEmails, setSentEmails] = useState<SentEmail[]>([]);
   const [selectedSent, setSelectedSent] = useState<SentEmail | null>(null);
+  const [selectedInboxIds, setSelectedInboxIds] = useState<number[]>([]);
+  const [selectedSentIds, setSelectedSentIds] = useState<number[]>([]);
   const replyModeRef = useRef(false);
   replyModeRef.current = replyMode;
 
   const fetchEmails = useCallback(async () => {
     try {
       setRefreshing(true);
-      const res = await fetch(
-        `${BASEROW_URL}/database/rows/table/${TABLE_EMAILS}/?user_field_names=true&size=200`,
-        { headers: HEADERS }
-      );
-      const data = await res.json();
-      setEmails((data.results || []).reverse());
+      const data = await listInboxEmails(200);
+      setEmails((data || []).reverse());
     } catch (e) { console.error(e); }
     finally { setLoading(false); setRefreshing(false); }
   }, []);
 
   const fetchSentEmails = useCallback(async () => {
-    if (!TABLE_SENT) return;
     try {
-      const res = await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_SENT}/?user_field_names=true&size=200`, { headers: HEADERS });
-      const data = await res.json();
-      setSentEmails((data.results || []).reverse());
+      const data = await listSentEmails(200);
+      setSentEmails((data || []).reverse());
     } catch (e) { console.error(e); }
   }, []);
 
@@ -732,8 +719,7 @@ export const Poste = () => {
   const totalUnread = emails.filter(e => !e.Traité).length;
   const markAsTreated = async (email: Email) => {
     try {
-      await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_EMAILS}/${email.id}/?user_field_names=true`,
-        { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ Traité: true }) });
+      await updateInboxEmail(email.id, { Traité: true });
       setEmails(prev => prev.map(e => e.id === email.id ? { ...e, Traité: true } : e));
       if (selectedEmail?.id === email.id) setSelectedEmail({ ...email, Traité: true });
     } catch (e) { console.error(e); }
@@ -743,8 +729,7 @@ export const Poste = () => {
   const deleteEmail = async (email: Email) => {
     if (!confirm(`Supprimer ?\n"${email.Sujet}"`)) return;
     try {
-      await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_EMAILS}/${email.id}/`,
-        { method: 'DELETE', headers: HEADERS });
+      await deleteInboxEmail(email.id);
       setEmails(prev => prev.filter(e => e.id !== email.id));
       if (selectedEmail?.id === email.id) setSelectedEmail(null);
     } catch (e) { console.error(e); }
@@ -753,32 +738,70 @@ export const Poste = () => {
   // Suppression directe (touche Delete) sans confirm
   const deleteEmailDirect = async (email: Email) => {
     try {
-      await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_EMAILS}/${email.id}/`,
-        { method: 'DELETE', headers: HEADERS });
+      await deleteInboxEmail(email.id);
       setEmails(prev => prev.filter(e => e.id !== email.id));
       setSelectedEmail(null);
     } catch (e) { console.error(e); }
   };
 
-  // Sauvegarder un email envoyé dans Baserow
-  const saveToSent = async (from: string, to: string, cc: string, bcc: string, subject: string, body: string) => {
-    if (!TABLE_SENT) return;
+  const toggleInboxSelection = (id: number) => {
+    setSelectedInboxIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
+  };
+
+  const toggleSentSelection = (id: number) => {
+    setSelectedSentIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
+  };
+
+  const deleteSelectedInbox = async () => {
+    if (!selectedInboxIds.length) return;
+    if (!confirm(`Supprimer ${selectedInboxIds.length} email(s) sélectionné(s) ?`)) return;
     try {
-      await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_SENT}/?user_field_names=true`, {
-        method: 'POST', headers: HEADERS,
-        body: JSON.stringify({ De: from, 'À': to, CC: cc, BCC: bcc, Sujet: subject, Corps: body, Date: new Date().toISOString(), Compte: from }),
-      });
+      await deleteInboxEmailsBulk(selectedInboxIds);
+      setEmails(prev => prev.filter(e => !selectedInboxIds.includes(e.id)));
+      if (selectedEmail && selectedInboxIds.includes(selectedEmail.id)) setSelectedEmail(null);
+      setSelectedInboxIds([]);
+    } catch (e) { console.error(e); }
+  };
+
+  const deleteSelectedSent = async () => {
+    if (!selectedSentIds.length) return;
+    if (!confirm(`Supprimer ${selectedSentIds.length} mail(s) envoyé(s) sélectionné(s) ?`)) return;
+    try {
+      await deleteSentEmailsBulk(selectedSentIds);
+      setSentEmails(prev => prev.filter(e => !selectedSentIds.includes(e.id)));
+      if (selectedSent && selectedSentIds.includes(selectedSent.id)) setSelectedSent(null);
+      setSelectedSentIds([]);
+    } catch (e) { console.error(e); }
+  };
+
+  const cleanupOldSent = async () => {
+    if (!confirm('Supprimer tous les mails envoyés de plus de 30 jours pour ce compte ?')) return;
+    try {
+      await deleteSentEmailsOlderThanDays(30, activeAccount);
+      await fetchSentEmails();
+      setSelectedSentIds([]);
+      if (selectedSent) {
+        const sentDate = selectedSent.Date ? new Date(selectedSent.Date).getTime() : Date.now();
+        if (sentDate < Date.now() - (30 * 24 * 60 * 60 * 1000)) setSelectedSent(null);
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const saveToSent = async (from: string, to: string, cc: string, bcc: string, subject: string, body: string) => {
+    try {
+      await createSentEmail({ De: from, 'À': to, CC: cc, BCC: bcc, Sujet: subject, Corps: body, Date: new Date().toISOString(), Compte: from });
       fetchSentEmails();
     } catch (e) { console.error(e); }
   };
 
   const createTask = async (name: string, desc: string) => {
     try {
-      await fetch(`${BASEROW_URL}/database/rows/table/${TABLE_TACHES}/?user_field_names=true`,
-        { method: 'POST', headers: HEADERS, body: JSON.stringify({
-          Titre: name, Description: desc, Statut: 'En cours',
-          Priorité: selectedEmail?.['Action requise'] ? 'Haute' : 'Normale',
-        })});
+      await createTaskLegacy({
+        Titre: name,
+        Description: desc,
+        Statut: 'En cours',
+        Priorité: selectedEmail?.['Action requise'] ? 'Haute' : 'Normale',
+      });
       setShowTaskPopup(false);
       setTaskSuccess(true);
       setTimeout(() => setTaskSuccess(false), 3000);
@@ -898,7 +921,13 @@ export const Poste = () => {
             const isActive = activeAccount === account.email;
             return (
               <button key={account.email}
-                onClick={() => { setActiveAccount(account.email); setSelectedEmail(null); }}
+                onClick={() => {
+                  setActiveAccount(account.email);
+                  setSelectedEmail(null);
+                  setSelectedSent(null);
+                  setSelectedInboxIds([]);
+                  setSelectedSentIds([]);
+                }}
                 className={`flex items-center gap-2 px-5 py-3.5 text-sm font-semibold transition-all border-b-2 ${
                   isActive ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)] border-b-transparent hover:text-[#a0a0c0]'
                 }`}
@@ -940,6 +969,26 @@ export const Poste = () => {
             className="p-1.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] text-[#a0a0c0] hover:text-[var(--text-primary)] transition-all">
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
+          {viewMode === 'inbox' && selectedInboxIds.length > 0 && (
+            <button onClick={deleteSelectedInbox}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#d95555]/10 border border-[#d95555]/20 text-[#d95555] hover:bg-[#d95555]/20 transition-all">
+              <Trash2 className="w-3.5 h-3.5" /> Supprimer la sélection ({selectedInboxIds.length})
+            </button>
+          )}
+          {viewMode === 'sent' && (
+            <>
+              {selectedSentIds.length > 0 && (
+                <button onClick={deleteSelectedSent}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#d95555]/10 border border-[#d95555]/20 text-[#d95555] hover:bg-[#d95555]/20 transition-all">
+                  <Trash2 className="w-3.5 h-3.5" /> Supprimer la sélection ({selectedSentIds.length})
+                </button>
+              )}
+                <button onClick={cleanupOldSent}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[var(--bg-surface)] border border-[var(--border)] text-[#a0a0c0] hover:text-[var(--text-primary)] transition-all">
+                  <Trash2 className="w-3.5 h-3.5" /> Supprimer &gt; 30 jours
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -951,7 +1000,7 @@ export const Poste = () => {
           {/* Sous-onglets Reçus / Envoyés */}
           <div className="flex border-b border-[var(--border)] shrink-0">
             {(['inbox', 'sent'] as const).map(mode => (
-              <button key={mode} onClick={() => { setViewMode(mode); setSelectedEmail(null); setSelectedSent(null); }}
+              <button key={mode} onClick={() => { setViewMode(mode); setSelectedEmail(null); setSelectedSent(null); setSelectedInboxIds([]); setSelectedSentIds([]); }}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold border-b-2 transition-all ${
                   viewMode === mode
                     ? 'text-[var(--text-primary)] border-b-[var(--gold-soft)]'
@@ -982,6 +1031,13 @@ export const Poste = () => {
                   } ${email.Traité ? 'opacity-40' : ''}`}
                   style={isSelected ? { borderLeftColor: activeAccountData.color } : {}}>
                   <div className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedInboxIds.includes(email.id)}
+                      onClick={e => e.stopPropagation()}
+                      onChange={e => { e.stopPropagation(); toggleInboxSelection(email.id); }}
+                      className="mt-2 h-3.5 w-3.5 accent-[#c9a84c]"
+                    />
                     <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5"
                       style={{ background: `${activeAccountData.color}20`, color: activeAccountData.color, border: `1px solid ${activeAccountData.color}30` }}>
                       {getInitials(email['Expéditeur'] || '')}
@@ -1018,7 +1074,6 @@ export const Poste = () => {
               <div className="flex flex-col items-center justify-center h-32 gap-2">
                 <SendHorizonal className="w-8 h-8 text-[var(--text-muted)] opacity-30" />
                 <p className="text-xs text-[var(--text-muted)]">Aucun email envoyé</p>
-                {!TABLE_SENT && <p className="text-[10px] text-[#d95555] text-center px-4">⚠️ Configurer TABLE_SENT dans Poste.tsx</p>}
               </div>
             ) : filteredSent.map(sent => {
               const isSelected = selectedSent?.id === sent.id;
@@ -1026,6 +1081,14 @@ export const Poste = () => {
                 <button key={sent.id} onClick={() => setSelectedSent(sent)}
                   className={`w-full text-left p-3 border-b border-[var(--border)]/50 transition-all hover:bg-[var(--bg-surface)] ${isSelected ? 'bg-[var(--bg-card)] border-l-2' : ''}`}
                   style={isSelected ? { borderLeftColor: activeAccountData.color } : {}}>
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedSentIds.includes(sent.id)}
+                      onClick={e => e.stopPropagation()}
+                      onChange={e => { e.stopPropagation(); toggleSentSelection(sent.id); }}
+                      className="mt-1 h-3.5 w-3.5 accent-[#c9a84c]"
+                    />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-bold truncate text-[var(--text-primary)]">→ {sent['À']}</p>
                     <p className="text-xs truncate font-semibold text-[var(--text-secondary)] mb-0.5">{sent.Sujet || 'Sans sujet'}</p>
@@ -1033,6 +1096,7 @@ export const Poste = () => {
                       <Clock className="w-3 h-3 text-[var(--text-muted)]" />
                       <span className="text-[10px] text-[var(--text-muted)]">{formatDate(sent.Date)}</span>
                     </div>
+                  </div>
                   </div>
                 </button>
               );

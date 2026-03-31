@@ -1,5 +1,5 @@
 {
-  "name": "Sync Google Contacts → Baserow (100% natif)",
+  "name": "Sync Google Contacts → Supabase (100% natif)",
   "nodes": [
     {
       "parameters": {
@@ -113,29 +113,22 @@
 
     {
       "parameters": {
-        "operation": "create",
-        "tableId": 544,
-        "dataToSend": "defineBelow",
-        "fieldsUi": {
-          "fieldValues": [
-            { "fieldName": "Prénom",     "fieldValue": "={{ $json.prenom }}" },
-            { "fieldName": "Nom",        "fieldValue": "={{ $json.nom }}" },
-            { "fieldName": "Email",      "fieldValue": "={{ $json.email }}" },
-            { "fieldName": "Téléphone",  "fieldValue": "={{ $json.telephone }}" },
-            { "fieldName": "Entreprise", "fieldValue": "={{ $json.entreprise }}" },
-            { "fieldName": "Catégorie",  "fieldValue": "Admin" }
-          ]
-        }
+        "resource": "row",
+        "operation": "upsert",
+        "table": "admin_contacts",
+        "columns": "first_name,last_name,email,phone,company,category",
+        "values": "={{ [$json.prenom, $json.nom, $json.email, $json.telephone, $json.entreprise, 'Admin'] }}",
+        "onConflict": "email"
       },
       "id": "s05",
-      "name": "Baserow Créer",
-      "type": "n8n-nodes-base.baserow",
+      "name": "Supabase Upsert",
+      "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [1080, 300],
       "credentials": {
-        "baserowApi": {
-          "id": "REMPLACER_BASEROW_CRED_ID",
-          "name": "Baserow"
+        "supabaseApi": {
+          "id": "REMPLACER_SUPABASE_CRED_ID",
+          "name": "Supabase"
         }
       }
     },
@@ -164,8 +157,8 @@
     "Webhook":           { "main": [[{ "node": "Google Contacts",    "type": "main", "index": 0 }]] },
     "Google Contacts":   { "main": [[{ "node": "Normaliser Champs",  "type": "main", "index": 0 }]] },
     "Normaliser Champs": { "main": [[{ "node": "A un email ?",       "type": "main", "index": 0 }]] },
-    "A un email ?":      { "main": [[{ "node": "Baserow Créer",      "type": "main", "index": 0 }]] },
-    "Baserow Créer":     { "main": [[{ "node": "Réponse",            "type": "main", "index": 0 }]] }
+    "A un email ?":      { "main": [[{ "node": "Supabase Upsert",    "type": "main", "index": 0 }]] },
+    "Supabase Upsert":   { "main": [[{ "node": "Réponse",            "type": "main", "index": 0 }]] }
   },
 
   "active": false,
