@@ -37,6 +37,7 @@ export const Finance = () => {
   const [showForm, setShowForm] = useState(false);
   const [formType, setFormType] = useState<'Entrée' | 'Dépense'>('Entrée');
   const [saving, setSaving] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'mois' | 'archive'>('mois');
   const [recherche, setRecherche] = useState('');
@@ -67,12 +68,12 @@ export const Finance = () => {
     boxSizing: 'border-box' as const, fontFamily: 'inherit',
   };
 
-  const fetchData = async () => {
+  const fetchData = async (injectForSelectedMonth = false) => {
     setLoading(true);
     try {
       const today = new Date();
       const isCurrentMonth = filterAnnee === today.getFullYear() && filterMois === today.getMonth();
-      if (isCurrentMonth) {
+      if (injectForSelectedMonth || isCurrentMonth) {
         await ensureMonthlyFixedCharges(filterAnnee, filterMois + 1);
       }
       const [finData, budData] = await Promise.all([listFinanceEntries(), listBudgetItems()]);
@@ -98,7 +99,13 @@ export const Finance = () => {
   const entrees = mouvementsMois.filter(m => getVal(m.Type) === 'Entrée').reduce((s, m) => s + (parseFloat(String(m.Montant)) || 0), 0);
   const depenses = mouvementsMois.filter(m => getVal(m.Type) === 'Dépense').reduce((s, m) => s + (parseFloat(String(m.Montant)) || 0), 0);
   const chargesFixes = budget.reduce((s, b) => s + (parseFloat(String(b.Mensuel)) || 0), 0);
-  const balance = entrees - depenses - chargesFixes;
+  const soldeOuverture = mouvements
+    .filter(m => !!m.Date && m.Date < moisStr)
+    .reduce((s, m) => s + ((getVal(m.Type) === 'Entrée' ? 1 : -1) * (parseFloat(String(m.Montant)) || 0)), 0);
+  const soldeMois = entrees - depenses;
+  const balance = soldeOuverture + soldeMois;
+  const chargesFixesInjectees = mouvementsMois.filter(m => getVal(m.Type) === 'Dépense' && getVal(m.Source) === 'Auto')
+    .reduce((s, m) => s + (parseFloat(String(m.Montant)) || 0), 0);
 
   const mouvementsAnnee = mouvements.filter(m => {
     if (!m.Date?.startsWith(String(filterAnnee))) return false;
@@ -142,6 +149,15 @@ export const Finance = () => {
       setEditingId(null); setShowForm(false); fetchData();
     } catch (e) { console.error(e); }
     setSaving(false);
+  };
+
+  const handleRecalculateMonth = async () => {
+    setRecalculating(true);
+    try {
+      await fetchData(true);
+    } finally {
+      setRecalculating(false);
+    }
   };
 
   const exportCSV = () => {
@@ -213,7 +229,15 @@ export const Finance = () => {
           </select>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={fetchData} style={{ padding: '8px', background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: 'pointer' }}>
+          <button
+            onClick={handleRecalculateMonth}
+            disabled={recalculating}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, cursor: 'pointer', fontSize: 12, opacity: recalculating ? 0.6 : 1 }}
+          >
+            <RefreshCw size={14} style={recalculating ? { animation: 'spin 1s linear infinite' } : undefined} />
+            Réinjecter / Recalculer
+          </button>
+          <button onClick={() => fetchData(false)} style={{ padding: '8px', background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: 'pointer' }}>
             <RefreshCw size={15} />
           </button>
           <button onClick={() => { setFormType('Entrée'); setEditingId(null); setShowForm(true); }}
@@ -323,8 +347,8 @@ export const Finance = () => {
             {[
               { label: 'Entrées', value: entrees, color: C.green, icon: TrendingUp },
               { label: 'Dépenses', value: depenses, color: C.red, icon: TrendingDown },
-              { label: 'Charges fixes', value: chargesFixes, color: C.orange, icon: DollarSign, sub: `${budget.length} postes` },
-              { label: 'Balance', value: balance, color: balance >= 0 ? C.green : C.red, icon: TrendingUp, sub: 'Entrées − dépenses − fixes' },
+              { label: 'Charges fixes', value: chargesFixes, color: C.orange, icon: DollarSign, sub: `${budget.length} postes · injectées: ${fmt(chargesFixesInjectees)}` },
+              { label: 'Solde', value: balance, color: balance >= 0 ? C.green : C.red, icon: TrendingUp, sub: `Ouverture ${fmt(soldeOuverture)} + mois ${fmt(soldeMois)}` },
             ].map((card, i) => {
               const Icon = card.icon;
               return (

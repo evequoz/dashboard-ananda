@@ -546,7 +546,7 @@ const ContactSidePanel = ({ senderRaw }: { senderRaw: string }) => {
   const catColor = catColors[catVal] || '#6b7280';
 
   return (
-    <div className="w-56 shrink-0 border-l border-[var(--border)] bg-[var(--bg-surface)] flex flex-col overflow-y-auto">
+    <div className="w-44 shrink-0 border-l border-[var(--border)] bg-[var(--bg-surface)] flex flex-col overflow-y-auto">
       <div className="px-3 py-3 border-b border-[var(--border)]">
         <div className="flex items-center gap-1.5">
           <Users className="w-3.5 h-3.5 text-[#c9a84c]" />
@@ -691,6 +691,8 @@ export const Poste = () => {
   const [selectedSentIds, setSelectedSentIds] = useState<number[]>([]);
   const [selectedTrashInboxIds, setSelectedTrashInboxIds] = useState<number[]>([]);
   const [selectedTrashSentIds, setSelectedTrashSentIds] = useState<number[]>([]);
+  const [showMailList, setShowMailList] = useState(true);
+  const [showContactPanel, setShowContactPanel] = useState(true);
   const replyModeRef = useRef(false);
   replyModeRef.current = replyMode;
 
@@ -1102,6 +1104,18 @@ export const Poste = () => {
             className="p-1.5 rounded-lg bg-[var(--bg-surface)] border border-[var(--border)] text-[#a0a0c0] hover:text-[var(--text-primary)] transition-all">
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
+          <button
+            onClick={() => setShowMailList(v => !v)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[var(--bg-surface)] border border-[var(--border)] text-[#a0a0c0] hover:text-[var(--text-primary)] transition-all"
+          >
+            {showMailList ? 'Masquer liste' : 'Afficher liste'}
+          </button>
+          <button
+            onClick={() => setShowContactPanel(v => !v)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[var(--bg-surface)] border border-[var(--border)] text-[#a0a0c0] hover:text-[var(--text-primary)] transition-all"
+          >
+            {showContactPanel ? 'Masquer contact' : 'Afficher contact'}
+          </button>
           {viewMode === 'inbox' && selectedInboxIds.length > 0 && (
             <button onClick={deleteSelectedInbox}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#d95555]/10 border border-[#d95555]/20 text-[#d95555] hover:bg-[#d95555]/20 transition-all">
@@ -1183,6 +1197,7 @@ export const Poste = () => {
       <div className="flex flex-1 overflow-hidden">
 
         {/* Liste emails */}
+        {showMailList && (
         <div className="flex flex-col border-r border-[var(--border)] bg-[var(--bg-main)] shrink-0" style={{ width: '300px' }}>
           {/* Sous-onglets Reçus / Envoyés */}
           <div className="flex border-b border-[var(--border)] shrink-0">
@@ -1356,6 +1371,7 @@ export const Poste = () => {
             ))}
           </div>
         </div>
+        )}
 
         {/* Détail email */}
         <div className="flex-1 flex bg-[var(--bg-main)] overflow-hidden">
@@ -1573,14 +1589,17 @@ export const Poste = () => {
                         {showFullContent ? 'Réduire' : 'Voir tout'}
                       </button>
                     </div>
-                    <div className={`text-sm text-[#d0ccc0] leading-relaxed whitespace-pre-wrap ${!showFullContent ? 'line-clamp-5' : ''}`}>
+                    <div
+                      className={`text-sm leading-relaxed whitespace-pre-wrap ${!showFullContent ? 'line-clamp-5' : ''}`}
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
                       {cleanContent(selectedEmail.Contenu)}
                     </div>
                   </div>
                 )}
               </div>
             </div>
-            <ContactSidePanel senderRaw={selectedEmail['Expéditeur'] || ''} />
+            {showContactPanel && <ContactSidePanel senderRaw={selectedEmail['Expéditeur'] || ''} />}
             </>
           ))}
         </div>

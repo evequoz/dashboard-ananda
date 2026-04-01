@@ -617,7 +617,7 @@ function TodayView({ tasks, onStatusChange, onEdit, onDelete, onAddSubTask }: {
   });
 
   const overdue = todayTasks.filter(t => isOverdue(t));
-  const inprogress = parentTasks.filter(t => getVal(t.Statut) === 'En cours' && !isOverdue(t));
+  const inprogress = todayTasks.filter(t => getVal(t.Statut) === 'En cours' && !isOverdue(t));
   const pending = todayTasks.filter(t => getVal(t.Statut) === 'À faire' && !isOverdue(t));
   const done = todayTasks.filter(t => getVal(t.Statut) === 'Fait');
 
@@ -633,7 +633,7 @@ function TodayView({ tasks, onStatusChange, onEdit, onDelete, onAddSubTask }: {
         <div className="space-y-2">
           {items.map(t => (
             <TaskCard key={t.id} task={t} getChildren={getChildren}
-              onStatusChange={onStatusChange} onEdit={onEdit} onDelete={onDelete} onAddSubTask={onAddSubTask} compact />
+              onStatusChange={onStatusChange} onEdit={onEdit} onDelete={onDelete} onAddSubTask={onAddSubTask} />
           ))}
         </div>
       </div>
