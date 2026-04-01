@@ -145,7 +145,7 @@ export const Overview = () => {
 
   const eventsByDay: Record<string, any[]> = {};
   events.forEach(e => { const k = new Date(e.start?.dateTime || e.start?.date).toDateString(); if (!eventsByDay[k]) eventsByDay[k] = []; eventsByDay[k].push(e); });
-  const agendaMaxHeight = events.length <= 2 ? 220 : 360;
+  const agendaPanelHeight = events.length <= 2 ? '48vh' : '62vh';
 
   return (
     <div style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
@@ -213,7 +213,7 @@ export const Overview = () => {
       </div>
 
       {/* ── GRILLE ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
 
         {/* ══ AGENDA ══ */}
         <div className="ov-card" style={{ padding: 22 }}>
@@ -227,7 +227,7 @@ export const Overview = () => {
             </div>
           </div>
 
-          <div className="ov-scroll" style={{ overflowY: 'auto', maxHeight: agendaMaxHeight, display: 'flex', flexDirection: 'column', gap: 12, paddingRight: 4 }}>
+          <div className="ov-scroll" style={{ overflowY: 'auto', height: agendaPanelHeight, display: 'flex', flexDirection: 'column', gap: 12, paddingRight: 4 }}>
             {Object.keys(eventsByDay).length === 0 ? (
               <div style={{ padding: '32px 16px', textAlign: 'center', border: '1px dashed var(--border)', borderRadius: 10 }}>
                 <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>Aucun événement cette semaine</p>
