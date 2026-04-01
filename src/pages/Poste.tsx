@@ -745,7 +745,6 @@ export const Poste = () => {
     && trashedSent.every(e => selectedTrashSentIds.includes(e.id));
 
   const unreadCount = (acc: string) => emails.filter(e => normalizeAccountEmail(e.Compte) === acc && !e.Traité && !e['Supprimé le']).length;
-  const totalUnread = emails.filter(e => !e.Traité && !e['Supprimé le']).length;
   const markAsTreated = async (email: Email) => {
     try {
       await updateInboxEmail(email.id, { Traité: true });
@@ -1083,11 +1082,6 @@ export const Poste = () => {
               <CheckCircle className="w-3 h-3" /> Tâche créée
             </span>
           )}
-          {totalUnread > 0 && (
-            <span className="px-2 py-0.5 bg-[#d95555]/20 border border-[#d95555]/30 rounded-full text-xs font-bold text-[#d95555]">
-              {totalUnread} non traités
-            </span>
-          )}
           <button onClick={() => setShowTreated(!showTreated)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
               showTreated ? 'bg-[#c9a84c]/20 border-[#c9a84c]/40 text-[#c9a84c]' : 'bg-[var(--bg-surface)] border-[var(--border)] text-[#a0a0c0] hover:text-[var(--text-primary)]'
@@ -1124,28 +1118,12 @@ export const Poste = () => {
               <Trash2 className="w-3.5 h-3.5" /> Corbeille ({selectedInboxIds.length})
             </button>
           )}
-          {viewMode === 'inbox' && filteredEmails.length > 0 && (
-            <button
-              onClick={() => setSelectedInboxIds(allInboxSelected ? [] : filteredEmails.map(e => e.id))}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[var(--bg-surface)] border border-[var(--border)] text-[#a0a0c0] hover:text-[var(--text-primary)] transition-all"
-            >
-              {allInboxSelected ? 'Tout désélectionner' : `Tout sélectionner (${filteredEmails.length})`}
-            </button>
-          )}
           {viewMode === 'sent' && (
             <>
               {selectedSentIds.length > 0 && (
                 <button onClick={deleteSelectedSent}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#d95555]/10 border border-[#d95555]/20 text-[#d95555] hover:bg-[#d95555]/20 transition-all">
                   <Trash2 className="w-3.5 h-3.5" /> Corbeille ({selectedSentIds.length})
-                </button>
-              )}
-              {filteredSent.length > 0 && (
-                <button
-                  onClick={() => setSelectedSentIds(allSentSelected ? [] : filteredSent.map(e => e.id))}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[var(--bg-surface)] border border-[var(--border)] text-[#a0a0c0] hover:text-[var(--text-primary)] transition-all"
-                >
-                  {allSentSelected ? 'Tout désélectionner' : `Tout sélectionner (${filteredSent.length})`}
                 </button>
               )}
                 <button onClick={cleanupOldSent}
@@ -1156,22 +1134,6 @@ export const Poste = () => {
           )}
           {viewMode === 'trash' && (
             <>
-              {(trashedInbox.length + trashedSent.length) > 0 && (
-                <button
-                  onClick={() => {
-                    if (allTrashSelected) {
-                      setSelectedTrashInboxIds([]);
-                      setSelectedTrashSentIds([]);
-                    } else {
-                      setSelectedTrashInboxIds(trashedInbox.map(e => e.id));
-                      setSelectedTrashSentIds(trashedSent.map(e => e.id));
-                    }
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[var(--bg-surface)] border border-[var(--border)] text-[#a0a0c0] hover:text-[var(--text-primary)] transition-all"
-                >
-                  {allTrashSelected ? 'Tout désélectionner' : `Tout sélectionner (${trashedInbox.length + trashedSent.length})`}
-                </button>
-              )}
               {(selectedTrashInboxIds.length + selectedTrashSentIds.length) > 0 && (
                 <button onClick={restoreSelectedTrash}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#4caf7d]/10 border border-[#4caf7d]/20 text-[#4caf7d] hover:bg-[#4caf7d]/20 transition-all">

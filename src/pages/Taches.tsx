@@ -415,12 +415,12 @@ function TaskCard({ task, getChildren, onStatusChange, onEdit, onDelete, onAddSu
   }
 
   return (
-    <div className={`rounded-xl border transition-all duration-200
+    <div className={`rounded-lg border transition-all duration-200
       ${done ? 'border-[#1a1a2e] opacity-60' : overdue ? 'border-amber-800/40' : 'border-[var(--border)] hover:border-[#33335a]'}
       bg-[var(--bg-card)] group`}>
 
       {/* Ligne principale */}
-      <div className="flex items-start gap-2 p-3">
+      <div className="flex items-start gap-2 p-2.5">
         {/* Toggle sous-tâches */}
         <button onClick={() => hasSubs && !compact && setExpanded(e => !e)}
           className={`mt-0.5 flex-shrink-0 transition-colors ${hasSubs && !compact ? 'text-[var(--text-muted)] hover:text-[var(--text-primary)]' : 'text-transparent cursor-default'}`}>
@@ -452,7 +452,7 @@ function TaskCard({ task, getChildren, onStatusChange, onEdit, onDelete, onAddSu
               </span>
             )}
           </div>
-          {!compact && task.Description && (
+          {!compact && expanded && task.Description && (
             <p className="text-xs text-[var(--text-muted)] mt-1 line-clamp-2">{task.Description}</p>
           )}
           <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -490,8 +490,8 @@ function TaskCard({ task, getChildren, onStatusChange, onEdit, onDelete, onAddSu
       </div>
 
       {/* Barre progression */}
-      {hasSubs && !compact && (
-        <div className="px-3 pb-1">
+      {hasSubs && expanded && !compact && (
+        <div className="px-2.5 pb-1">
           <div className="w-full bg-[var(--bg-surface)] rounded-full h-1 overflow-hidden">
             <div className="bg-[#4caf7d] h-full rounded-full transition-all duration-300"
               style={{ width: `${(doneSubs / subTasks.length) * 100}%` }} />
@@ -501,7 +501,7 @@ function TaskCard({ task, getChildren, onStatusChange, onEdit, onDelete, onAddSu
 
       {/* Sous-tâches */}
       {hasSubs && expanded && !compact && (
-        <div className="border-t border-[#1a1a2e] mx-3 mb-1 pt-2 space-y-1">
+        <div className="border-t border-[#1a1a2e] mx-2.5 mb-1 pt-2 space-y-1">
           {subTasks.map(sub => (
             <div key={sub.id} className="pl-3 border-l border-[#1f1f35]/80">
               <TaskCard
@@ -520,8 +520,8 @@ function TaskCard({ task, getChildren, onStatusChange, onEdit, onDelete, onAddSu
       )}
 
       {/* Bouton ajouter sous-tâche — toujours visible si pas compact */}
-      {!compact && onAddSubTask && (
-        <div className="px-3 pb-2.5 pt-1">
+      {!compact && onAddSubTask && expanded && (
+        <div className="px-2.5 pb-2 pt-1">
           <button onClick={() => onAddSubTask(task)}
             className="flex items-center gap-1.5 text-[11px] text-[var(--text-muted)] hover:text-[#c9a84c] transition-colors px-2 py-1 rounded-lg hover:bg-[var(--border)]">
             <Plus className="w-3 h-3" />

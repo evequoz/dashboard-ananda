@@ -390,12 +390,16 @@ export const ensureMonthlyFixedCharges = async (year: number, month: number) => 
 
   const { data: budgetItems, error: budgetError } = await supabase
     .from('budget_items')
-    .select('id,label,monthly_amount,category,active')
-    .eq('active', true);
+    .select('id,label,monthly_amount,category,active');
   if (budgetError) throw budgetError;
 
-  const rowsToInsert = (budgetItems || [])
-    .filter((item: any) => Number(item.monthly_amount || 0) > 0)
+  const activeBudgetItems = (budgetItems || []).filter((item: any) => {
+    const active = item?.active;
+    return active === true || active === 'VRAI' || active === 'true' || active === 1;
+  });
+
+  const rowsToInsert = activeBudgetItems
+    .filter((item: any) => Number(item.monthly_amount || 0) > 0 && String(item.label || '').trim())
     .map((item: any) => ({
       invoice_date: monthStart,
       payment_date: null,
@@ -411,12 +415,13 @@ export const ensureMonthlyFixedCharges = async (year: number, month: number) => 
 
   if (!rowsToInsert.length) return 0;
 
-  const { error } = await supabase
+  const { error, data } = await supabase
     .from('finance_entries')
-    .upsert(rowsToInsert, { onConflict: 'auto_key', ignoreDuplicates: true });
+    .upsert(rowsToInsert, { onConflict: 'auto_key' })
+    .select('id');
   if (error) throw error;
 
-  return rowsToInsert.length;
+  return (data || []).length;
 };
 
 // Compat layer from former baserowApi.ts
