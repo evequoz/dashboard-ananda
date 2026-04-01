@@ -19,7 +19,9 @@ const fmt = (n: number) => Math.round(n).toLocaleString('fr-CH') + ' CHF';
 const getVal = (field: any) => (field as any)?.value ?? field ?? '';
 const isActiveBudget = (value: any) => {
   const str = String(value ?? '').trim().toLowerCase();
-  return value === true || value === 1 || ['vrai', 'true', '1', 'yes', 'oui'].includes(str);
+  if ([false, 0].includes(value)) return false;
+  if (['false', 'faux', '0', 'no', 'non'].includes(str)) return false;
+  return true;
 };
 
 type Mouvement = {

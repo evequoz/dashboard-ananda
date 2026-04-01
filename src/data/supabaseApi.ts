@@ -400,7 +400,9 @@ export const ensureMonthlyFixedCharges = async (year: number, month: number) => 
   const activeBudgetItems = (budgetItems || []).filter((item: any) => {
     const activeRaw = item?.active;
     const activeStr = String(activeRaw ?? '').trim().toLowerCase();
-    return activeRaw === true || activeRaw === 1 || ['vrai', 'true', '1', 'yes', 'oui'].includes(activeStr);
+    if ([false, 0].includes(activeRaw)) return false;
+    if (['false', 'faux', '0', 'no', 'non'].includes(activeStr)) return false;
+    return true;
   });
 
   const { data: existingAutoRows, error: existingError } = await supabase

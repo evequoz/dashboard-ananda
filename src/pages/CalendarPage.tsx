@@ -593,6 +593,19 @@ export const CalendarPage = () => {
     const end = new Date(start); end.setDate(start.getDate() + 6);
     return d >= start && d <= end;
   });
+  const timedEvents = events.filter(e => !!e.start && !e.allDay);
+  const hourBounds = timedEvents.reduce((acc, e) => {
+    const s = new Date(e.start).getHours();
+    const eHour = e.end ? new Date(e.end).getHours() : s + 1;
+    return {
+      min: Math.min(acc.min, s),
+      max: Math.max(acc.max, eHour),
+    };
+  }, { min: 8, max: 18 });
+  const slotMinHour = Math.max(6, hourBounds.min - 1);
+  const slotMaxHour = Math.min(22, hourBounds.max + 2);
+  const slotMinTime = `${String(slotMinHour).padStart(2, '0')}:00:00`;
+  const slotMaxTime = `${String(slotMaxHour).padStart(2, '0')}:00:00`;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', padding: '12px 16px', height: 'calc(100vh - 70px)', background: C.bg, fontFamily: "'Outfit', sans-serif" }}>
@@ -649,8 +662,8 @@ export const CalendarPage = () => {
             events={events}
             headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay' }}
             height="100%"
-            slotMinTime="07:00:00"
-            slotMaxTime="22:00:00"
+            slotMinTime={slotMinTime}
+            slotMaxTime={slotMaxTime}
             nowIndicator={true}
             selectable={true}
             editable={true}
