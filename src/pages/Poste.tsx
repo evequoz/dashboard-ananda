@@ -700,7 +700,7 @@ export const Poste = () => {
     try {
       setRefreshing(true);
       const data = await listInboxEmails(400, true);
-      setEmails((data || []).reverse());
+      setEmails(data || []);
     } catch (e) { console.error(e); }
     finally { setLoading(false); setRefreshing(false); }
   }, []);
@@ -708,7 +708,7 @@ export const Poste = () => {
   const fetchSentEmails = useCallback(async () => {
     try {
       const data = await listSentEmails(400, true);
-      setSentEmails((data || []).reverse());
+      setSentEmails(data || []);
     } catch (e) { console.error(e); }
   }, []);
 
@@ -1106,15 +1106,17 @@ export const Poste = () => {
           </button>
           <button
             onClick={() => setShowMailList(v => !v)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[var(--bg-surface)] border border-[var(--border)] text-[#a0a0c0] hover:text-[var(--text-primary)] transition-all"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#a0a0c0] hover:text-[var(--text-primary)] bg-[var(--bg-surface)] border border-[var(--border)] transition-all"
+            title={showMailList ? 'Masquer liste' : 'Afficher liste'}
           >
-            {showMailList ? 'Masquer liste' : 'Afficher liste'}
+            <Mail className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={() => setShowContactPanel(v => !v)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[var(--bg-surface)] border border-[var(--border)] text-[#a0a0c0] hover:text-[var(--text-primary)] transition-all"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#a0a0c0] hover:text-[var(--text-primary)] bg-[var(--bg-surface)] border border-[var(--border)] transition-all"
+            title={showContactPanel ? 'Masquer contact' : 'Afficher contact'}
           >
-            {showContactPanel ? 'Masquer contact' : 'Afficher contact'}
+            <Users className="w-3.5 h-3.5" />
           </button>
           {viewMode === 'inbox' && selectedInboxIds.length > 0 && (
             <button onClick={deleteSelectedInbox}
@@ -1240,8 +1242,11 @@ export const Poste = () => {
                 <button key={email.id} onClick={() => openEmail(email)}
                   className={`w-full text-left p-3 border-b border-[var(--border)]/50 transition-all hover:bg-[var(--bg-surface)] ${
                     isSelected ? 'bg-[var(--bg-card)] border-l-2' : ''
-                  } ${email.Traité ? 'opacity-40' : ''}`}
-                  style={isSelected ? { borderLeftColor: activeAccountData.color } : {}}>
+                  } ${email.Traité ? 'opacity-55' : ''}`}
+                  style={{
+                    borderLeftColor: isSelected ? activeAccountData.color : (!email.Traité ? '#d4b060' : undefined),
+                    background: !email.Traité && !isSelected ? 'rgba(212,176,96,0.06)' : undefined,
+                  }}>
                   <div className="flex items-start gap-2">
                     <input
                       type="checkbox"
@@ -1260,6 +1265,11 @@ export const Poste = () => {
                           {email['Expéditeur']?.replace(/<.*>/, '').replace(/"/g, '').trim() || 'Inconnu'}
                         </p>
                         <div className="flex items-center gap-0.5 shrink-0">
+                          {!email.Traité && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#d4b060]/20 border border-[#d4b060]/35 text-[#d4b060]">
+                              NON LU
+                            </span>
+                          )}
                           {emailFiles.length > 0 && <Paperclip className="w-3 h-3 text-[var(--text-muted)]" />}
                           {hasSuggestions(email) && <Sparkles className="w-3 h-3 text-[#7b5ea7]" />}
                           {email['Converti en tâche'] && <CheckCircle className="w-3 h-3 text-[#4caf7d]" />}
