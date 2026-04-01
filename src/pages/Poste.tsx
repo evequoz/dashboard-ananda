@@ -693,8 +693,29 @@ export const Poste = () => {
   const [selectedTrashSentIds, setSelectedTrashSentIds] = useState<number[]>([]);
   const [showMailList, setShowMailList] = useState(true);
   const [showContactPanel, setShowContactPanel] = useState(true);
+  const [readInboxIds, setReadInboxIds] = useState<number[]>([]);
   const replyModeRef = useRef(false);
   replyModeRef.current = replyMode;
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('dashboard-read-inbox-ids');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) setReadInboxIds(parsed.filter((id: any) => Number.isFinite(Number(id))).map((id: any) => Number(id)));
+    } catch {
+      // Ignore corrupted local state.
+    }
+  }, []);
+
+  const markEmailAsRead = (id: number) => {
+    setReadInboxIds(prev => {
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id];
+      localStorage.setItem('dashboard-read-inbox-ids', JSON.stringify(next));
+      return next;
+    });
+  };
 
   const fetchEmails = useCallback(async () => {
     try {
@@ -1008,6 +1029,7 @@ export const Poste = () => {
 
   const openEmail = (email: Email) => {
     setSelectedEmail(email);
+    markEmailAsRead(email.id);
     setReplyMode(false);
     setShowFullContent(false);
     setSendStatus('idle');
@@ -1199,15 +1221,16 @@ export const Poste = () => {
               </div>
             ) : filteredEmails.map(email => {
               const isSelected = selectedEmail?.id === email.id;
+              const isRead = email.Traité || readInboxIds.includes(email.id);
               const emailFiles: BaserowFile[] = email['Fichier'] || [];
               return (
                 <button key={email.id} onClick={() => openEmail(email)}
                   className={`w-full text-left p-3 border-b border-[var(--border)]/50 transition-all hover:bg-[var(--bg-surface)] ${
                     isSelected ? 'bg-[var(--bg-card)] border-l-2' : ''
-                  } ${email.Traité ? 'opacity-55' : ''}`}
+                  } ${isRead ? 'opacity-55' : ''}`}
                   style={{
-                    borderLeftColor: isSelected ? activeAccountData.color : (!email.Traité ? '#d4b060' : undefined),
-                    background: !email.Traité && !isSelected ? 'rgba(212,176,96,0.06)' : undefined,
+                    borderLeftColor: isSelected ? activeAccountData.color : (!isRead ? '#d4b060' : undefined),
+                    background: !isRead && !isSelected ? 'rgba(212,176,96,0.06)' : undefined,
                   }}>
                   <div className="flex items-start gap-2">
                     <input
@@ -1223,11 +1246,11 @@ export const Poste = () => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1 mb-0.5">
-                        <p className={`text-xs font-bold truncate ${!email.Traité ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+                        <p className={`text-xs font-bold truncate ${!isRead ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
                           {email['Expéditeur']?.replace(/<.*>/, '').replace(/"/g, '').trim() || 'Inconnu'}
                         </p>
                         <div className="flex items-center gap-0.5 shrink-0">
-                          {!email.Traité && (
+                          {!isRead && (
                             <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#d4b060]/20 border border-[#d4b060]/35 text-[#d4b060]">
                               NON LU
                             </span>
@@ -1239,7 +1262,7 @@ export const Poste = () => {
                           {email.Traité && <CheckCircle className="w-3 h-3 text-[#4caf7d]" />}
                         </div>
                       </div>
-                      <p className={`text-xs truncate mb-0.5 font-semibold ${!email.Traité ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+                      <p className={`text-xs truncate mb-0.5 font-semibold ${!isRead ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
                         {email.Sujet || 'Sans sujet'}
                       </p>
                       <p className="text-[10px] text-[var(--text-muted)] line-clamp-2 leading-relaxed">

@@ -369,7 +369,7 @@ export const updateFinanceEntry = async (id: number, payload: Record<string, any
 };
 
 export const createFinanceEntry = async (payload: Record<string, any>) => {
-  const { error } = await supabase.from('finance_entries').insert({
+  const insertPayload: Record<string, any> = {
     invoice_date: payload.Date,
     payment_date: payload['Date paiement'] ?? null,
     label: payload.Libellé,
@@ -379,14 +379,18 @@ export const createFinanceEntry = async (payload: Record<string, any>) => {
     category: payload.Catégorie,
     notes: payload.Notes ?? '',
     validated: payload.Validé ?? true,
-    auto_key: payload['Clé auto'] ?? null,
-  });
+  };
+  if (payload['Clé auto']) insertPayload.auto_key = payload['Clé auto'];
+
+  const { error } = await supabase.from('finance_entries').insert(insertPayload);
   if (error) throw error;
 };
 
 export const ensureMonthlyFixedCharges = async (year: number, month: number) => {
   const mm = String(month).padStart(2, '0');
   const monthStart = `${year}-${mm}-01`;
+  const nextMonth = new Date(year, month, 1);
+  const nextMonthStart = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}-01`;
 
   const { data: budgetItems, error: budgetError } = await supabase
     .from('budget_items')
@@ -394,31 +398,49 @@ export const ensureMonthlyFixedCharges = async (year: number, month: number) => 
   if (budgetError) throw budgetError;
 
   const activeBudgetItems = (budgetItems || []).filter((item: any) => {
-    const active = item?.active;
-    return active === true || active === 'VRAI' || active === 'true' || active === 1;
+    const activeRaw = item?.active;
+    const activeStr = String(activeRaw ?? '').trim().toLowerCase();
+    return activeRaw === true || activeRaw === 1 || ['vrai', 'true', '1', 'yes', 'oui'].includes(activeStr);
   });
+
+  const { data: existingAutoRows, error: existingError } = await supabase
+    .from('finance_entries')
+    .select('id,label,amount,invoice_date,source,type')
+    .gte('invoice_date', monthStart)
+    .lt('invoice_date', nextMonthStart)
+    .eq('type', 'Dépense')
+    .eq('source', 'Auto');
+  if (existingError) throw existingError;
+
+  const existingKeys = new Set(
+    (existingAutoRows || []).map((row: any) => {
+      const label = String(row.label || '').trim().toLowerCase();
+      const amount = Number(row.amount || 0).toFixed(2);
+      return `${label}|${amount}`;
+    }),
+  );
 
   const rowsToInsert = activeBudgetItems
     .filter((item: any) => Number(item.monthly_amount || 0) > 0 && String(item.label || '').trim())
+    .filter((item: any) => {
+      const key = `${String(item.label || '').trim().toLowerCase()}|${Number(item.monthly_amount || 0).toFixed(2)}`;
+      return !existingKeys.has(key);
+    })
     .map((item: any) => ({
       invoice_date: monthStart,
       payment_date: null,
-      label: item.label,
+      label: String(item.label || '').trim(),
       amount: item.monthly_amount,
       type: 'Dépense',
       source: 'Auto',
       category: item.category || 'Divers',
       notes: `Charge fixe automatique ${year}-${mm}`,
       validated: true,
-      auto_key: `fixed-${year}-${mm}-${item.id}`,
     }));
 
   if (!rowsToInsert.length) return 0;
 
-  const { error, data } = await supabase
-    .from('finance_entries')
-    .upsert(rowsToInsert, { onConflict: 'auto_key' })
-    .select('id');
+  const { error, data } = await supabase.from('finance_entries').insert(rowsToInsert).select('id');
   if (error) throw error;
 
   return (data || []).length;
