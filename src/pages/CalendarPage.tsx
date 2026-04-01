@@ -595,7 +595,7 @@ export const CalendarPage = () => {
   });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', padding: '12px 16px', height: '100%', minHeight: 0, boxSizing: 'border-box', background: C.bg, fontFamily: "'Outfit', sans-serif" }}>
+    <div style={{ display: 'flex', flexDirection: 'column', padding: '12px 16px', height: 'calc(100vh - 70px)', background: C.bg, fontFamily: "'Outfit', sans-serif" }}>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderRadius: 14, overflow: 'hidden', border: `1px solid ${C.border}`, boxShadow: '0 8px 40px rgba(0,0,0,0.4)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 18px', background: C.surface, borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

@@ -141,6 +141,7 @@ export const Overview = () => {
     if (focusFilter === 'waiting') return waitingTasks;
     return tachesFiltrees;
   })();
+  const tachesApercu = tachesAffichees.slice(0, 6);
 
   const eventsByDay: Record<string, any[]> = {};
   events.forEach(e => { const k = new Date(e.start?.dateTime || e.start?.date).toDateString(); if (!eventsByDay[k]) eventsByDay[k] = []; eventsByDay[k].push(e); });
@@ -283,7 +284,9 @@ export const Overview = () => {
               </div>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Tâches à faire</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>{tachesAffichees.length} tâche{tachesAffichees.length !== 1 ? 's' : ''} en attente</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>
+                  {tachesAffichees.length} tâche{tachesAffichees.length !== 1 ? 's' : ''} en attente
+                </div>
               </div>
             </div>
 
@@ -330,7 +333,7 @@ export const Overview = () => {
               })}
             </div>
 
-            <div className="ov-scroll" style={{ overflowY: 'auto', maxHeight: 180, display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 10 }}>
               {loading ? (
                 <p style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: '20px 0' }}>Chargement...</p>
               ) : tachesAffichees.length === 0 ? (
@@ -338,7 +341,7 @@ export const Overview = () => {
                   <CheckCircle size={20} color="#4caf7d" style={{ margin: '0 auto 8px' }} />
                   <p style={{ fontSize: 13, color: '#5dc98d', margin: 0, fontWeight: 600 }}>Tout est fait ✓</p>
                 </div>
-              ) : tachesAffichees.map(t => (
+              ) : tachesApercu.map(t => (
                 <div key={t.id} onClick={() => openTaskInTasksPage(t.id)} className="ov-task" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer', transition: 'all 0.15s' }}>
                   <button
                     onClick={(e) => { e.stopPropagation(); toggleTache(t.id); }}
@@ -352,6 +355,14 @@ export const Overview = () => {
                   </div>
                 </div>
               ))}
+              {!loading && tachesAffichees.length > 6 && (
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent('dashboard:navigate', { detail: { page: 'tasks' } }))}
+                  style={{ marginTop: 4, border: '1px dashed var(--border)', background: 'transparent', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer' }}
+                >
+                  Voir {tachesAffichees.length - 6} tâche(s) de plus
+                </button>
+              )}
             </div>
 
             {adding ? (

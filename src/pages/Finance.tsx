@@ -17,6 +17,10 @@ const MOIS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août'
 const now = new Date();
 const fmt = (n: number) => Math.round(n).toLocaleString('fr-CH') + ' CHF';
 const getVal = (field: any) => (field as any)?.value ?? field ?? '';
+const isActiveBudget = (value: any) => {
+  const str = String(value ?? '').trim().toLowerCase();
+  return value === true || value === 1 || ['vrai', 'true', '1', 'yes', 'oui'].includes(str);
+};
 
 type Mouvement = {
   id: number; Date: string; 'Date paiement': string;
@@ -75,7 +79,7 @@ export const Finance = () => {
       await ensureMonthlyFixedCharges(filterAnnee, filterMois + 1);
       const [finData, budData] = await Promise.all([listFinanceEntries(), listBudgetItems()]);
       setMouvements(finData || []);
-      setBudget((budData || []).filter((r: BudgetLigne) => r.Actif === true || r.Actif === 'VRAI'));
+      setBudget((budData || []).filter((r: BudgetLigne) => isActiveBudget(r.Actif)));
     } catch (e) { console.error(e); }
     setLoading(false);
   };
