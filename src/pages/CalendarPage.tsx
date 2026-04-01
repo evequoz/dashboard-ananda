@@ -48,6 +48,13 @@ const extractCalendarItems = (payload: any): any[] => {
   return [];
 };
 
+const normalizeCalendarItem = (raw: any): any => {
+  if (!raw) return null;
+  const candidate = raw.json ?? raw.data ?? raw.event ?? raw;
+  if (candidate?.start || candidate?.end || candidate?.summary || candidate?.title) return candidate;
+  return null;
+};
+
 const DEFAULT_EVENT_TYPES = [
   { label: 'Live / Q&A', color: '#4caf7d', bg: '#4caf7d18' },
   { label: 'Formation', color: '#5588d0', bg: '#5588d018' },
@@ -453,6 +460,7 @@ export const CalendarPage = () => {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [newEventDate, setNewEventDate] = useState<string | null>(null);
   const [showTypesManager, setShowTypesManager] = useState(false);
@@ -470,13 +478,18 @@ export const CalendarPage = () => {
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
+    setSyncError(null);
     try {
       const res = await fetch('https://n8n.ananda-communaute.cloud/webhook/get-calendar');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const rawEvents = extractCalendarItems(data);
 
       if (rawEvents.length) {
-        const formatted = rawEvents.map((item: any) => {
+        const formatted = rawEvents
+          .map((raw: any) => normalizeCalendarItem(raw))
+          .filter((item: any) => !!item && !!(item.start?.dateTime || item.start?.date || item.start))
+          .map((item: any) => {
           const isAllDay = !item.start?.dateTime;
           const isFree = item.transparency === 'transparent';
           const eventType = item.extendedProperties?.private?.eventType || '';
@@ -495,10 +508,10 @@ export const CalendarPage = () => {
 
           return {
             id: item.id || `evt-${Math.random()}`,
-            title: item.summary || item.events || 'Événement',
+            title: item.summary || item.title || item.events || 'Événement',
             allDay: isAllDay,
-            start: item.start?.dateTime || item.start?.date,
-            end: item.end?.dateTime || item.end?.date,
+            start: item.start?.dateTime || item.start?.date || item.start,
+            end: item.end?.dateTime || item.end?.date || item.end,
             // Couleur basée sur le calendrier
             backgroundColor: isFree ? 'transparent' : calColor.bg,
             borderColor: calColor.color,
@@ -516,17 +529,25 @@ export const CalendarPage = () => {
         });
         setEvents(formatted);
         setLastSync(new Date());
+        try { localStorage.setItem('ananda-calendar-cache', JSON.stringify(formatted)); } catch {}
       } else if (Array.isArray(data) && data.length === 0) {
         // Keep explicit empty array behavior when upstream really has no events.
         setEvents([]);
         setLastSync(new Date());
+        try { localStorage.setItem('ananda-calendar-cache', JSON.stringify([])); } catch {}
       } else {
-        setEvents([]);
-        setLastSync(new Date());
-        console.warn('Format calendrier inattendu ou vide:', data);
+        throw new Error('Format webhook inattendu');
       }
     } catch (e) {
       console.error('Erreur calendrier:', e);
+      setSyncError("Sync agenda indisponible (webhook). Affichage du dernier cache local.");
+      try {
+        const cached = localStorage.getItem('ananda-calendar-cache');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) setEvents(parsed);
+        }
+      } catch {}
     } finally {
       setLoading(false);
     }
@@ -650,6 +671,7 @@ export const CalendarPage = () => {
             <span style={{ fontFamily: "'Playfair Display',serif", color: C.goldSoft, fontSize: 15 }}>Cockpit de Planification</span>
             {loading && <span style={{ fontSize: 11, color: C.muted }}>↻</span>}
             {lastSync && !loading && <span style={{ fontSize: 10, color: C.muted }}>{lastSync.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>}
+            {syncError && <span style={{ fontSize: 10, color: C.red }}>{syncError}</span>}
           </div>
 
           {/* Légende calendriers */}

@@ -40,6 +40,7 @@ export const Finance = () => {
   const [mouvements, setMouvements] = useState<Mouvement[]>([]);
   const [budget, setBudget] = useState<BudgetLigne[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [formType, setFormType] = useState<'Entrée' | 'Dépense'>('Entrée');
   const [saving, setSaving] = useState(false);
@@ -76,17 +77,21 @@ export const Finance = () => {
 
   const fetchData = async (_injectForSelectedMonth = false) => {
     setLoading(true);
+    setSyncError(null);
     try {
       // Toujours vérifier/injecter les charges fixes pour le mois affiché.
       await ensureMonthlyFixedCharges(filterAnnee, filterMois + 1);
       const [finData, budData] = await Promise.all([listFinanceEntries(), listBudgetItems()]);
       setMouvements(finData || []);
       setBudget((budData || []).filter((r: BudgetLigne) => isActiveBudget(r.Actif)));
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setSyncError("Erreur de synchronisation finance. Vérifie Supabase/n8n puis clique sur 'Réinjecter / Recalculer'.");
+    }
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [filterMois, filterAnnee]);
 
   const moisStr = `${filterAnnee}-${String(filterMois + 1).padStart(2, '0')}`;
   const mouvementsMois = mouvements.filter(m => m.Date?.startsWith(moisStr));
@@ -253,6 +258,11 @@ export const Finance = () => {
           </button>
         </div>
       </div>
+      {syncError && (
+        <div style={{ padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.red}55`, background: isDark ? 'rgba(217,85,85,0.12)' : 'rgba(217,85,85,0.08)', color: C.red, fontSize: 12 }}>
+          {syncError}
+        </div>
+      )}
 
       {/* Formulaire */}
       {showForm && (
