@@ -454,6 +454,32 @@ export const ensureMonthlyFixedCharges = async (year: number, month: number) => 
     sourceItems = Array.from(uniq.values());
   }
 
+  if (!sourceItems.length) {
+    // Fallback plus robuste: reprendre les charges auto les plus recentes
+    // (pas uniquement le mois precedent), utile si un mois n'a pas ete injecte.
+    const { data: historicalAutoRows, error: historicalAutoError } = await supabase
+      .from('finance_entries')
+      .select('label,amount,category,invoice_date')
+      .lt('invoice_date', monthStart)
+      .eq('type', 'Dépense')
+      .eq('source', 'Auto')
+      .order('invoice_date', { ascending: false })
+      .limit(500);
+    if (historicalAutoError) throw historicalAutoError;
+
+    const latestByKey = new Map<string, { label: string; amount: number; category: string | null }>();
+    (historicalAutoRows || []).forEach((row: any) => {
+      const label = String(row.label || '').trim();
+      const amount = Number(row.amount || 0);
+      if (!label || amount <= 0) return;
+      const key = `${label.toLowerCase()}|${amount.toFixed(2)}`;
+      if (!latestByKey.has(key)) {
+        latestByKey.set(key, { label, amount, category: row.category || 'Divers' });
+      }
+    });
+    sourceItems = Array.from(latestByKey.values());
+  }
+
   const rowsToInsert = sourceItems
     .filter((item) => !existingKeys.has(`${item.label.toLowerCase()}|${item.amount.toFixed(2)}`))
     .map((item) => ({

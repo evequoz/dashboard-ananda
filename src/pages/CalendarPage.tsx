@@ -451,8 +451,16 @@ export const CalendarPage = () => {
     try {
       const res = await fetch('https://n8n.ananda-communaute.cloud/webhook/get-calendar');
       const data = await res.json();
-      if (Array.isArray(data)) {
-        const formatted = data.map((item: any) => {
+      const rawEvents = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.items)
+          ? data.items
+          : Array.isArray(data?.events)
+            ? data.events
+            : [];
+
+      if (rawEvents.length) {
+        const formatted = rawEvents.map((item: any) => {
           const isAllDay = !item.start?.dateTime;
           const isFree = item.transparency === 'transparent';
           const eventType = item.extendedProperties?.private?.eventType || '';
@@ -492,6 +500,12 @@ export const CalendarPage = () => {
         });
         setEvents(formatted);
         setLastSync(new Date());
+      } else if (Array.isArray(data) && data.length === 0) {
+        // Keep explicit empty array behavior when upstream really has no events.
+        setEvents([]);
+        setLastSync(new Date());
+      } else {
+        console.warn('Format calendrier inattendu, conservation des events locaux');
       }
     } catch (e) {
       console.error('Erreur calendrier:', e);
