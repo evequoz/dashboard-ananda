@@ -726,7 +726,7 @@ export const Contacts = () => {
   const [composeTarget, setComposeTarget] = useState<string | null>(null);
 
   return (
-    <div className="-m-8 flex flex-col" style={{ height: 'calc(100vh - 80px)' }}>
+    <div className="flex flex-col" style={{ height: '100%', minHeight: 0 }}>
       {composeTarget && <QuickComposeModal to={composeTarget} onClose={() => setComposeTarget(null)} />}
 
       {/* Onglets principaux */}

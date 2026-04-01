@@ -68,14 +68,11 @@ export const Finance = () => {
     boxSizing: 'border-box' as const, fontFamily: 'inherit',
   };
 
-  const fetchData = async (injectForSelectedMonth = false) => {
+  const fetchData = async (_injectForSelectedMonth = false) => {
     setLoading(true);
     try {
-      const today = new Date();
-      const isCurrentMonth = filterAnnee === today.getFullYear() && filterMois === today.getMonth();
-      if (injectForSelectedMonth || isCurrentMonth) {
-        await ensureMonthlyFixedCharges(filterAnnee, filterMois + 1);
-      }
+      // Toujours vérifier/injecter les charges fixes pour le mois affiché.
+      await ensureMonthlyFixedCharges(filterAnnee, filterMois + 1);
       const [finData, budData] = await Promise.all([listFinanceEntries(), listBudgetItems()]);
       setMouvements(finData || []);
       setBudget((budData || []).filter((r: BudgetLigne) => r.Actif === true || r.Actif === 'VRAI'));

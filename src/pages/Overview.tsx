@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   Calendar, Clock, CheckCircle, Mail, Plus,
-  BookOpen, Lightbulb, FileText, Flag, Server, X, Trash2, ExternalLink
+  BookOpen, Lightbulb, FileText, Flag, Server, X, Trash2, ExternalLink, Users, PauseCircle, TrendingUp
 } from 'lucide-react';
 import {
   getTachesAujourdhui,
@@ -59,6 +59,12 @@ const getInitials = (from: string) => {
   const name = from.replace(/<.*>/, '').replace(/"/g, '').trim();
   const parts = name.split(' ');
   return parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : name.slice(0, 2).toUpperCase();
+};
+
+const MOCK_PARAMPARA_STATS = {
+  nouveauxAbonnes7j: 12,
+  abonnementsSuspendus: 3,
+  activiteSemaine: '+8%',
 };
 
 export const Overview = () => {
@@ -138,6 +144,7 @@ export const Overview = () => {
 
   const eventsByDay: Record<string, any[]> = {};
   events.forEach(e => { const k = new Date(e.start?.dateTime || e.start?.date).toDateString(); if (!eventsByDay[k]) eventsByDay[k] = []; eventsByDay[k].push(e); });
+  const agendaMaxHeight = events.length <= 2 ? 220 : 360;
 
   return (
     <div style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
@@ -177,6 +184,33 @@ export const Overview = () => {
         </div>
       </div>
 
+      {/* ── KPI PARAMPARA (fictif en attendant branchement) ── */}
+      <div className="ov-card" style={{ padding: 14, marginBottom: 16 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
+          Donnees fictives pour le layout (a brancher a Parampara ensuite)
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', background: 'var(--bg-card)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, color: 'var(--text-muted)', fontSize: 11 }}>
+              <Users size={12} /> Nouveaux abonnes (7j)
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: '#5dc98d' }}>{MOCK_PARAMPARA_STATS.nouveauxAbonnes7j}</div>
+          </div>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', background: 'var(--bg-card)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, color: 'var(--text-muted)', fontSize: 11 }}>
+              <PauseCircle size={12} /> Abonnements suspendus
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: '#e07070' }}>{MOCK_PARAMPARA_STATS.abonnementsSuspendus}</div>
+          </div>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', background: 'var(--bg-card)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, color: 'var(--text-muted)', fontSize: 11 }}>
+              <TrendingUp size={12} /> Activite Parampara
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: '#d4b060' }}>{MOCK_PARAMPARA_STATS.activiteSemaine}</div>
+          </div>
+        </div>
+      </div>
+
       {/* ── GRILLE ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
 
@@ -192,7 +226,7 @@ export const Overview = () => {
             </div>
           </div>
 
-          <div className="ov-scroll" style={{ overflowY: 'auto', maxHeight: 430, display: 'flex', flexDirection: 'column', gap: 18, paddingRight: 4 }}>
+          <div className="ov-scroll" style={{ overflowY: 'auto', maxHeight: agendaMaxHeight, display: 'flex', flexDirection: 'column', gap: 12, paddingRight: 4 }}>
             {Object.keys(eventsByDay).length === 0 ? (
               <div style={{ padding: '32px 16px', textAlign: 'center', border: '1px dashed var(--border)', borderRadius: 10 }}>
                 <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>Aucun événement cette semaine</p>
@@ -296,7 +330,7 @@ export const Overview = () => {
               })}
             </div>
 
-            <div className="ov-scroll" style={{ overflowY: 'auto', maxHeight: 210, display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 12 }}>
+            <div className="ov-scroll" style={{ overflowY: 'auto', maxHeight: 180, display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 10 }}>
               {loading ? (
                 <p style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: '20px 0' }}>Chargement...</p>
               ) : tachesAffichees.length === 0 ? (
@@ -316,70 +350,6 @@ export const Overview = () => {
                     {t.priorite === 'Haute' && <Flag size={13} color="#e07070" />}
                     {t.projet && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, border: `1px solid ${pc(t.projet).color}50`, background: pc(t.projet).bg, color: pc(t.projet).color }}>{t.projet}</span>}
                   </div>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8, marginBottom: 12 }}>
-              {[
-                { title: 'Urgent', items: urgentTasks, color: '#e07070', bg: 'rgba(220,80,80,0.08)' },
-                { title: "À faire aujourd'hui", items: dueTodayTasks, color: '#d4b060', bg: 'rgba(212,176,96,0.08)' },
-                { title: 'En attente', items: waitingTasks, color: '#9aa0c8', bg: 'rgba(128,128,160,0.08)' },
-              ].map(block => (
-                <div key={block.title} style={{ border: '1px solid var(--border)', borderRadius: 10, background: block.bg, padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: block.color, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                      {block.title}
-                    </span>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{block.items.length}</span>
-                  </div>
-                  {block.items.length === 0 ? (
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Aucune tâche</div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {block.items.slice(0, 2).map(item => (
-                        <div key={`${block.title}-${item.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <button
-                            onClick={() => openTaskInTasksPage(item.id)}
-                            style={{
-                              flex: 1,
-                              minWidth: 0,
-                              fontSize: 12,
-                              color: 'var(--text-primary)',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              background: 'transparent',
-                              border: 'none',
-                              textAlign: 'left',
-                              cursor: 'pointer',
-                              padding: 0,
-                            }}
-                            title="Ouvrir dans Tâches"
-                          >
-                            {item.text}
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleTache(item.id);
-                            }}
-                            style={{
-                              border: '1px solid var(--border)',
-                              background: 'var(--bg-card)',
-                              borderRadius: 7,
-                              fontSize: 10,
-                              color: 'var(--text-muted)',
-                              padding: '4px 8px',
-                              cursor: 'pointer',
-                            }}
-                          >
-                            Terminer
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               ))}
             </div>

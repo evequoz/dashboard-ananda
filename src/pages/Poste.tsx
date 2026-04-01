@@ -1042,7 +1042,7 @@ export const Poste = () => {
   const files: BaserowFile[] = selectedEmail?.['Fichier'] || [];
 
   return (
-    <div className="flex flex-col -m-8" style={{ height: 'calc(100vh - 80px)' }}>
+    <div className="flex flex-col" style={{ height: '100%', minHeight: 0 }}>
 
       {showTaskPopup && selectedEmail && (
         <TaskPopup email={selectedEmail} onConfirm={createTask} onClose={() => setShowTaskPopup(false)} />
@@ -1246,7 +1246,7 @@ export const Poste = () => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1 mb-0.5">
-                        <p className={`text-xs font-bold truncate ${!isRead ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+                        <p className={`text-xs font-bold truncate ${!isRead ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
                           {email['Expéditeur']?.replace(/<.*>/, '').replace(/"/g, '').trim() || 'Inconnu'}
                         </p>
                         <div className="flex items-center gap-0.5 shrink-0">
@@ -1262,7 +1262,7 @@ export const Poste = () => {
                           {email.Traité && <CheckCircle className="w-3 h-3 text-[#4caf7d]" />}
                         </div>
                       </div>
-                      <p className={`text-xs truncate mb-0.5 font-semibold ${!isRead ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+                      <p className={`text-xs truncate mb-0.5 font-semibold ${!isRead ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
                         {email.Sujet || 'Sans sujet'}
                       </p>
                       <p className="text-[10px] text-[var(--text-muted)] line-clamp-2 leading-relaxed">
