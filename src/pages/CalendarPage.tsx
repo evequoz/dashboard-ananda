@@ -25,6 +25,29 @@ const getCalendarColor = (calendarName: string) => {
   return CALENDAR_COLORS[calendarName] || { color: C.gold, bg: `${C.gold}18`, label: calendarName };
 };
 
+const extractCalendarItems = (payload: any): any[] => {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload;
+  if (typeof payload === 'string') {
+    try {
+      const parsed = JSON.parse(payload);
+      return extractCalendarItems(parsed);
+    } catch {
+      return [];
+    }
+  }
+  if (typeof payload !== 'object') return [];
+
+  const directKeys = ['items', 'events', 'data', 'result', 'body', 'records'];
+  for (const key of directKeys) {
+    const candidate = (payload as any)[key];
+    const extracted = extractCalendarItems(candidate);
+    if (extracted.length) return extracted;
+  }
+
+  return [];
+};
+
 const DEFAULT_EVENT_TYPES = [
   { label: 'Live / Q&A', color: '#4caf7d', bg: '#4caf7d18' },
   { label: 'Formation', color: '#5588d0', bg: '#5588d018' },
@@ -322,7 +345,6 @@ const NewEventModal = ({ date, onClose, onSave, eventTypes }: {
     setTimeError('');
   };
 
-  const selectedType = eventTypes.find(t => t.label === form.eventType) || eventTypes[0];
   const calColor = getCalendarColor(form.calendar);
 
   const handleSave = () => {
@@ -451,13 +473,7 @@ export const CalendarPage = () => {
     try {
       const res = await fetch('https://n8n.ananda-communaute.cloud/webhook/get-calendar');
       const data = await res.json();
-      const rawEvents = Array.isArray(data)
-        ? data
-        : Array.isArray(data?.items)
-          ? data.items
-          : Array.isArray(data?.events)
-            ? data.events
-            : [];
+      const rawEvents = extractCalendarItems(data);
 
       if (rawEvents.length) {
         const formatted = rawEvents.map((item: any) => {
@@ -505,7 +521,9 @@ export const CalendarPage = () => {
         setEvents([]);
         setLastSync(new Date());
       } else {
-        console.warn('Format calendrier inattendu, conservation des events locaux');
+        setEvents([]);
+        setLastSync(new Date());
+        console.warn('Format calendrier inattendu ou vide:', data);
       }
     } catch (e) {
       console.error('Erreur calendrier:', e);
@@ -677,7 +695,7 @@ export const CalendarPage = () => {
             locales={[frLocale]}
             locale="fr"
             events={events}
-            headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,dayGridWeek,timeGridWeek,timeGridDay' }}
+            headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay' }}
             height="100%"
             slotMinTime={slotMinTime}
             slotMaxTime={slotMaxTime}
