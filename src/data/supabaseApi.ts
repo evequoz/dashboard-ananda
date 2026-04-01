@@ -391,6 +391,9 @@ export const ensureMonthlyFixedCharges = async (year: number, month: number) => 
   const monthStart = `${year}-${mm}-01`;
   const nextMonth = new Date(year, month, 1);
   const nextMonthStart = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}-01`;
+  const prevMonth = new Date(year, month - 2, 1);
+  const prevMonthStart = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}-01`;
+  const prevMonthNext = `${year}-${mm}-01`;
 
   const { data: budgetItems, error: budgetError } = await supabase
     .from('budget_items')
@@ -422,17 +425,42 @@ export const ensureMonthlyFixedCharges = async (year: number, month: number) => 
     }),
   );
 
-  const rowsToInsert = activeBudgetItems
+  let sourceItems: Array<{ label: string; amount: number; category: string | null }> = activeBudgetItems
     .filter((item: any) => Number(item.monthly_amount || 0) > 0 && String(item.label || '').trim())
-    .filter((item: any) => {
-      const key = `${String(item.label || '').trim().toLowerCase()}|${Number(item.monthly_amount || 0).toFixed(2)}`;
-      return !existingKeys.has(key);
-    })
     .map((item: any) => ({
+      label: String(item.label || '').trim(),
+      amount: Number(item.monthly_amount || 0),
+      category: item.category || 'Divers',
+    }));
+
+  if (!sourceItems.length) {
+    const { data: prevAutoRows, error: prevAutoError } = await supabase
+      .from('finance_entries')
+      .select('label,amount,category')
+      .gte('invoice_date', prevMonthStart)
+      .lt('invoice_date', prevMonthNext)
+      .eq('type', 'Dépense')
+      .eq('source', 'Auto');
+    if (prevAutoError) throw prevAutoError;
+
+    const uniq = new Map<string, { label: string; amount: number; category: string | null }>();
+    (prevAutoRows || []).forEach((row: any) => {
+      const label = String(row.label || '').trim();
+      const amount = Number(row.amount || 0);
+      if (!label || amount <= 0) return;
+      const key = `${label.toLowerCase()}|${amount.toFixed(2)}`;
+      if (!uniq.has(key)) uniq.set(key, { label, amount, category: row.category || 'Divers' });
+    });
+    sourceItems = Array.from(uniq.values());
+  }
+
+  const rowsToInsert = sourceItems
+    .filter((item) => !existingKeys.has(`${item.label.toLowerCase()}|${item.amount.toFixed(2)}`))
+    .map((item) => ({
       invoice_date: monthStart,
       payment_date: null,
-      label: String(item.label || '').trim(),
-      amount: item.monthly_amount,
+      label: item.label,
+      amount: item.amount,
       type: 'Dépense',
       source: 'Auto',
       category: item.category || 'Divers',

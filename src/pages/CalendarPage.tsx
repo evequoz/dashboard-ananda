@@ -594,6 +594,7 @@ export const CalendarPage = () => {
     return d >= start && d <= end;
   });
   const timedEvents = events.filter(e => !!e.start && !e.allDay);
+  const hasTimedEvents = timedEvents.length > 0;
   const hourBounds = timedEvents.reduce((acc, e) => {
     const s = new Date(e.start).getHours();
     const eHour = e.end ? new Date(e.end).getHours() : s + 1;
@@ -606,6 +607,7 @@ export const CalendarPage = () => {
   const slotMaxHour = Math.min(22, hourBounds.max + 2);
   const slotMinTime = `${String(slotMinHour).padStart(2, '0')}:00:00`;
   const slotMaxTime = `${String(slotMaxHour).padStart(2, '0')}:00:00`;
+  const defaultView = hasTimedEvents ? 'timeGridWeek' : 'dayGridWeek';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', padding: '12px 16px', height: 'calc(100vh - 70px)', background: C.bg, fontFamily: "'Outfit', sans-serif" }}>
@@ -655,12 +657,13 @@ export const CalendarPage = () => {
 
         <div style={{ flex: 1, background: 'var(--bg-surface)', padding: '10px 12px', overflow: 'hidden' }}>
           <FullCalendar
+            key={`${defaultView}-${events.length}`}
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-            initialView="timeGridWeek"
+            initialView={defaultView}
             locales={[frLocale]}
             locale="fr"
             events={events}
-            headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay' }}
+            headerToolbar={{ left: 'prev,next today', center: 'title', right: 'dayGridMonth,dayGridWeek,timeGridWeek,timeGridDay' }}
             height="100%"
             slotMinTime={slotMinTime}
             slotMaxTime={slotMaxTime}
