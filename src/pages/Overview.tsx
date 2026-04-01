@@ -9,6 +9,7 @@ import {
   listInboxEmails,
   updateInboxEmail,
   deleteInboxEmail,
+  notifyInboxDeletionSync,
   createTaskLegacy,
 } from '../data/supabaseApi';
 
@@ -101,7 +102,14 @@ export const Overview = () => {
     window.dispatchEvent(new CustomEvent('dashboard:navigate', { detail: { page: 'tasks' } }));
   };
   const marquerTraite = async (id: number) => { setEmails(p => p.filter(e => e.id !== id)); try { await updateInboxEmail(id, { Traité: true }); } catch {} };
-  const supprimerEmail = async (id: number) => { setEmails(p => p.filter(e => e.id !== id)); try { await deleteInboxEmail(id); } catch {} };
+  const supprimerEmail = async (id: number) => {
+    setEmails(p => p.filter(e => e.id !== id));
+    try {
+      const email = emails.find(e => e.id === id);
+      await notifyInboxDeletionSync([{ id, accountEmail: email?.Compte }], 'hard_delete');
+      await deleteInboxEmail(id);
+    } catch {}
+  };
   const ajouterTache = async () => {
     if (!newTask.trim()) return;
     try {

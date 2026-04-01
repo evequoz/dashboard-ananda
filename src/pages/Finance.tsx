@@ -7,6 +7,7 @@ import {
   deleteFinanceEntry,
   updateFinanceEntry,
   createFinanceEntry,
+  ensureMonthlyFixedCharges,
 } from '../data/supabaseApi';
 
 const CATEGORIES = ['Formation', 'Logement', 'Assurance', 'Leasing', 'Social', 'Télécom', 'Doterra', 'Divers'];
@@ -69,6 +70,11 @@ export const Finance = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
+      const today = new Date();
+      const isCurrentMonth = filterAnnee === today.getFullYear() && filterMois === today.getMonth();
+      if (isCurrentMonth) {
+        await ensureMonthlyFixedCharges(filterAnnee, filterMois + 1);
+      }
       const [finData, budData] = await Promise.all([listFinanceEntries(), listBudgetItems()]);
       setMouvements(finData || []);
       setBudget((budData || []).filter((r: BudgetLigne) => r.Actif === true || r.Actif === 'VRAI'));

@@ -1,5 +1,30 @@
 import { supabase } from '../lib/supabaseClient';
 
+const N8N_DELETE_EMAIL_WEBHOOK = 'https://n8n.ananda-communaute.cloud/webhook/delete-email';
+
+export const notifyInboxDeletionSync = async (
+  emails: Array<{ id: number; accountEmail?: string | null }>,
+  mode: 'trash' | 'hard_delete' = 'trash',
+) => {
+  if (!emails.length) return;
+  try {
+    await fetch(N8N_DELETE_EMAIL_WEBHOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source: 'dashboard-ananda',
+        action: mode,
+        emails: emails.map(item => ({
+          local_id: item.id,
+          account_email: item.accountEmail || null,
+        })),
+      }),
+    });
+  } catch {
+    // Best effort sync: local workflow still proceeds.
+  }
+};
+
 const legacyTaskFromRow = (row: any) => ({
   id: row.id,
   Titre: row.title,
@@ -354,8 +379,44 @@ export const createFinanceEntry = async (payload: Record<string, any>) => {
     category: payload.Catégorie,
     notes: payload.Notes ?? '',
     validated: payload.Validé ?? true,
+    auto_key: payload['Clé auto'] ?? null,
   });
   if (error) throw error;
+};
+
+export const ensureMonthlyFixedCharges = async (year: number, month: number) => {
+  const mm = String(month).padStart(2, '0');
+  const monthStart = `${year}-${mm}-01`;
+
+  const { data: budgetItems, error: budgetError } = await supabase
+    .from('budget_items')
+    .select('id,label,monthly_amount,category,active')
+    .eq('active', true);
+  if (budgetError) throw budgetError;
+
+  const rowsToInsert = (budgetItems || [])
+    .filter((item: any) => Number(item.monthly_amount || 0) > 0)
+    .map((item: any) => ({
+      invoice_date: monthStart,
+      payment_date: null,
+      label: item.label,
+      amount: item.monthly_amount,
+      type: 'Dépense',
+      source: 'Auto',
+      category: item.category || 'Divers',
+      notes: `Charge fixe automatique ${year}-${mm}`,
+      validated: true,
+      auto_key: `fixed-${year}-${mm}-${item.id}`,
+    }));
+
+  if (!rowsToInsert.length) return 0;
+
+  const { error } = await supabase
+    .from('finance_entries')
+    .upsert(rowsToInsert, { onConflict: 'auto_key', ignoreDuplicates: true });
+  if (error) throw error;
+
+  return rowsToInsert.length;
 };
 
 // Compat layer from former baserowApi.ts

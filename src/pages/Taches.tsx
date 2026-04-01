@@ -323,12 +323,12 @@ function PlannerModal({ onClose, onApply }: PlannerModalProps) {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 w-full max-w-2xl shadow-2xl">
+      <div className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] shadow-2xl flex flex-col">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-[var(--text-primary)]">Planifier avec IA</h2>
           <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"><X className="w-5 h-5" /></button>
         </div>
-        <div className="space-y-3">
+        <div className="space-y-3 overflow-y-auto pr-1">
           <textarea
             value={goal}
             onChange={e => setGoal(e.target.value)}
@@ -633,7 +633,7 @@ function TodayView({ tasks, onStatusChange, onEdit, onDelete, onAddSubTask }: {
         <div className="space-y-2">
           {items.map(t => (
             <TaskCard key={t.id} task={t} getChildren={getChildren}
-              onStatusChange={onStatusChange} onEdit={onEdit} onDelete={onDelete} onAddSubTask={onAddSubTask} />
+              onStatusChange={onStatusChange} onEdit={onEdit} onDelete={onDelete} onAddSubTask={onAddSubTask} compact />
           ))}
         </div>
       </div>
