@@ -397,7 +397,7 @@ function TaskCard({ task, getChildren, onStatusChange, onEdit, onDelete, onAddSu
   compact?: boolean;
   depth?: number;
 }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const statut = getVal(task.Statut);
   const prio = getVal(task.Priorité);
   const projet = getVal(task.Projet);
