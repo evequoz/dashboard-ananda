@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabaseClient';
 
-const N8N_DELETE_EMAIL_WEBHOOK = 'https://n8n.ananda-communaute.cloud/webhook/delete-email';
+const N8N_DELETE_EMAIL_WEBHOOK =
+  'https://n8n.ananda-communaute.cloud/webhook/lZ21nLX2InNyGVp6/webhook/delete-email';
 
 export const notifyInboxDeletionSync = async (
   emails: Array<{ id: number; accountEmail?: string | null }>,
