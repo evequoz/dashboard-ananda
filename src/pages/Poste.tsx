@@ -127,6 +127,25 @@ const getFileName = (name: string) => {
   return n.length > 28 ? n.slice(0, 25) + '…' : n;
 };
 
+const toSafeText = (value: unknown): string => {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return value.map((v) => toSafeText(v)).join(' ').trim();
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    if (typeof record.value === 'string') return record.value;
+    if (typeof record.text === 'string') return record.text;
+  }
+  return '';
+};
+
+const extractEmailAddress = (raw: string) => {
+  const src = (raw || '').trim();
+  const match = src.match(/<([^>]+)>/);
+  return (match?.[1] || src).trim();
+};
+
 // ── Modal Tâche ──
 interface TaskPopupProps {
   email: Email;
@@ -237,10 +256,10 @@ interface ReplyModalProps {
 }
 const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus }: ReplyModalProps) => {
   const suggestions = [
-    { label: 'Réponse 1 — Directe', value: email['Réponse 1'] || '' },
-    { label: 'Réponse 2 — Développée', value: email['Réponse 2'] || '' },
-    { label: 'Réponse 3 — Spirituelle', value: email['Réponse 3'] || '' },
-  ].filter(s => s.value.trim() !== '');
+    { label: 'Réponse 1 — Directe', value: toSafeText(email['Réponse 1']) },
+    { label: 'Réponse 2 — Développée', value: toSafeText(email['Réponse 2']) },
+    { label: 'Réponse 3 — Spirituelle', value: toSafeText(email['Réponse 3']) },
+  ].filter(s => s.value.trim().length > 0);
 
   const [text, setText] = useState(suggestions[0]?.value || '');
   const [activeTab, setActiveTab] = useState(0);
@@ -967,11 +986,12 @@ export const Poste = () => {
     if (!selectedEmail || !text.trim()) return;
     setSending(true);
     try {
-      await fetch(N8N_SEND_WEBHOOK, {
+      const to = extractEmailAddress(selectedEmail['Expéditeur']);
+      const res = await fetch(N8N_SEND_WEBHOOK, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          to: selectedEmail['Expéditeur'],
+          to,
           subject: `Re: ${selectedEmail.Sujet || ''}`,
           body: text,
           from: normalizeAccountEmail(selectedEmail.Compte),
@@ -985,9 +1005,13 @@ export const Poste = () => {
           })),
         }),
       });
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(body || `HTTP ${res.status}`);
+      }
       setSendStatus('success');
       await markAsTreated(selectedEmail);
-      await saveToSent(normalizeAccountEmail(selectedEmail.Compte), selectedEmail['Expéditeur'], cc, bcc, `Re: ${selectedEmail.Sujet || ''}`, text);
+      await saveToSent(normalizeAccountEmail(selectedEmail.Compte), to, cc, bcc, `Re: ${selectedEmail.Sujet || ''}`, text);
       setReplyMode(false);
       setTimeout(() => setSendStatus('idle'), 3000);
     } catch {
