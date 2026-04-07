@@ -253,15 +253,16 @@ interface ReplyModalProps {
   onClose: () => void;
   sending: boolean;
   sendStatus: 'idle' | 'success' | 'error';
+  initialText?: string;
 }
-const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus }: ReplyModalProps) => {
+const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus, initialText = '' }: ReplyModalProps) => {
   const suggestions = [
     { label: 'Réponse 1 — Directe', value: toSafeText(email['Réponse 1']) },
     { label: 'Réponse 2 — Développée', value: toSafeText(email['Réponse 2']) },
     { label: 'Réponse 3 — Spirituelle', value: toSafeText(email['Réponse 3']) },
   ].filter(s => s.value.trim().length > 0);
 
-  const [text, setText] = useState(suggestions[0]?.value || '');
+  const [text, setText] = useState(initialText || suggestions[0]?.value || '');
   const [activeTab, setActiveTab] = useState(0);
   const [cc, setCc] = useState('');
   const [bcc, setBcc] = useState('');
@@ -270,6 +271,11 @@ const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus 
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   const selectSuggestion = (idx: number) => { setActiveTab(idx); setText(suggestions[idx].value); };
+
+  useEffect(() => {
+    setText(initialText || suggestions[0]?.value || '');
+    setActiveTab(0);
+  }, [email.id, initialText]);
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -713,6 +719,7 @@ export const Poste = () => {
   const [showMailList, setShowMailList] = useState(true);
   const [showContactPanel, setShowContactPanel] = useState(true);
   const [readInboxIds, setReadInboxIds] = useState<number[]>([]);
+  const [replySeedText, setReplySeedText] = useState('');
   const replyModeRef = useRef(false);
   replyModeRef.current = replyMode;
 
@@ -1076,9 +1083,10 @@ export const Poste = () => {
           email={selectedEmail}
           accountColor={activeAccountData.color}
           onSend={sendReply}
-          onClose={() => { setReplyMode(false); setSendStatus('idle'); }}
+          onClose={() => { setReplyMode(false); setReplySeedText(''); setSendStatus('idle'); }}
           sending={sending}
           sendStatus={sendStatus}
+          initialText={replySeedText}
         />
       )}
       {composeMode && (
@@ -1495,7 +1503,7 @@ export const Poste = () => {
                     </>
                   ) : (
                     <>
-                      <button onClick={() => setReplyMode(true)}
+                      <button onClick={() => { setReplySeedText(''); setReplyMode(true); }}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105"
                         style={{ background: `linear-gradient(135deg, ${activeAccountData.color}, ${activeAccountData.color}cc)`, color: '#05050a' }}>
                         <Send className="w-3.5 h-3.5" /> Répondre
@@ -1577,7 +1585,10 @@ export const Poste = () => {
                             <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: s.color }}>
                               {s.label}
                             </span>
-                            <button onClick={() => setReplyMode(true)}
+                            <button onClick={() => {
+                              setReplySeedText(toSafeText(selectedEmail[s.key]));
+                              setReplyMode(true);
+                            }}
                               className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all"
                               style={{ background: s.color + '20', border: `1px solid ${s.color}40`, color: s.color }}>
                               Utiliser <ChevronRight className="w-3 h-3" />
