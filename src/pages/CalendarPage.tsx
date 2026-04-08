@@ -37,8 +37,17 @@ const extractCalendarItems = (payload: any): any[] => {
     }
   }
   if (typeof payload !== 'object') return [];
+  if (
+    payload?.start ||
+    payload?.end ||
+    payload?.summary ||
+    payload?.title ||
+    payload?.startDateTime
+  ) {
+    return [payload];
+  }
 
-  const directKeys = ['items', 'events', 'data', 'result', 'body', 'records'];
+  const directKeys = ['items', 'events', 'data', 'result', 'body', 'records', 'calendar', 'output'];
   for (const key of directKeys) {
     const candidate = (payload as any)[key];
     const extracted = extractCalendarItems(candidate);
@@ -455,6 +464,25 @@ const NewEventModal = ({ date, onClose, onSave, eventTypes }: {
 };
 
 const N8N_WEBHOOK = 'https://n8n.ananda-communaute.cloud/webhook/create-event';
+const CALENDAR_WEBHOOKS = [
+  'https://n8n.ananda-communaute.cloud/webhook/get-calendar',
+  'https://n8n.ananda-communaute.cloud/webhook/get-calendar/',
+];
+
+const fetchWithTimeout = async (url: string, ms = 12000) => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, {
+      method: 'GET',
+      cache: 'no-store',
+      signal: controller.signal,
+      headers: { 'Cache-Control': 'no-cache' },
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+};
 
 export const CalendarPage = () => {
   const [events, setEvents] = useState<any[]>([]);
@@ -480,9 +508,22 @@ export const CalendarPage = () => {
     setLoading(true);
     setSyncError(null);
     try {
-      const res = await fetch('https://n8n.ananda-communaute.cloud/webhook/get-calendar');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      let data: any = null;
+      let lastErr: any = null;
+
+      for (const endpoint of CALENDAR_WEBHOOKS) {
+        try {
+          const res = await fetchWithTimeout(endpoint);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          data = await res.json();
+          lastErr = null;
+          break;
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+      if (lastErr) throw lastErr;
+
       const rawEvents = extractCalendarItems(data);
 
       if (rawEvents.length) {
@@ -593,14 +634,17 @@ export const CalendarPage = () => {
     setEvents(prev => [...prev, newEvent]);
 
     try {
-      await fetch(N8N_WEBHOOK, {
+      const res = await fetch(N8N_WEBHOOK, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'create', ...newEvent })
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setSyncError(null);
       setTimeout(fetchEvents, 2000);
     } catch (e) {
       console.error('Erreur création:', e);
+      setSyncError("Creation locale OK, mais sync webhook indisponible. Nouvelle tentative auto a la prochaine actualisation.");
     }
   };
 
@@ -626,7 +670,15 @@ export const CalendarPage = () => {
     fetch(N8N_WEBHOOK, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'update', id, ...data })
-    }).catch(console.error);
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        setSyncError(null);
+      })
+      .catch((err) => {
+        console.error(err);
+        setSyncError("Modification locale OK, mais sync webhook indisponible. Nouvelle tentative auto a la prochaine actualisation.");
+      });
   };
 
   const handleDelete = (id: string) => {
@@ -634,7 +686,15 @@ export const CalendarPage = () => {
     fetch(N8N_WEBHOOK, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'delete', id })
-    }).catch(console.error);
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        setSyncError(null);
+      })
+      .catch((err) => {
+        console.error(err);
+        setSyncError("Suppression locale OK, mais sync webhook indisponible. Nouvelle tentative auto a la prochaine actualisation.");
+      });
   };
 
   const todayEvents = events.filter(e => e.start && new Date(e.start).toDateString() === new Date().toDateString());
