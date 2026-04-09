@@ -1,20 +1,22 @@
-import { supabase } from './supabaseClient';
+import { getValidSession } from './supabaseClient';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const askGemini = async (prompt: string, forceJson = false) => {
   if (!prompt?.trim()) throw new Error("Le prompt est requis.");
 
-  const { data: { session } } = await supabase.auth.getSession();
+  const { session, error } = await getValidSession();
   const token = session?.access_token;
+  if (!token || error) {
+    throw new Error(error?.message || 'Session Supabase introuvable. Reconnectez-vous pour appeler l’IA.');
+  }
   const functionUrl = `${supabaseUrl}/functions/v1/gemini-pro`;
 
   const response = await fetch(functionUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token || supabaseAnonKey}`,
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ prompt }),
   });
