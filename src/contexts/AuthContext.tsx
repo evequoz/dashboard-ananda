@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { supabase } from "../lib/supabaseClient";
+import type { User as SupabaseAuthUser } from "@supabase/supabase-js";
+import { supabase, getValidSession } from "../lib/supabaseClient";
 
 // ============================================================
 // CONFIGURATION DES UTILISATEURS ET PERMISSIONS
@@ -59,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let mounted = true;
 
     const init = async () => {
-      const { data, error } = await supabase.auth.getSession();
+      const { session, error } = await getValidSession();
       if (!mounted) return;
       if (error) {
         setUser(null);
@@ -67,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const sessionUser = data.session?.user ?? null;
+      const sessionUser = session?.user ?? null;
       setUser(sessionUser ? hydrateUser(sessionUser.id, sessionUser.email) : null);
       setIsLoading(false);
     };
@@ -88,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
+      email: email.trim().toLowerCase(),
       password,
     });
 
@@ -96,7 +97,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: false, error: error?.message || "Email ou mot de passe incorrect" };
     }
 
-    setUser(hydrateUser(data.user.id, data.user.email));
+    const sessionUser = data.session?.user ?? null;
+    if (!sessionUser) {
+      const { session, error: sessionError } = await getValidSession();
+      if (sessionError || !session?.user) {
+        return {
+          success: false,
+          error:
+            sessionError?.message ||
+            "Connexion établie mais session invalide. Veuillez réessayer.",
+        };
+      }
+      setUser(hydrateUser(session.user.id, session.user.email));
+      return { success: true };
+    }
+
+    setUser(hydrateUser(sessionUser.id, sessionUser.email));
     return { success: true };
   };
 
@@ -118,8 +134,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 function buildUserFromAuth() {
-  return (id: string, email?: string | null): User => {
+  return (id: string, email?: string | null, authUser?: SupabaseAuthUser): User => {
     const normalizedEmail = (email || "").toLowerCase();
+
+    const meta = authUser?.user_metadata as Record<string, unknown> | undefined;
+    const metaRole = meta?.dashboard_role;
+    if (metaRole === "admin" || metaRole === "assistant") {
+      const metaName =
+        (typeof meta?.full_name === "string" && meta.full_name) ||
+        (typeof meta?.name === "string" && meta.name) ||
+        normalizedEmail.split("@")[0] ||
+        "Utilisateur";
+      const avatar = (metaName || "U")
+        .split(" ")
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((p) => p[0])
+        .join("")
+        .toUpperCase();
+      return {
+        id,
+        email: normalizedEmail,
+        name: metaName,
+        role: metaRole,
+        avatar: avatar || "U",
+      };
+    }
+
     const known = USER_PROFILES[normalizedEmail];
 
     if (known) {
