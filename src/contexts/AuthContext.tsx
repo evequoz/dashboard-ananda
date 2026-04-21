@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useMemo, ReactNode } from "react";
 import type { User as SupabaseAuthUser } from "@supabase/supabase-js";
 import { supabase, getValidSession } from "../lib/supabaseClient";
 
@@ -54,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const hydrateUser = buildUserFromAuth();
+  const hydrateUser = useMemo(() => buildUserFromAuth(), []);
 
   useEffect(() => {
     let mounted = true;
@@ -85,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mounted = false;
       listener.subscription.unsubscribe();
     };
-  }, []);
+  }, [hydrateUser]);
 
   const login = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -201,6 +201,7 @@ function buildUserFromAuth() {
 // HOOK
 // ============================================================
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");

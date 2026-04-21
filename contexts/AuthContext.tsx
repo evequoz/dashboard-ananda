@@ -86,7 +86,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: false, error: "Email ou mot de passe incorrect" };
     }
 
-    const { password: _, ...userData } = found;
+    const { email, name, role, avatar } = found;
+    const userData: User = { email, name, role, avatar };
     setUser(userData);
     sessionStorage.setItem("ananda_user", JSON.stringify(userData));
     return { success: true };
@@ -113,6 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 // HOOK
 // ============================================================
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");

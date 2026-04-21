@@ -3,7 +3,7 @@ import {
   Search, User, Mail, Phone, Calendar, ExternalLink,
   X, Loader2, Users, ChevronRight, Send, RefreshCw,
   CheckCircle, AlertCircle, Plus, Pencil, Trash2,
-  Building2, Tag, FileText, Cloud, Clock, Inbox,
+  Building2, FileText, Cloud, Clock, Inbox,
 } from 'lucide-react';
 import {
   listAdminContacts,
@@ -12,7 +12,6 @@ import {
   deleteAdminContact,
   listInboxEmails,
   listSentEmails,
-  findAdminByEmail,
 } from '../data/supabaseApi';
 
 // ── Constants ─────────────────────────────────────────────────────
@@ -26,9 +25,9 @@ const CATEGORIES        = ['Fournisseur', 'Partenaire', 'Admin', 'Comptable', 'A
 interface SysContact {
   id: number; email: string; firstName?: string; lastName?: string;
   phone?: string; locale?: string; registrationSource?: string;
-  fields?: Array<{ id: number; slug: string; value: any }>;
+  fields?: Array<{ id: number; slug: string; value: unknown }>;
   tags?: Array<{ id: number; name: string }>;
-  createdAt?: string; updatedAt?: string; [key: string]: any;
+  createdAt?: string; updatedAt?: string; [key: string]: unknown;
 }
 
 interface AdminContact {
@@ -38,7 +37,7 @@ interface AdminContact {
   Notes: string; 'Date création': string;
 }
 
-interface EmailRecord { id: number; Sujet: string; 'Date réception': string; Traité: boolean; }
+interface EmailRecord { id: number; Sujet: string; 'Date réception': string; Traité: boolean; 'Expéditeur'?: string; }
 interface SentRecord  { id: number; Sujet: string; Date: string; 'À': string; }
 
 // ── Helpers ───────────────────────────────────────────────────────
@@ -46,6 +45,7 @@ const fmtDate = (d?: string) =>
   d ? new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
 const fmtShort = (d?: string) =>
   d ? new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '—';
+const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 const sysName     = (c: SysContact)   => [c.firstName, c.lastName].filter(Boolean).join(' ') || c.email;
 const sysInitials = (c: SysContact)   => (c.firstName?.[0] || c.email[0]).toUpperCase();
@@ -256,7 +256,7 @@ const CommunauteTab = ({ onCompose }: { onCompose: (email: string) => void }) =>
       if (!res.ok) throw new Error(`Erreur API : ${res.status}`);
       const data = await res.json();
       setResults(data.items || []); setSearched(true);
-    } catch (e: any) { setError(e.message); }
+    } catch (e: unknown) { setError(getErrorMessage(e)); }
     finally { setLoading(false); }
   }, []);
 
@@ -352,16 +352,16 @@ const AdminContactForm = ({ initial, onSave, onClose }: {
           <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--border)] transition-all"><X className="w-4 h-4" /></button>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-          {[
+          {([
             { label: 'Prénom', key: 'Prénom', placeholder: 'Jean' },
             { label: 'Nom',    key: 'Nom',    placeholder: 'Dupont' },
             { label: 'Email *', key: 'Email', placeholder: 'jean@exemple.com' },
             { label: 'Téléphone', key: 'Téléphone', placeholder: '+41 79 000 00 00' },
             { label: 'Entreprise', key: 'Entreprise', placeholder: 'ACME SA' },
-          ].map(f => (
+          ] as const).map(f => (
             <div key={f.key}>
               <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">{f.label}</label>
-              <input value={(form as any)[f.key]} onChange={e => set(f.key, e.target.value)}
+              <input value={form[f.key]} onChange={e => set(f.key, e.target.value)}
                 className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#c9a84c]/50 transition-all"
                 placeholder={f.placeholder} />
             </div>
@@ -406,8 +406,8 @@ const EmailHistory = ({ email }: { email: string }) => {
       try {
         const [recData, sentData] = await Promise.all([listInboxEmails(200), listSentEmails(200)]);
         const lc = email.toLowerCase();
-        setReceived((recData || []).filter((r: any) => (r['Expéditeur'] || '').toLowerCase().includes(lc)).slice(0, 20));
-        setSent((sentData || []).filter((s: any) => (s['À'] || '').toLowerCase().includes(lc)).slice(0, 20));
+        setReceived((recData || []).filter((r: EmailRecord) => (r['Expéditeur'] || '').toLowerCase().includes(lc)).slice(0, 20));
+        setSent((sentData || []).filter((s: SentRecord) => (s['À'] || '').toLowerCase().includes(lc)).slice(0, 20));
       } catch { /* silently fail */ }
       finally { setLoading(false); }
     };
@@ -594,8 +594,8 @@ const AdminTab = ({ onCompose }: { onCompose: (email: string) => void }) => {
     setFetchError(null);
     try {
       setContacts(await listAdminContacts());
-    } catch (e: any) {
-      setFetchError(`Erreur réseau : ${e?.message ?? String(e)}`);
+    } catch (e: unknown) {
+      setFetchError(`Erreur réseau : ${getErrorMessage(e)}`);
       setContacts([]);
     } finally {
       setLoading(false);

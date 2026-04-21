@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { DollarSign, TrendingUp, TrendingDown, PlusCircle, X, Check, RefreshCw, Download, AlertCircle } from 'lucide-react';
 import { useTheme } from '../App';
 import {
@@ -16,8 +16,11 @@ const MOIS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août'
 
 const now = new Date();
 const fmt = (n: number) => Math.round(n).toLocaleString('fr-CH') + ' CHF';
-const getVal = (field: any) => (field as any)?.value ?? field ?? '';
-const isActiveBudget = (value: any) => {
+const getVal = (field: unknown) => {
+  if (typeof field === 'object' && field !== null && 'value' in field) return String((field as { value?: unknown }).value ?? '');
+  return String(field ?? '');
+};
+const isActiveBudget = (value: unknown) => {
   const str = String(value ?? '').trim().toLowerCase();
   if ([false, 0].includes(value)) return false;
   if (['false', 'faux', '0', 'no', 'non'].includes(str)) return false;
@@ -26,8 +29,8 @@ const isActiveBudget = (value: any) => {
 
 type Mouvement = {
   id: number; Date: string; 'Date paiement': string;
-  Libellé: string; Montant: number; Type: any;
-  Source: any; Catégorie: any; Notes: string; Validé: boolean;
+  Libellé: string; Montant: number; Type: unknown;
+  Source: unknown; Catégorie: unknown; Notes: string; Validé: boolean;
 };
 type BudgetLigne = {
   id: number; Libellé: string; Mensuel: number; Actif: boolean | string; Catégorie: string;
@@ -75,7 +78,7 @@ export const Finance = () => {
     boxSizing: 'border-box' as const, fontFamily: 'inherit',
   };
 
-  const fetchData = async (_injectForSelectedMonth = false) => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setSyncError(null);
     try {
@@ -89,9 +92,9 @@ export const Finance = () => {
       setSyncError("Erreur de synchronisation finance. Vérifie Supabase/n8n puis clique sur 'Réinjecter / Recalculer'.");
     }
     setLoading(false);
-  };
+  }, [filterAnnee, filterMois]);
 
-  useEffect(() => { fetchData(); }, [filterMois, filterAnnee]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const moisStr = `${filterAnnee}-${String(filterMois + 1).padStart(2, '0')}`;
   const mouvementsMois = mouvements.filter(m => m.Date?.startsWith(moisStr));
@@ -162,7 +165,7 @@ export const Finance = () => {
   const handleRecalculateMonth = async () => {
     setRecalculating(true);
     try {
-      await fetchData(true);
+      await fetchData();
     } finally {
       setRecalculating(false);
     }
@@ -432,7 +435,7 @@ export const Finance = () => {
             ].map((c, i) => (
               <div key={i} style={{ background: isDark ? '#05050a' : '#f5f3ee', border: `1px solid ${C.border}`, borderRadius: 10, padding: 16 }}>
                 <p style={{ fontSize: 11, color: C.muted, margin: '0 0 6px' }}>{c.label}</p>
-                <p style={{ fontSize: 20, fontWeight: 700, color: c.color, margin: 0 }}>{(c as any).isCount ? c.value : fmt(c.value as number)}</p>
+                <p style={{ fontSize: 20, fontWeight: 700, color: c.color, margin: 0 }}>{c.isCount ? c.value : fmt(c.value as number)}</p>
               </div>
             ))}
           </div>

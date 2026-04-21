@@ -1,5 +1,5 @@
 import { LayoutDashboard, Mail, Users, DollarSign, Calendar, CheckSquare, LogOut, Sun, Moon } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, type PageKey } from '../contexts/AuthContext';
 import { useTheme } from '../App';
 
 interface SidebarProps {
@@ -10,6 +10,14 @@ interface SidebarProps {
 export const Sidebar = ({ currentPage, onPageChange }: SidebarProps) => {
   const { user, canAccess, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const ACCESS_BY_MENU_PAGE: Record<string, PageKey> = {
+    overview: 'overview',
+    agenda: 'calendar',
+    tasks: 'tasks',
+    poste: 'emails',
+    finance: 'finance',
+    contacts: 'tools',
+  };
 
   const menuItems = [
     { id: 'overview', label: 'Aperçu',  icon: LayoutDashboard, page: 'overview' },
@@ -20,7 +28,7 @@ export const Sidebar = ({ currentPage, onPageChange }: SidebarProps) => {
     { id: 'contacts', label: 'Contacts', icon: Users,           page: 'contacts' },
   ];
 
-  const visibleItems = menuItems.filter(item => canAccess(item.page as any));
+  const visibleItems = menuItems.filter(item => canAccess(ACCESS_BY_MENU_PAGE[item.page]));
   const roleLabel = user?.role === 'admin' ? 'Administrateur' : 'Assistante';
   const isDark = theme === 'dark';
 

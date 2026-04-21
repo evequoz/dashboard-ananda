@@ -4,6 +4,7 @@ import {
   RotateCcw, Calendar, Columns, Clock, ChevronLeft,
   ChevronRight, X, ChevronDown, ChevronRight as ChevronR, Pencil, Trash2, Sparkles
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { createTaskLegacy, deleteTaskLegacy, listTaskRows, updateTaskLegacy } from '../data/supabaseApi';
 import { generateTaskPlan, type PlannedTask } from '../lib/taskPlannerService';
 
@@ -23,14 +24,14 @@ interface Task {
   id: number;
   Titre?: string;
   Description?: string;
-  Projet?: any;
-  Priorité?: any;
-  Statut?: any;
-  Récurrence?: any;
+  Projet?: unknown;
+  Priorité?: unknown;
+  Statut?: unknown;
+  Récurrence?: unknown;
   Fait?: boolean;
   'Date échéance'?: string;
   'Date faite'?: string;
-  'Tâche parente'?: any[];
+  'Tâche parente'?: Array<{ id?: number }>;
 }
 
 interface ModalState {
@@ -76,10 +77,13 @@ function formatDateLabel(value?: string) {
   if (!year || !month || !day) return iso;
   return new Date(year, month - 1, day).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 }
-function getVal(f: any): string {
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Erreur inconnue';
+}
+function getVal(f: unknown): string {
   if (!f) return '';
-  if (Array.isArray(f)) return f[0]?.value ?? '';
-  if (typeof f === 'object' && 'value' in f) return f.value;
+  if (Array.isArray(f)) return (f[0] as { value?: string } | undefined)?.value ?? '';
+  if (typeof f === 'object' && 'value' in f) return String((f as { value?: unknown }).value ?? '');
   return String(f);
 }
 function isOverdue(t: Task) {
@@ -154,15 +158,15 @@ function TaskModal({ onClose, onSave, onUpdate, mode, task, defaultStatut = 'À 
   defaultStatut?: string;
   parentTask?: Task | null;
 }) {
-  const getInitialVal = (field: any): string => {
+  const getInitialVal = (field: unknown): string => {
     if (!field) return '';
     if (Array.isArray(field)) return field[0]?.value ?? '';
-    if (typeof field === 'object' && 'value' in field) return field.value;
+    if (typeof field === 'object' && 'value' in field) return String((field as { value?: unknown }).value ?? '');
     return String(field);
   };
-  const getInitialDate = (d: any) => {
+  const getInitialDate = (d: unknown) => {
     if (!d) return todayStr();
-    return d.split('T')[0];
+    return String(d).split('T')[0];
   };
 
   const [form, setForm] = useState({
@@ -182,7 +186,7 @@ function TaskModal({ onClose, onSave, onUpdate, mode, task, defaultStatut = 'À 
     if (!form.Titre.trim()) { setError('Le titre est obligatoire'); return; }
     setSaving(true);
     try {
-      const body: Record<string, any> = {
+      const body: Record<string, unknown> = {
         Titre: form.Titre.trim(),
         Description: form.Description.trim() || null,
         Fait: form.Statut === 'Fait',
@@ -196,12 +200,12 @@ function TaskModal({ onClose, onSave, onUpdate, mode, task, defaultStatut = 'À 
 
       if (mode === 'edit' && task) {
         const updated = await updateTaskLegacy(task.id, body);
-        onUpdate(updated);
+        onUpdate(updated as unknown as Task);
       } else {
         const created = await createTaskLegacy(body);
-        onSave(created);
+        onSave(created as unknown as Task);
       }
-    } catch (e: any) { setError('Erreur : ' + e.message); setSaving(false); }
+    } catch (e: unknown) { setError('Erreur : ' + getErrorMessage(e)); setSaving(false); }
   }
 
   const title = mode === 'edit'
@@ -328,8 +332,8 @@ function PlannerModal({ onClose, onApply }: PlannerModalProps) {
         createdAt: new Date().toISOString(),
         tasks: generated.tasks || [],
       });
-    } catch (e: any) {
-      setError(e.message || "Erreur de génération IA.");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e) || "Erreur de génération IA.");
     } finally {
       setLoading(false);
     }
@@ -342,8 +346,8 @@ function PlannerModal({ onClose, onApply }: PlannerModalProps) {
     try {
       await onApply(plan);
       onClose();
-    } catch (e: any) {
-      setError(e.message || "Erreur lors de la création des tâches.");
+    } catch (e: unknown) {
+      setError(getErrorMessage(e) || "Erreur lors de la création des tâches.");
     } finally {
       setApplying(false);
     }
@@ -892,8 +896,8 @@ export const Taches = () => {
   const loadTasks = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      setTasks(await listTaskRows());
-    } catch (e: any) { setError(e.message); }
+      setTasks((await listTaskRows()) as unknown as Task[]);
+    } catch (e: unknown) { setError(getErrorMessage(e)); }
     finally { setLoading(false); }
   }, []);
 
@@ -994,7 +998,7 @@ export const Taches = () => {
   }
 
   async function createPlannedTask(task: PlannedTask, parentId: number | null = null): Promise<void> {
-    const payload: Record<string, any> = {
+    const payload: Record<string, unknown> = {
       Titre: task.title?.trim() || 'Tâche IA',
       Description: task.description?.trim() || null,
       Statut: 'À faire',
@@ -1004,7 +1008,7 @@ export const Taches = () => {
       'Date échéance': task.due_date || null,
     };
     if (parentId) payload['Tâche parente'] = [parentId];
-    const created = await createTaskLegacy(payload);
+    const created = (await createTaskLegacy(payload)) as unknown as Task;
     if (Array.isArray(task.subtasks) && task.subtasks.length > 0) {
       for (const subTask of task.subtasks) {
         await createPlannedTask(subTask, created.id);
@@ -1020,7 +1024,7 @@ export const Taches = () => {
     setFeedback({ type: 'success', message: 'Plan IA appliqué avec succès.' });
   }
 
-  const VIEWS: { id: View; label: string; icon: any }[] = [
+  const VIEWS: { id: View; label: string; icon: LucideIcon }[] = [
     { id: 'today', label: "Aujourd'hui", icon: Clock },
     { id: 'kanban', label: 'Kanban', icon: Columns },
     { id: 'calendar', label: 'Calendrier', icon: Calendar },

@@ -1,5 +1,5 @@
 import { useState, useEffect, createContext, useContext } from 'react';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { AuthProvider, useAuth, type PageKey } from './contexts/AuthContext';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { Overview } from './pages/Overview';
@@ -15,6 +15,7 @@ export const ThemeContext = createContext<{
   toggleTheme: () => void;
 }>({ theme: 'dark', toggleTheme: () => {} });
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useTheme = () => useContext(ThemeContext);
 
 const THEMES = {
@@ -50,9 +51,19 @@ const THEMES = {
   },
 };
 
+type DashboardPage = 'overview' | 'agenda' | 'tasks' | 'poste' | 'finance' | 'contacts';
+const PAGE_ACCESS_MAP: Record<DashboardPage, PageKey> = {
+  overview: 'overview',
+  agenda: 'calendar',
+  tasks: 'tasks',
+  poste: 'emails',
+  finance: 'finance',
+  contacts: 'tools',
+};
+
 function AppContent() {
   const { user, canAccess } = useAuth();
-  const [currentPage, setCurrentPage] = useState('overview');
+  const [currentPage, setCurrentPage] = useState<DashboardPage>('overview');
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     try { return (localStorage.getItem('ananda-theme') as 'dark' | 'light') || 'dark'; }
     catch { return 'dark'; }
@@ -62,13 +73,15 @@ function AppContent() {
     const root = document.documentElement;
     Object.entries(THEMES[theme]).forEach(([k, v]) => root.style.setProperty(k, v));
     root.setAttribute('data-theme', theme);
-    try { localStorage.setItem('ananda-theme', theme); } catch {}
+    try { localStorage.setItem('ananda-theme', theme); } catch { /* ignore storage write errors */ }
   }, [theme]);
 
   useEffect(() => {
     const onNavigate = (evt: Event) => {
       const custom = evt as CustomEvent<{ page?: string }>;
-      if (custom.detail?.page) setCurrentPage(custom.detail.page);
+      if (custom.detail?.page && custom.detail.page in PAGE_ACCESS_MAP) {
+        setCurrentPage(custom.detail.page as DashboardPage);
+      }
     };
     window.addEventListener('dashboard:navigate', onNavigate as EventListener);
     return () => window.removeEventListener('dashboard:navigate', onNavigate as EventListener);
@@ -82,7 +95,7 @@ function AppContent() {
     </ThemeContext.Provider>
   );
 
-  const safePage = canAccess(currentPage as any) ? currentPage : 'overview';
+  const safePage = canAccess(PAGE_ACCESS_MAP[currentPage]) ? currentPage : 'overview';
 
   const renderPage = () => {
     switch (safePage) {
