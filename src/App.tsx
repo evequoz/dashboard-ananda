@@ -54,11 +54,11 @@ const THEMES = {
 type DashboardPage = 'overview' | 'agenda' | 'tasks' | 'poste' | 'finance' | 'contacts';
 const PAGE_ACCESS_MAP: Record<DashboardPage, PageKey> = {
   overview: 'overview',
-  agenda: 'calendar',
+  agenda: 'agenda',
   tasks: 'tasks',
-  poste: 'emails',
+  poste: 'poste',
   finance: 'finance',
-  contacts: 'tools',
+  contacts: 'contacts',
 };
 
 function AppContent() {

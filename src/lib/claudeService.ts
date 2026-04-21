@@ -2,14 +2,15 @@ import { supabase } from './supabaseClient';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const claudeFunctionName = import.meta.env.VITE_SUPABASE_CLAUDE_FUNCTION || 'claude-pro';
+const claudeFunctionName = import.meta.env.VITE_SUPABASE_CLAUDE_FUNCTION || 'claude-proxy';
+const explicitClaudeFunctionUrl = import.meta.env.VITE_CLAUDE_FUNCTION_URL;
 
 export const askClaude = async (prompt: string, forceJson = false) => {
   if (!prompt?.trim()) throw new Error('Le prompt est requis.');
 
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
-  const functionUrl = `${supabaseUrl}/functions/v1/${claudeFunctionName}`;
+  const functionUrl = explicitClaudeFunctionUrl || `${supabaseUrl}/functions/v1/${claudeFunctionName}`;
 
   const response = await fetch(functionUrl, {
     method: 'POST',

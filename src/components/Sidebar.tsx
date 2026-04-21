@@ -12,11 +12,11 @@ export const Sidebar = ({ currentPage, onPageChange }: SidebarProps) => {
   const { theme, toggleTheme } = useTheme();
   const ACCESS_BY_MENU_PAGE: Record<string, PageKey> = {
     overview: 'overview',
-    agenda: 'calendar',
+    agenda: 'agenda',
     tasks: 'tasks',
-    poste: 'emails',
+    poste: 'poste',
     finance: 'finance',
-    contacts: 'tools',
+    contacts: 'contacts',
   };
 
   const menuItems = [
