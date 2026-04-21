@@ -3,8 +3,95 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
+import type { EventApi } from '@fullcalendar/core';
 import frLocale from '@fullcalendar/core/locales/fr';
 import { Sparkles, RefreshCw, Plus, X, Calendar, Clock, MapPin, Edit2, Trash2, Tag } from 'lucide-react';
+
+type CalendarDateInput = string | Date | null | undefined;
+
+interface EventFormData {
+  title: string;
+  allDay: boolean;
+  startDate: string;
+  endDate: string;
+  startTime: string;
+  endTime: string;
+  description: string;
+  location: string;
+  status: string;
+  eventType: string;
+  calendar: string;
+}
+
+interface NewEventFormData {
+  title: string;
+  date: string;
+  endDate: string;
+  allDay: boolean;
+  startTime: string;
+  endTime: string;
+  description: string;
+  location: string;
+  status: string;
+  recurrence: string;
+  calendar: string;
+  eventType: string;
+}
+
+interface CalendarApiItem {
+  id?: string;
+  summary?: string;
+  title?: string;
+  events?: string;
+  start?: { dateTime?: string; date?: string } | string;
+  end?: { dateTime?: string; date?: string } | string;
+  transparency?: string;
+  extendedProperties?: { private?: { eventType?: string } };
+  organizer?: { displayName?: string };
+  calendar?: string;
+  description?: string;
+  location?: string;
+  recurrence?: string | null;
+}
+
+interface CalendarUiEvent {
+  id: string;
+  title: string;
+  allDay: boolean;
+  start: string;
+  end?: string;
+  backgroundColor: string;
+  borderColor: string;
+  textColor: string;
+  borderStyle: 'solid' | 'dashed';
+  extendedProps: {
+    description: string;
+    location: string;
+    status: 'free' | 'busy';
+    recurrence: string | null;
+    calendar: string;
+    eventType: string;
+  };
+}
+
+interface LocalEventDraft {
+  id: string;
+  title: string;
+  allDay: boolean;
+  start?: string;
+  end?: string;
+  backgroundColor: string;
+  borderColor: string;
+  textColor: string;
+  extendedProps: {
+    description: string;
+    location: string;
+    status: string;
+    recurrence: string | null;
+    calendar: string;
+    eventType: string;
+  };
+}
 
 const C = {
   bg: 'var(--bg-main)', surface: 'var(--bg-surface)', card: 'var(--bg-card)',
@@ -25,9 +112,9 @@ const getCalendarColor = (calendarName: string) => {
   return CALENDAR_COLORS[calendarName] || { color: C.gold, bg: `${C.gold}18`, label: calendarName };
 };
 
-const extractCalendarItems = (payload: any): any[] => {
+const extractCalendarItems = (payload: unknown): CalendarApiItem[] => {
   if (!payload) return [];
-  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload)) return payload as CalendarApiItem[];
   if (typeof payload === 'string') {
     try {
       const parsed = JSON.parse(payload);
@@ -37,19 +124,20 @@ const extractCalendarItems = (payload: any): any[] => {
     }
   }
   if (typeof payload !== 'object') return [];
+  const record = payload as Record<string, unknown>;
   if (
-    payload?.start ||
-    payload?.end ||
-    payload?.summary ||
-    payload?.title ||
-    payload?.startDateTime
+    record.start ||
+    record.end ||
+    record.summary ||
+    record.title ||
+    record.startDateTime
   ) {
-    return [payload];
+    return [payload as CalendarApiItem];
   }
 
   const directKeys = ['items', 'events', 'data', 'result', 'body', 'records', 'calendar', 'output'];
   for (const key of directKeys) {
-    const candidate = (payload as any)[key];
+    const candidate = record[key];
     const extracted = extractCalendarItems(candidate);
     if (extracted.length) return extracted;
   }
@@ -57,9 +145,10 @@ const extractCalendarItems = (payload: any): any[] => {
   return [];
 };
 
-const normalizeCalendarItem = (raw: any): any => {
+const normalizeCalendarItem = (raw: unknown): CalendarApiItem | null => {
   if (!raw) return null;
-  const candidate = raw.json ?? raw.data ?? raw.event ?? raw;
+  const source = raw as Record<string, unknown>;
+  const candidate = (source.json ?? source.data ?? source.event ?? source) as CalendarApiItem;
   if (candidate?.start || candidate?.end || candidate?.summary || candidate?.title) return candidate;
   return null;
 };
@@ -88,10 +177,10 @@ const inputStyle: React.CSSProperties = {
   fontFamily: "'Outfit', sans-serif", boxSizing: 'border-box'
 };
 
-const formatTime = (dt: any) =>
+const formatTime = (dt: CalendarDateInput) =>
   dt ? new Date(dt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '--:--';
 
-const formatDate = (dt: any) =>
+const formatDate = (dt: CalendarDateInput) =>
   dt ? new Date(dt).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
 
 // Retourne HH:MM de l'heure actuelle arrondie à la demie
@@ -166,8 +255,8 @@ const EventTypesManager = ({ types, onUpdate, onClose }: {
 };
 
 const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
-  event: any; onClose: () => void; onDelete: (id: string) => void;
-  onUpdate: (id: string, data: any) => void; eventTypes: typeof DEFAULT_EVENT_TYPES;
+  event: EventApi; onClose: () => void; onDelete: (id: string) => void;
+  onUpdate: (id: string, data: EventFormData) => void; eventTypes: typeof DEFAULT_EVENT_TYPES;
 }) => {
   const currentType = eventTypes.find(t => t.label === event.extendedProps?.eventType) || eventTypes[eventTypes.length - 1];
   const calColor = getCalendarColor(event.extendedProps?.calendar || '');
@@ -198,12 +287,12 @@ const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
 
   const [timeError, setTimeError] = useState('');
 
-  const set = (k: string, v: any) => {
+  const set = (k: string, v: string | boolean) => {
     setForm(f => {
       const updated = { ...f, [k]: v };
       // Auto-ajustement fin si début change
       if (k === 'startTime') {
-        updated.endTime = addOneHour(v);
+        updated.endTime = addOneHour(String(v));
       }
       return updated;
     });
@@ -321,7 +410,7 @@ const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
               </div>
               <div>
                 <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Description</label>
-                <textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3} style={{ ...inputStyle, resize: 'vertical' } as any} />
+                <textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3} style={{ ...inputStyle, resize: 'vertical' } as React.CSSProperties} />
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
@@ -336,7 +425,7 @@ const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
 };
 
 const NewEventModal = ({ date, onClose, onSave, eventTypes }: {
-  date: string; onClose: () => void; onSave: (e: any) => void; eventTypes: typeof DEFAULT_EVENT_TYPES;
+  date: string; onClose: () => void; onSave: (e: NewEventFormData) => void; eventTypes: typeof DEFAULT_EVENT_TYPES;
 }) => {
   const now = getCurrentTime();
   const [form, setForm] = useState({
@@ -349,12 +438,12 @@ const NewEventModal = ({ date, onClose, onSave, eventTypes }: {
 
   const [timeError, setTimeError] = useState('');
 
-  const set = (k: string, v: any) => {
+  const set = (k: string, v: string | boolean) => {
     setForm(f => {
       const updated = { ...f, [k]: v };
       // Auto-ajustement fin si début change
       if (k === 'startTime') {
-        updated.endTime = addOneHour(v);
+        updated.endTime = addOneHour(String(v));
       }
       return updated;
     });
@@ -448,7 +537,7 @@ const NewEventModal = ({ date, onClose, onSave, eventTypes }: {
           </div>
           <div>
             <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Description</label>
-            <textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3} placeholder="Notes, lien Zoom..." style={{ ...inputStyle, resize: 'vertical' } as any} />
+            <textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3} placeholder="Notes, lien Zoom..." style={{ ...inputStyle, resize: 'vertical' } as React.CSSProperties} />
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
@@ -485,11 +574,11 @@ const fetchWithTimeout = async (url: string, ms = 12000) => {
 };
 
 export const CalendarPage = () => {
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<CalendarUiEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
-  const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [selectedEvent, setSelectedEvent] = useState<EventApi | null>(null);
   const [newEventDate, setNewEventDate] = useState<string | null>(null);
   const [showTypesManager, setShowTypesManager] = useState(false);
   const [eventTypes, setEventTypes] = useState<typeof DEFAULT_EVENT_TYPES>(() => {
@@ -501,15 +590,15 @@ export const CalendarPage = () => {
 
   const saveEventTypes = (types: typeof DEFAULT_EVENT_TYPES) => {
     setEventTypes(types);
-    try { localStorage.setItem('ananda-event-types', JSON.stringify(types)); } catch {}
+    try { localStorage.setItem('ananda-event-types', JSON.stringify(types)); } catch { /* ignore localStorage failures */ }
   };
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
     setSyncError(null);
     try {
-      let data: any = null;
-      let lastErr: any = null;
+      let data: unknown = null;
+      let lastErr: unknown = null;
 
       for (const endpoint of CALENDAR_WEBHOOKS) {
         try {
@@ -527,11 +616,18 @@ export const CalendarPage = () => {
       const rawEvents = extractCalendarItems(data);
 
       if (rawEvents.length) {
+        const hasStart = (item: CalendarApiItem) => {
+          if (!item.start) return false;
+          if (typeof item.start === 'string') return true;
+          return Boolean(item.start.dateTime || item.start.date);
+        };
         const formatted = rawEvents
-          .map((raw: any) => normalizeCalendarItem(raw))
-          .filter((item: any) => !!item && !!(item.start?.dateTime || item.start?.date || item.start))
-          .map((item: any) => {
-          const isAllDay = !item.start?.dateTime;
+          .map((raw) => normalizeCalendarItem(raw))
+          .filter((item): item is CalendarApiItem => !!item && hasStart(item))
+          .map((item): CalendarUiEvent => {
+          const startObj = typeof item.start === 'string' ? null : item.start;
+          const endObj = typeof item.end === 'string' ? null : item.end;
+          const isAllDay = !startObj?.dateTime;
           const isFree = item.transparency === 'transparent';
           const eventType = item.extendedProperties?.private?.eventType || '';
           const calendarName = item.organizer?.displayName || item.calendar || 'Calendrier';
@@ -551,8 +647,8 @@ export const CalendarPage = () => {
             id: item.id || `evt-${Math.random()}`,
             title: item.summary || item.title || item.events || 'Événement',
             allDay: isAllDay,
-            start: item.start?.dateTime || item.start?.date || item.start,
-            end: item.end?.dateTime || item.end?.date || item.end,
+            start: typeof item.start === 'string' ? item.start : (item.start?.dateTime || item.start?.date || ''),
+            end: typeof item.end === 'string' ? item.end : (endObj?.dateTime || endObj?.date),
             // Couleur basée sur le calendrier
             backgroundColor: isFree ? 'transparent' : calColor.bg,
             borderColor: calColor.color,
@@ -570,12 +666,12 @@ export const CalendarPage = () => {
         });
         setEvents(formatted);
         setLastSync(new Date());
-        try { localStorage.setItem('ananda-calendar-cache', JSON.stringify(formatted)); } catch {}
+        try { localStorage.setItem('ananda-calendar-cache', JSON.stringify(formatted)); } catch { /* ignore localStorage failures */ }
       } else if (Array.isArray(data) && data.length === 0) {
         // Keep explicit empty array behavior when upstream really has no events.
         setEvents([]);
         setLastSync(new Date());
-        try { localStorage.setItem('ananda-calendar-cache', JSON.stringify([])); } catch {}
+        try { localStorage.setItem('ananda-calendar-cache', JSON.stringify([])); } catch { /* ignore localStorage failures */ }
       } else {
         throw new Error('Format webhook inattendu');
       }
@@ -588,11 +684,11 @@ export const CalendarPage = () => {
           const parsed = JSON.parse(cached);
           if (Array.isArray(parsed)) setEvents(parsed);
         }
-      } catch {}
+      } catch { /* ignore invalid cache */ }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [eventTypes]);
 
   useEffect(() => {
     fetchEvents();
@@ -600,11 +696,11 @@ export const CalendarPage = () => {
     return () => clearInterval(interval);
   }, [fetchEvents]);
 
-  const handleCreate = async (form: any) => {
+  const handleCreate = async (form: NewEventFormData) => {
     const calColor = getCalendarColor(form.calendar);
     const tempId = `local-${Date.now()}`;
 
-    const newEvent: any = {
+    const newEvent: LocalEventDraft = {
       id: tempId,
       title: form.title,
       allDay: form.allDay,
@@ -648,7 +744,7 @@ export const CalendarPage = () => {
     }
   };
 
-  const handleUpdate = (id: string, data: any) => {
+  const handleUpdate = (id: string, data: EventFormData) => {
     const calColor = getCalendarColor(data.calendar || 'Calendrier');
     setEvents(prev => prev.map(e =>
       e.id === id ? {

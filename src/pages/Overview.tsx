@@ -22,6 +22,11 @@ interface EmailItem {
   'Résumé IA': string; 'Date réception': string | null;
   Traité: boolean; Compte: string;
 }
+interface CalendarEventItem {
+  summary?: string;
+  start?: { dateTime?: string; date?: string };
+  end?: { dateTime?: string; date?: string };
+}
 
 const PROJET_COLORS: Record<string, { color: string; bg: string }> = {
   'Formation': { color: '#6699e0', bg: '#6699e018' },
@@ -69,7 +74,7 @@ const MOCK_PARAMPARA_STATS = {
 
 export const Overview = () => {
   const [taches, setTaches] = useState<Tache[]>([]);
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<CalendarEventItem[]>([]);
   const [emails, setEmails] = useState<EmailItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtre, setFiltre] = useState('Tout');
@@ -80,8 +85,10 @@ export const Overview = () => {
   const loadEmails = async () => {
     try {
       const data = await listInboxEmails(50);
-      setEmails((data || []).filter((e: any) => !e.Traité).reverse());
-    } catch {}
+      setEmails((data || []).filter((e: EmailItem) => !e.Traité).reverse());
+    } catch {
+      // Ignore transient inbox fetch errors on dashboard.
+    }
   };
 
   useEffect(() => { loadEmails(); const t = setInterval(loadEmails, 3 * 60 * 1000); return () => clearInterval(t); }, []);
@@ -97,7 +104,9 @@ export const Overview = () => {
           setEvents(data.filter(i => new Date(i.end?.dateTime || i.end?.date) > now && new Date(i.start?.dateTime || i.start?.date) <= in7)
             .sort((a, b) => new Date(a.start?.dateTime || a.start?.date).getTime() - new Date(b.start?.dateTime || b.start?.date).getTime()));
         }
-      } catch {}
+      } catch {
+        // Ignore transient calendar webhook failures on dashboard.
+      }
     };
     load(); const t = setInterval(load, 60000); return () => clearInterval(t);
   }, []);
@@ -107,14 +116,16 @@ export const Overview = () => {
     localStorage.setItem('dashboard-open-task-id', id);
     window.dispatchEvent(new CustomEvent('dashboard:navigate', { detail: { page: 'tasks' } }));
   };
-  const marquerTraite = async (id: number) => { setEmails(p => p.filter(e => e.id !== id)); try { await updateInboxEmail(id, { Traité: true }); } catch {} };
+  const marquerTraite = async (id: number) => { setEmails(p => p.filter(e => e.id !== id)); try { await updateInboxEmail(id, { Traité: true }); } catch { /* no-op: optimistic UI */ } };
   const supprimerEmail = async (id: number) => {
     setEmails(p => p.filter(e => e.id !== id));
     try {
       const email = emails.find(e => e.id === id);
       await notifyInboxDeletionSync([{ id, accountEmail: email?.Compte }], 'hard_delete');
       await deleteInboxEmail(id);
-    } catch {}
+    } catch {
+      // Keep optimistic deletion in UI if backend call fails.
+    }
   };
   const ajouterTache = async () => {
     if (!newTask.trim()) return;
@@ -122,7 +133,9 @@ export const Overview = () => {
       const row = await createTaskLegacy({ Titre: newTask.trim(), Statut: 'À faire', Priorité: 'Normale', 'Date échéance': new Date().toISOString().split('T')[0] });
       setTaches(p => [...p, { id: row.id.toString(), text: newTask.trim(), completed: false, priorite: 'Normale', projet: '', dateEcheance: null }]);
       setNewTask(''); setAdding(false);
-    } catch {}
+    } catch {
+      // Keep quick-add UI fluid; task list refresh will reconcile later.
+    }
   };
 
   const today = new Date();
@@ -143,7 +156,7 @@ export const Overview = () => {
   })();
   const tachesApercu = tachesAffichees.slice(0, 6);
 
-  const eventsByDay: Record<string, any[]> = {};
+  const eventsByDay: Record<string, CalendarEventItem[]> = {};
   events.forEach(e => { const k = new Date(e.start?.dateTime || e.start?.date).toDateString(); if (!eventsByDay[k]) eventsByDay[k] = []; eventsByDay[k].push(e); });
   const agendaPanelHeight = events.length <= 2 ? '48vh' : '62vh';
 
@@ -293,7 +306,6 @@ export const Overview = () => {
             {projets.length > 1 && (
               <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 14 }}>
                 {projets.map(p => {
-                  const col = p === 'Tout' ? { color: 'var(--text-secondary)', bg: 'var(--border)' } : pc(p);
                   const isActive = filtre === p;
                   return (
                     <button key={p} onClick={() => setFiltre(p)} className="ov-filtre" style={{ padding: '5px 12px', borderRadius: 99, fontSize: 11, fontWeight: 600, border: `1px solid ${isActive ? (p === 'Tout' ? 'var(--border-hover)' : pc(p).color + '80') : 'var(--border)'}`, background: isActive ? (p === 'Tout' ? 'var(--border)' : pc(p).bg) : 'transparent', color: isActive ? (p === 'Tout' ? 'var(--text-secondary)' : pc(p).color) : 'var(--text-muted)' }}>

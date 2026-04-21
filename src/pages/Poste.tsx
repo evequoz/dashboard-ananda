@@ -275,7 +275,7 @@ const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus,
   useEffect(() => {
     setText(initialText || suggestions[0]?.value || '');
     setActiveTab(0);
-  }, [email.id, initialText]);
+  }, [email.id, initialText, suggestions]);
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -515,7 +515,7 @@ const ComposeModal = ({ activeAccount, accountColor, onSend, onClose, sending, s
 // ── Panneau contact (Systeme.io + fallback contacts_admin) ──
 interface SysContact {
   id: number; email: string; firstName?: string; lastName?: string;
-  phone?: string; tags?: Array<{ id: number; name: string }>; createdAt?: string; [k: string]: any;
+  phone?: string; tags?: Array<{ id: number; name: string }>; createdAt?: string; [k: string]: unknown;
 }
 interface AdminContact {
   id: number; Prénom: string; Nom: string; Email: string; Téléphone: string;
@@ -547,7 +547,7 @@ const ContactSidePanel = ({ senderRaw }: { senderRaw: string }) => {
         }
         const admin = await findAdminByEmail(email);
         if (admin) {
-          setAdminContact(admin as any);
+          setAdminContact(admin as AdminContact);
           return;
         }
         setNotFound(true);
@@ -728,7 +728,7 @@ export const Poste = () => {
       const raw = localStorage.getItem('dashboard-read-inbox-ids');
       if (!raw) return;
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) setReadInboxIds(parsed.filter((id: any) => Number.isFinite(Number(id))).map((id: any) => Number(id)));
+      if (Array.isArray(parsed)) setReadInboxIds(parsed.filter((id: unknown) => Number.isFinite(Number(id))).map((id: unknown) => Number(id)));
     } catch {
       // Ignore corrupted local state.
     }
@@ -784,13 +784,6 @@ export const Poste = () => {
   const filteredSent = sentEmails.filter(e => normalizeAccountEmail(e.Compte) === activeAccount && !e['Supprimé le']);
   const trashedInbox = emails.filter(e => normalizeAccountEmail(e.Compte) === activeAccount && !!e['Supprimé le']);
   const trashedSent = sentEmails.filter(e => normalizeAccountEmail(e.Compte) === activeAccount && !!e['Supprimé le']);
-  const allInboxSelected = filteredEmails.length > 0 && filteredEmails.every(e => selectedInboxIds.includes(e.id));
-  const allSentSelected = filteredSent.length > 0 && filteredSent.every(e => selectedSentIds.includes(e.id));
-  const allTrashSelected =
-    (trashedInbox.length + trashedSent.length) > 0
-    && trashedInbox.every(e => selectedTrashInboxIds.includes(e.id))
-    && trashedSent.every(e => selectedTrashSentIds.includes(e.id));
-
   const unreadCount = (acc: string) => emails.filter(e => normalizeAccountEmail(e.Compte) === acc && !e.Traité && !e['Supprimé le']).length;
   const markAsTreated = async (email: Email) => {
     try {

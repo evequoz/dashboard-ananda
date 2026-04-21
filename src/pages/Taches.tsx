@@ -53,7 +53,29 @@ interface PlanHistoryEntry {
   tasks: PlannedTask[];
 }
 
-function todayStr() { return new Date().toISOString().split('T')[0]; }
+interface FeedbackState {
+  type: 'success' | 'error';
+  message: string;
+}
+
+function dateToLocalIso(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+function todayStr() { return dateToLocalIso(new Date()); }
+function extractDatePart(value?: string) {
+  if (!value) return '';
+  return value.split('T')[0];
+}
+function formatDateLabel(value?: string) {
+  const iso = extractDatePart(value);
+  if (!iso) return '';
+  const [year, month, day] = iso.split('-').map(Number);
+  if (!year || !month || !day) return iso;
+  return new Date(year, month - 1, day).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+}
 function getVal(f: any): string {
   if (!f) return '';
   if (Array.isArray(f)) return f[0]?.value ?? '';
@@ -62,7 +84,7 @@ function getVal(f: any): string {
 }
 function isOverdue(t: Task) {
   if (!t['Date échéance'] || getVal(t.Statut) === 'Fait') return false;
-  return t['Date échéance'].split('T')[0] < todayStr();
+  return extractDatePart(t['Date échéance']) < todayStr();
 }
 function getParentId(t: Task): number | null {
   const p = t['Tâche parente'];
@@ -84,6 +106,28 @@ function buildChildrenMap(tasks: Task[]) {
     map[parentId].push(task);
   }
   return map;
+}
+
+function sortTasksForDisplay(items: Task[]) {
+  return [...items].sort((a, b) => {
+    const aDone = getVal(a.Statut) === 'Fait';
+    const bDone = getVal(b.Statut) === 'Fait';
+    if (aDone !== bDone) return aDone ? 1 : -1;
+
+    const aOverdue = isOverdue(a);
+    const bOverdue = isOverdue(b);
+    if (aOverdue !== bOverdue) return aOverdue ? -1 : 1;
+
+    const prioRank: Record<string, number> = { Haute: 0, Normale: 1, Basse: 2 };
+    const prioDiff = (prioRank[getVal(a.Priorité)] ?? 1) - (prioRank[getVal(b.Priorité)] ?? 1);
+    if (prioDiff !== 0) return prioDiff;
+
+    const aDue = extractDatePart(a['Date échéance']) || '9999-12-31';
+    const bDue = extractDatePart(b['Date échéance']) || '9999-12-31';
+    if (aDue !== bDue) return aDue.localeCompare(bDue);
+
+    return (a.Titre || '').localeCompare(b.Titre || '', 'fr');
+  });
 }
 
 function PrioBadge({ prio }: { prio: string }) {
@@ -387,15 +431,14 @@ function PlannerModal({ onClose, onApply }: PlannerModalProps) {
 }
 
 // ─── CARTE TÂCHE ─────────────────────────────────────────────
-function TaskCard({ task, getChildren, onStatusChange, onEdit, onDelete, onAddSubTask, compact = false, depth = 0 }: {
+function TaskCard({ task, getChildren, onStatusChange, onEdit, onDelete, onAddSubTask, compact = false }: {
   task: Task;
   getChildren: (parentId: number) => Task[];
   onStatusChange: (id: number, statut: string) => void;
   onEdit: (task: Task) => void;
-  onDelete?: (id: number) => void;
+  onDelete?: (task: Task) => void;
   onAddSubTask?: (parent: Task) => void;
   compact?: boolean;
-  depth?: number;
 }) {
   const [expanded, setExpanded] = useState(false);
   const statut = getVal(task.Statut);
@@ -422,7 +465,9 @@ function TaskCard({ task, getChildren, onStatusChange, onEdit, onDelete, onAddSu
       {/* Ligne principale */}
       <div className="flex items-start gap-2 p-2.5">
         {/* Toggle sous-tâches */}
-        <button onClick={() => hasSubs && !compact && setExpanded(e => !e)}
+        <button
+          onClick={() => hasSubs && !compact && setExpanded(e => !e)}
+          aria-label={expanded ? 'Replier les sous-tâches' : 'Déplier les sous-tâches'}
           className={`mt-0.5 flex-shrink-0 transition-colors ${hasSubs && !compact ? 'text-[var(--text-muted)] hover:text-[var(--text-primary)]' : 'text-transparent cursor-default'}`}>
           {hasSubs && !compact
             ? expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronR className="w-4 h-4" />
@@ -430,7 +475,10 @@ function TaskCard({ task, getChildren, onStatusChange, onEdit, onDelete, onAddSu
         </button>
 
         {/* Statut */}
-        <button onClick={() => onStatusChange(task.id, nextStatut())} className="mt-0.5 flex-shrink-0 hover:scale-110 transition-all">
+        <button
+          onClick={() => onStatusChange(task.id, nextStatut())}
+          aria-label={`Changer le statut de ${task.Titre || 'la tâche'}`}
+          className="mt-0.5 flex-shrink-0 hover:scale-110 transition-all">
           {done
             ? <CheckCircle2 className="w-4 h-4 text-[#4caf7d]" />
             : statut === 'En cours'
@@ -462,8 +510,8 @@ function TaskCard({ task, getChildren, onStatusChange, onEdit, onDelete, onAddSu
               </span>
             )}
             {task['Date échéance'] && (
-              <span className="text-[10px] text-[var(--text-muted)]">
-                {new Date(task['Date échéance']).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+              <span className={`text-[10px] ${overdue && !done ? 'text-amber-300' : 'text-[var(--text-muted)]'}`}>
+                {formatDateLabel(task['Date échéance'])}
               </span>
             )}
             {hasSubs && (
@@ -475,12 +523,14 @@ function TaskCard({ task, getChildren, onStatusChange, onEdit, onDelete, onAddSu
         {/* Boutons action */}
         <div className="flex-shrink-0 flex items-center gap-1">
           <button onClick={() => onEdit(task)}
+            aria-label={`Modifier ${task.Titre || 'la tâche'}`}
             className="p-1.5 rounded-lg text-[#33335a] hover:text-[#c9a84c] hover:bg-[var(--border)] transition-all"
             title="Modifier">
             <Pencil className="w-3.5 h-3.5" />
           </button>
           {onDelete && (
-            <button onClick={() => onDelete(task.id)}
+            <button onClick={() => onDelete(task)}
+              aria-label={`Supprimer ${task.Titre || 'la tâche'}`}
               className="p-1.5 rounded-lg text-[#33335a] hover:text-red-400 hover:bg-red-500/10 transition-all"
               title="Supprimer">
               <Trash2 className="w-3.5 h-3.5" />
@@ -512,7 +562,6 @@ function TaskCard({ task, getChildren, onStatusChange, onEdit, onDelete, onAddSu
                 onDelete={onDelete}
                 onAddSubTask={onAddSubTask}
                 compact={false}
-                depth={depth + 1}
               />
             </div>
           ))}
@@ -539,7 +588,7 @@ function KanbanView({ tasks, onStatusChange, onAddInCol, onEdit, onDelete, onAdd
   onStatusChange: (id: number, statut: string) => void;
   onAddInCol: (statut: string) => void;
   onEdit: (task: Task) => void;
-  onDelete: (id: number) => void;
+  onDelete: (task: Task) => void;
   onAddSubTask: (parent: Task) => void;
 }) {
   const dragId = useRef<number | null>(null);
@@ -549,7 +598,7 @@ function KanbanView({ tasks, onStatusChange, onAddInCol, onEdit, onDelete, onAdd
   const parentTasks = tasks.filter(t => !getParentId(t));
 
   return (
-    <div className="grid grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
       {KANBAN_COLS.map(col => {
         const colTasks = parentTasks.filter(t => {
           const s = getVal(t.Statut);
@@ -602,7 +651,7 @@ function TodayView({ tasks, onStatusChange, onEdit, onDelete, onAddSubTask }: {
   tasks: Task[];
   onStatusChange: (id: number, statut: string) => void;
   onEdit: (task: Task) => void;
-  onDelete: (id: number) => void;
+  onDelete: (task: Task) => void;
   onAddSubTask: (parent: Task) => void;
 }) {
   const [focusFilter, setFocusFilter] = useState<'all' | 'todo' | 'inprogress' | 'done' | 'overdue'>('all');
@@ -612,14 +661,14 @@ function TodayView({ tasks, onStatusChange, onEdit, onDelete, onAddSubTask }: {
   const parentTasks = tasks.filter(t => !getParentId(t));
 
   const todayTasks = parentTasks.filter(t => {
-    const d = t['Date échéance']?.split('T')[0];
+    const d = extractDatePart(t['Date échéance']);
     return !d || d <= today;
   });
 
-  const overdue = todayTasks.filter(t => isOverdue(t));
-  const inprogress = todayTasks.filter(t => getVal(t.Statut) === 'En cours' && !isOverdue(t));
-  const pending = todayTasks.filter(t => getVal(t.Statut) === 'À faire' && !isOverdue(t));
-  const done = todayTasks.filter(t => getVal(t.Statut) === 'Fait');
+  const overdue = sortTasksForDisplay(todayTasks.filter(t => isOverdue(t)));
+  const inprogress = sortTasksForDisplay(todayTasks.filter(t => getVal(t.Statut) === 'En cours' && !isOverdue(t)));
+  const pending = sortTasksForDisplay(todayTasks.filter(t => getVal(t.Statut) === 'À faire' && !isOverdue(t)));
+  const done = sortTasksForDisplay(todayTasks.filter(t => getVal(t.Statut) === 'Fait'));
 
   const visibleOverdue = focusFilter === 'all' || focusFilter === 'overdue' ? overdue : [];
   const visibleInProgress = focusFilter === 'all' || focusFilter === 'inprogress' ? inprogress : [];
@@ -641,7 +690,7 @@ function TodayView({ tasks, onStatusChange, onEdit, onDelete, onAddSubTask }: {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { id: 'todo', label: 'À faire', value: pending.length, color: 'text-[var(--text-primary)]' },
           { id: 'inprogress', label: 'En cours', value: inprogress.length, color: 'text-[#c9a84c]' },
@@ -673,20 +722,26 @@ function TodayView({ tasks, onStatusChange, onEdit, onDelete, onAddSubTask }: {
           <p className="text-[#33335a] text-xs mt-1">Clique sur "Nouvelle tâche" pour commencer</p>
         </div>
       )}
-      <Section title="En retard — à traiter" items={visibleOverdue} color="#f59e0b" />
-      <Section title="En cours" items={visibleInProgress} color="#c9a84c" />
-      <Section title="À faire aujourd'hui" items={visiblePending} color="#5a587a" />
-      <Section title="Faites" items={visibleDone} color="#4caf7d" />
+      {focusFilter !== 'all' && visibleOverdue.length === 0 && visibleInProgress.length === 0 && visiblePending.length === 0 && visibleDone.length === 0 && (
+        <div className="text-center py-10 border border-dashed border-[var(--border)] rounded-xl">
+          <p className="text-sm text-[var(--text-muted)]">Aucune tâche dans ce filtre</p>
+          <p className="text-xs text-[#33335a] mt-1">Clique de nouveau sur la carte active pour revenir à l'ensemble</p>
+        </div>
+      )}
+      <div className="space-y-5">
+        <Section title="En retard — à traiter" items={visibleOverdue} color="#f59e0b" />
+        <Section title="En cours" items={visibleInProgress} color="#c9a84c" />
+        <Section title="À faire aujourd'hui" items={visiblePending} color="#5a587a" />
+        <Section title="Faites" items={visibleDone} color="#4caf7d" />
+      </div>
     </div>
   );
 }
 
 // ─── VUE CALENDRIER ──────────────────────────────────────────
-function CalendarView({ tasks, onStatusChange, onEdit, onDelete }: {
+function CalendarView({ tasks, onEdit }: {
   tasks: Task[];
-  onStatusChange: (id: number, statut: string) => void;
   onEdit: (task: Task) => void;
-  onDelete?: (id: number) => void;
 }) {
   const [mode, setMode] = useState<'week' | '15days'>('week');
   const [offset, setOffset] = useState(0);
@@ -710,7 +765,7 @@ function CalendarView({ tasks, onStatusChange, onEdit, onDelete }: {
   const tasksByDate: Record<string, Task[]> = {};
   parentTasks.forEach(t => {
     if (t['Date échéance']) {
-      const d = t['Date échéance'].split('T')[0];
+      const d = extractDatePart(t['Date échéance']);
       if (!tasksByDate[d]) tasksByDate[d] = [];
       tasksByDate[d].push(t);
     }
@@ -754,21 +809,22 @@ function CalendarView({ tasks, onStatusChange, onEdit, onDelete }: {
       </div>
 
       {/* Grille */}
-      <div className={`grid gap-2 ${mode === 'week' ? 'grid-cols-7' : 'grid-cols-5'}`}>
-        {dateRange.map(date => {
-          const dateStr = date.toISOString().split('T')[0];
-          const dayTasks = tasksByDate[dateStr] || [];
-          const isToday = dateStr === todayStr();
-          const isPast = date < todayDate;
-          const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-          const pending = dayTasks.filter(t => getVal(t.Statut) !== 'Fait').length;
-          const done = dayTasks.filter(t => getVal(t.Statut) === 'Fait').length;
+      <div className="overflow-x-auto pb-1">
+        <div className={`grid gap-2 min-w-[920px] ${mode === 'week' ? 'grid-cols-7' : 'grid-cols-5'}`}>
+          {dateRange.map(date => {
+            const dateStr = dateToLocalIso(date);
+            const dayTasks = tasksByDate[dateStr] || [];
+            const isToday = dateStr === todayStr();
+            const isPast = date < todayDate;
+            const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+            const pending = dayTasks.filter(t => getVal(t.Statut) !== 'Fait').length;
+            const done = dayTasks.filter(t => getVal(t.Statut) === 'Fait').length;
 
-          return (
-            <div key={dateStr} className={`rounded-xl border p-2 transition-all ${
-              isToday ? 'border-[#c9a84c]/50' : 'border-[var(--border)]'
-            } ${isWeekend && !isToday ? 'opacity-60' : ''}`}
-              style={{ background: isToday ? 'rgba(201,168,76,0.06)' : 'var(--bg-card)', minHeight: mode === 'week' ? 130 : 100 }}>
+            return (
+              <div key={dateStr} className={`rounded-xl border p-2 transition-all ${
+                isToday ? 'border-[#c9a84c]/50' : 'border-[var(--border)]'
+              } ${isWeekend && !isToday ? 'opacity-60' : ''}`}
+                style={{ background: isToday ? 'rgba(201,168,76,0.06)' : 'var(--bg-card)', minHeight: mode === 'week' ? 130 : 100 }}>
 
               {/* En-tête */}
               <div className="mb-2">
@@ -812,9 +868,10 @@ function CalendarView({ tasks, onStatusChange, onEdit, onDelete }: {
                   <p className="text-[9px] text-[var(--text-muted)] pl-1">+{dayTasks.length - maxPerDay} autres</p>
                 )}
               </div>
-            </div>
-          );
-        })}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -825,6 +882,7 @@ export const Taches = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [view, setView] = useState<View>('today');
   const [modal, setModal] = useState<ModalState>({ open: false, mode: 'create', statut: 'À faire', parent: null, task: null });
   const [plannerOpen, setPlannerOpen] = useState(false);
@@ -857,20 +915,32 @@ export const Taches = () => {
     localStorage.removeItem('dashboard-open-task-id');
   }, [tasks]);
 
+  useEffect(() => {
+    if (!feedback) return;
+    const timeout = window.setTimeout(() => setFeedback(null), 2800);
+    return () => window.clearTimeout(timeout);
+  }, [feedback]);
+
   async function updateStatut(id: number, statut: string) {
     setTasks(prev => prev.map(t => t.id === id ? { ...t, Statut: { id: 0, value: statut, color: '' }, Fait: statut === 'Fait' } : t));
     try {
       await updateTaskLegacy(id, { Statut: statut, Fait: statut === 'Fait' });
-    } catch { loadTasks(); }
+      setFeedback({ type: 'success', message: `Statut mis à jour: ${statut}` });
+    } catch {
+      setFeedback({ type: 'error', message: "Échec de mise à jour du statut." });
+      loadTasks();
+    }
   }
 
   function handleSaved(task: Task) {
     setTasks(prev => [task, ...prev]);
+    setFeedback({ type: 'success', message: 'Tâche créée.' });
     setModal({ open: false, mode: 'create', statut: 'À faire', parent: null, task: null });
   }
 
   function handleUpdated(updated: Task) {
     setTasks(prev => prev.map(t => t.id === updated.id ? updated : t));
+    setFeedback({ type: 'success', message: 'Tâche mise à jour.' });
     setModal({ open: false, mode: 'create', statut: 'À faire', parent: null, task: null });
   }
 
@@ -886,12 +956,41 @@ export const Taches = () => {
     setModal({ open: true, mode: 'create', statut, parent: null, task: null });
   }
 
-  async function deleteTask(id: number) {
-    if (!confirm('Supprimer cette tâche ?')) return;
-    setTasks(prev => prev.filter(t => t.id !== id));
+  async function deleteTask(task: Task) {
+    const childCount = tasks.filter(t => getParentId(t) === task.id).length;
+    const taskLabel = task.Titre?.trim() || 'cette tâche';
+    const warning = childCount > 0
+      ? `Supprimer "${taskLabel}" ?\n\n${childCount} sous-tâche(s) liée(s) seront également impactées selon la configuration des relations.`
+      : `Supprimer "${taskLabel}" ?`;
+    if (!confirm(warning)) return;
+    const childrenMap = buildChildrenMap(tasks);
+    const idsToRemove = new Set<number>();
+    const deleteOrder: number[] = [];
+    const visit = (id: number) => {
+      if (idsToRemove.has(id)) return;
+      idsToRemove.add(id);
+      const children = childrenMap[id] || [];
+      for (const child of children) visit(child.id);
+      // Post-order: delete children before parent.
+      deleteOrder.push(id);
+    };
+    visit(task.id);
+    setTasks(prev => prev.filter(t => !idsToRemove.has(t.id)));
     try {
-      await deleteTaskLegacy(id);
-    } catch { loadTasks(); }
+      for (const idToDelete of deleteOrder) {
+        await deleteTaskLegacy(idToDelete);
+      }
+      await loadTasks();
+      setFeedback({
+        type: 'success',
+        message: deleteOrder.length > 1
+          ? `Tâche et ${deleteOrder.length - 1} sous-tâche(s) supprimées.`
+          : 'Tâche supprimée.',
+      });
+    } catch {
+      setFeedback({ type: 'error', message: 'Suppression impossible, rechargement en cours.' });
+      loadTasks();
+    }
   }
 
   async function createPlannedTask(task: PlannedTask, parentId: number | null = null): Promise<void> {
@@ -918,6 +1017,7 @@ export const Taches = () => {
       await createPlannedTask(task, null);
     }
     await loadTasks();
+    setFeedback({ type: 'success', message: 'Plan IA appliqué avec succès.' });
   }
 
   const VIEWS: { id: View; label: string; icon: any }[] = [
@@ -933,8 +1033,8 @@ export const Taches = () => {
           <h1 className="text-2xl font-bold text-[var(--text-primary)]">Tâches</h1>
           <p className="text-sm text-[var(--text-muted)] mt-0.5 capitalize">{today}</p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg p-1 gap-1">
+        <div className="flex items-center gap-3 flex-wrap w-full lg:w-auto">
+          <div className="flex items-center bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg p-1 gap-1 w-full sm:w-auto overflow-x-auto">
             {VIEWS.map(v => {
               const Icon = v.icon;
               return (
@@ -946,7 +1046,7 @@ export const Taches = () => {
               );
             })}
           </div>
-          <button onClick={loadTasks} className="p-2 rounded-lg border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[#33335a] transition-all">
+          <button onClick={loadTasks} aria-label="Rafraîchir la liste des tâches" className="p-2 rounded-lg border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[#33335a] transition-all">
             <RefreshCw className="w-4 h-4" />
           </button>
           <button onClick={() => setPlannerOpen(true)}
@@ -961,6 +1061,24 @@ export const Taches = () => {
       </div>
 
       {error && <div className="bg-red-950/30 border border-red-800/40 text-red-400 text-sm rounded-xl p-4">{error}</div>}
+      {feedback && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`rounded-xl border px-4 py-3 text-sm ${
+            feedback.type === 'success'
+              ? 'bg-emerald-950/20 border-emerald-800/40 text-emerald-300'
+              : 'bg-red-950/30 border-red-800/40 text-red-300'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {feedback.type === 'success'
+              ? <CheckCircle2 className="w-4 h-4" />
+              : <AlertTriangle className="w-4 h-4" />}
+            <span>{feedback.message}</span>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
@@ -970,7 +1088,7 @@ export const Taches = () => {
         <>
           {view === 'today' && <TodayView tasks={tasks} onStatusChange={updateStatut} onEdit={openEdit} onDelete={deleteTask} onAddSubTask={openAddSubTask} />}
           {view === 'kanban' && <KanbanView tasks={tasks} onStatusChange={updateStatut} onAddInCol={openCreate} onEdit={openEdit} onDelete={deleteTask} onAddSubTask={openAddSubTask} />}
-          {view === 'calendar' && <CalendarView tasks={tasks} onStatusChange={updateStatut} onEdit={openEdit} onDelete={deleteTask} />}
+          {view === 'calendar' && <CalendarView tasks={tasks} onEdit={openEdit} />}
         </>
       )}
 
