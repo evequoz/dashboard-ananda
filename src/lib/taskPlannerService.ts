@@ -1,4 +1,4 @@
-import { askGemini } from './geminiService';
+import { askClaude } from './claudeService';
 
 export interface PlannedTask {
   title: string;
@@ -54,7 +54,7 @@ Format attendu:
 }
 `;
 
-  const response = await askGemini(prompt, true);
+  const response = await askClaude(prompt, true);
   const data = response.data as PlannedTaskPayload;
   if (!data || !Array.isArray(data.tasks)) {
     throw new Error("Réponse IA invalide: aucune liste de tâches.");
