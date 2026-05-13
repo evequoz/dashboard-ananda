@@ -70,6 +70,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
+  console.log('JWT OK');
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -88,6 +89,7 @@ serve(async (req) => {
         `dashboard_inbox_owner_user_id: ${ownerErr?.message ?? 'null'}`,
       );
     }
+    console.log('Owner ID:', ownerId);
 
     const { data: rulesRaw } = await supabase
       .from('email_senders')
@@ -99,6 +101,7 @@ serve(async (req) => {
       .select('id, email, imap_host, imap_port, username, active, last_uid_seen')
       .eq('active', true);
     if (accErr) throw accErr;
+    console.log('Accounts:', accounts?.length);
 
     for (const acc of (accounts ?? []) as EmailAccount[]) {
       const pass = imapPasswordFor(acc.email);
@@ -121,6 +124,7 @@ serve(async (req) => {
       let maxUidHandled = acc.last_uid_seen;
 
       try {
+        console.log('Connecting IMAP:', acc.email);
         await client.connect();
         const lock = await client.getMailboxLock('INBOX');
         try {
@@ -313,6 +317,10 @@ serve(async (req) => {
         } finally {
           lock.release();
         }
+      } catch (e) {
+        const imapMsg = e instanceof Error ? e.message : String(e);
+        console.error('IMAP error:', imapMsg);
+        throw e instanceof Error ? e : new Error(imapMsg);
       } finally {
         await client.logout().catch(() => undefined);
       }
@@ -323,6 +331,7 @@ serve(async (req) => {
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    console.error('email-sync fatal:', msg);
     return new Response(JSON.stringify({ ok: false, error: msg }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
