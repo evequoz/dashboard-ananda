@@ -14,6 +14,7 @@ const { ImapFlow } = require('imapflow');
 const { simpleParser } = require('mailparser');
 const nodemailer = require('nodemailer');
 const fetch = require('node-fetch');
+const ws = require('ws');
 
 const PER_ACCOUNT_TIMEOUT_MS = 20000;
 const GLOBAL_BUDGET_CAP_MS = 150000;
@@ -143,6 +144,7 @@ async function main() {
 
   const supabase = createClient(supabaseUrl, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
+    realtime: { transport: ws },
   });
 
   const summary = { accounts: [] };
