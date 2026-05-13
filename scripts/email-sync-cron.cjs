@@ -13,7 +13,6 @@ const { createClient } = require('@supabase/supabase-js');
 const { ImapFlow } = require('imapflow');
 const { simpleParser } = require('mailparser');
 const nodemailer = require('nodemailer');
-const nodeFetch = require('node-fetch');
 const ws = require('ws');
 
 const PER_ACCOUNT_TIMEOUT_MS = 20000;
@@ -68,6 +67,42 @@ async function senderSeenBefore(supabase, accountEmail, fromHeader) {
   return (count ?? 0) > 0;
 }
 
+function callGemini(prompt) {
+  return new Promise((resolve, reject) => {
+    const https = require('https');
+    const apiKey = process.env.GEMINI_API_KEY;
+    const body = JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0, maxOutputTokens: 50 },
+    });
+    const req = https.request(
+      {
+        hostname: 'generativelanguage.googleapis.com',
+        path: `/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+        },
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(data));
+          } catch (e) {
+            reject(e);
+          }
+        });
+      },
+    );
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
 async function classifyEmail(subject, from, snippet) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return { score: 0.5, category: 'unknown' };
@@ -90,18 +125,12 @@ Règles :
 - Pub non sollicitée → score > 0.7, spam
 - Robots/notifications automatiques → automated`;
 
-  const url =
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
-  const res = await nodeFetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0, maxOutputTokens: 128 },
-    }),
-  });
-  if (!res.ok) return { score: 0.5, category: 'unknown' };
-  const data = await res.json();
+  let data;
+  try {
+    data = await callGemini(prompt);
+  } catch {
+    return { score: 0.5, category: 'unknown' };
+  }
   const text =
     data?.candidates?.[0]?.content?.parts?.[0]?.text ??
     '{"score":0.5,"category":"unknown"}';
