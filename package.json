@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
-    "email-sync": "node scripts/email-sync-cron.js"
+    "email-sync": "node scripts/email-sync-cron.js",
+    "verify-env": "node scripts/verify-env.cjs"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
