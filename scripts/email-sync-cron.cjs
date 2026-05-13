@@ -13,7 +13,7 @@ const { createClient } = require('@supabase/supabase-js');
 const { ImapFlow } = require('imapflow');
 const { simpleParser } = require('mailparser');
 const nodemailer = require('nodemailer');
-const fetch = require('node-fetch');
+const nodeFetch = require('node-fetch');
 const ws = require('ws');
 
 const PER_ACCOUNT_TIMEOUT_MS = 20000;
@@ -92,7 +92,7 @@ Règles :
 
   const url =
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
-  const res = await fetch(url, {
+  const res = await nodeFetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
