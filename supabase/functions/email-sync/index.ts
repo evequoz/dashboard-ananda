@@ -20,6 +20,15 @@ type EmailAccount = {
 
 type SenderRule = { email_pattern: string; status: string };
 
+const PER_ACCOUNT_TIMEOUT_MS = 8000;
+const GLOBAL_BUDGET_MS = 25000;
+
+function rejectAfter(ms: number, label: string): Promise<never> {
+  return new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(`Timeout ${ms}ms: ${label}`)), ms);
+  });
+}
+
 function extractAddress(fromHeader: string): string {
   const m = fromHeader.match(/<([^>]+)>/);
   return (m?.[1] || fromHeader).trim().toLowerCase();
@@ -79,6 +88,7 @@ serve(async (req) => {
   });
 
   const summary: Record<string, unknown> = { accounts: [] as unknown[] };
+  const globalDeadline = Date.now() + GLOBAL_BUDGET_MS;
 
   try {
     const { data: ownerId, error: ownerErr } = await supabase.rpc(
@@ -103,15 +113,9 @@ serve(async (req) => {
     if (accErr) throw accErr;
     console.log('Accounts:', accounts?.length);
 
-    for (const acc of (accounts ?? []) as EmailAccount[]) {
+    const syncOneImapAccount = async (acc: EmailAccount): Promise<void> => {
       const pass = imapPasswordFor(acc.email);
-      if (!pass) {
-        (summary.accounts as unknown[]).push({
-          email: acc.email,
-          skipped: 'no_imap_password_secret',
-        });
-        continue;
-      }
+      if (!pass) throw new Error('no_imap_password_secret');
 
       const client = new ImapFlow({
         host: acc.imap_host,
@@ -132,9 +136,16 @@ serve(async (req) => {
           const uidNext = st.uidNext ?? 1;
           const maxUid = uidNext > 0 ? uidNext - 1 : 0;
 
+          // Derniers 500 messages sur le serveur (UID) — ne pas marquer deleted hors fenêtre
+          const uidWindowMin = maxUid > 0 ? Math.max(1, maxUid - 500) : 1;
           const uidsOnServer = new Set<number>();
           if (maxUid > 0) {
-            for await (const m of client.fetch({ uid: `1:${maxUid}` }, { uid: true })) {
+            for await (
+              const m of client.fetch(
+                { uid: `${uidWindowMin}:${maxUid}` },
+                { uid: true },
+              )
+            ) {
               if (m.uid) uidsOnServer.add(m.uid);
             }
           }
@@ -148,7 +159,9 @@ serve(async (req) => {
             .not('uid_imap', 'is', null);
 
           const missingIds = (existingRows ?? [])
-            .filter((r: { uid_imap: number }) => !uidsOnServer.has(r.uid_imap))
+            .filter((r: { uid_imap: number }) =>
+              r.uid_imap >= uidWindowMin && !uidsOnServer.has(r.uid_imap)
+            )
             .map((r: { id: number }) => r.id);
 
           if (missingIds.length) {
@@ -160,7 +173,7 @@ serve(async (req) => {
 
           let startUid = acc.last_uid_seen + 1;
           if (acc.last_uid_seen <= 0 && maxUid > 0) {
-            startUid = Math.max(1, maxUid - 100);
+            startUid = Math.max(1, maxUid - 20);
           }
           if (startUid > maxUid) {
             await supabase
@@ -175,7 +188,7 @@ serve(async (req) => {
               fetched: 0,
               markedDeleted: missingIds.length,
             });
-            continue;
+            return;
           }
 
           let inserted = 0;
@@ -323,6 +336,39 @@ serve(async (req) => {
         throw e instanceof Error ? e : new Error(imapMsg);
       } finally {
         await client.logout().catch(() => undefined);
+      }
+    };
+
+    for (const acc of (accounts ?? []) as EmailAccount[]) {
+      if (Date.now() >= globalDeadline) {
+        console.log('email-sync: budget 25s épuisé, arrêt des comptes restants');
+        (summary.accounts as unknown[]).push({
+          skipped: 'global_budget_25s_exceeded',
+        });
+        break;
+      }
+
+      const pass = imapPasswordFor(acc.email);
+      if (!pass) {
+        (summary.accounts as unknown[]).push({
+          email: acc.email,
+          skipped: 'no_imap_password_secret',
+        });
+        continue;
+      }
+
+      try {
+        await Promise.race([
+          syncOneImapAccount(acc),
+          rejectAfter(PER_ACCOUNT_TIMEOUT_MS, `account ${acc.email}`),
+        ]);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error('email-sync compte:', acc.email, msg);
+        (summary.accounts as unknown[]).push({
+          email: acc.email,
+          error: msg,
+        });
       }
     }
 
