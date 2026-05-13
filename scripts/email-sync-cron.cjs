@@ -225,14 +225,13 @@ async function main() {
       connectionTimeout: 10000,
     });
 
-    client.on('error', (err) => {
-      console.error('IMAP socket error:', acc.email, err.message);
-    });
-
     let maxUidHandled = lastSeen;
 
     try {
       console.log('Connecting IMAP:', acc.email);
+      client.on('error', (err) => {
+        console.error('IMAP socket error:', acc.email, err.message);
+      });
       await client.connect();
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : String(e);
