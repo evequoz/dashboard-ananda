@@ -20,7 +20,7 @@ type EmailAccount = {
 
 type SenderRule = { email_pattern: string; status: string };
 
-const PER_ACCOUNT_TIMEOUT_MS = 8000;
+const PER_ACCOUNT_TIMEOUT_MS = 20000;
 const GLOBAL_BUDGET_MS = 25000;
 
 function rejectAfter(ms: number, label: string): Promise<never> {
@@ -123,13 +123,29 @@ serve(async (req) => {
         secure: true,
         auth: { user: acc.username, pass },
         logger: false,
-      });
+        tls: { rejectUnauthorized: false },
+        socketTimeout: 15000,
+        greetingTimeout: 10000,
+        connectionTimeout: 10000,
+      } as ConstructorParameters<typeof ImapFlow>[0]);
 
       let maxUidHandled = acc.last_uid_seen;
 
       try {
         console.log('Connecting IMAP:', acc.email);
         await client.connect();
+      } catch (e) {
+        const errMsg = e instanceof Error ? e.message : String(e);
+        console.error('IMAP connect error:', acc.email, errMsg);
+        (summary.accounts as unknown[]).push({
+          email: acc.email,
+          error: errMsg,
+        });
+        await client.logout().catch(() => undefined);
+        return;
+      }
+
+      try {
         const lock = await client.getMailboxLock('INBOX');
         try {
           const st = await client.status('INBOX', { uidNext: true, messages: true });
