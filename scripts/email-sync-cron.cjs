@@ -16,7 +16,7 @@ const nodemailer = require('nodemailer');
 const fetch = require('node-fetch');
 
 const PER_ACCOUNT_TIMEOUT_MS = 20000;
-const GLOBAL_BUDGET_MS = 25000;
+const GLOBAL_BUDGET_CAP_MS = 150000;
 
 const ACCOUNT_SECRETS = {
   'serge@eh-me.com': 'EMAIL_SERGE_EHME_PASSWORD',
@@ -146,7 +146,6 @@ async function main() {
   });
 
   const summary = { accounts: [] };
-  const globalDeadline = Date.now() + GLOBAL_BUDGET_MS;
 
   const { data: ownerId, error: ownerErr } = await supabase.rpc(
     'dashboard_inbox_owner_user_id',
@@ -169,6 +168,13 @@ async function main() {
     .eq('active', true);
   if (accErr) throw accErr;
   console.log('Accounts:', accounts?.length ?? 0);
+
+  const globalBudgetMs = Math.min(
+    GLOBAL_BUDGET_CAP_MS,
+    20000 + (accounts?.length ?? 1) * PER_ACCOUNT_TIMEOUT_MS,
+  );
+  const globalDeadline = Date.now() + globalBudgetMs;
+  console.log('email-sync-cron global budget ms:', globalBudgetMs);
 
   const syncOneImapAccount = async (acc) => {
     const pass = imapPasswordFor(acc.email);

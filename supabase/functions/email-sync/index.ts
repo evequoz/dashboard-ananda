@@ -21,7 +21,8 @@ type EmailAccount = {
 type SenderRule = { email_pattern: string; status: string };
 
 const PER_ACCOUNT_TIMEOUT_MS = 20000;
-const GLOBAL_BUDGET_MS = 25000;
+/** Plafond (Edge / worker) ; le budget réel dépend du nombre de comptes. */
+const GLOBAL_BUDGET_CAP_MS = 150000;
 
 function rejectAfter(ms: number, label: string): Promise<never> {
   return new Promise((_, reject) => {
@@ -88,7 +89,6 @@ serve(async (req) => {
   });
 
   const summary: Record<string, unknown> = { accounts: [] as unknown[] };
-  const globalDeadline = Date.now() + GLOBAL_BUDGET_MS;
 
   try {
     const { data: ownerId, error: ownerErr } = await supabase.rpc(
@@ -112,6 +112,13 @@ serve(async (req) => {
       .eq('active', true);
     if (accErr) throw accErr;
     console.log('Accounts:', accounts?.length);
+
+    const globalBudgetMs = Math.min(
+      GLOBAL_BUDGET_CAP_MS,
+      20000 + (accounts ?? []).length * PER_ACCOUNT_TIMEOUT_MS,
+    );
+    const globalDeadline = Date.now() + globalBudgetMs;
+    console.log('email-sync global budget ms:', globalBudgetMs);
 
     const syncOneImapAccount = async (acc: EmailAccount): Promise<void> => {
       const pass = imapPasswordFor(acc.email);
