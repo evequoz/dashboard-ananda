@@ -279,7 +279,7 @@ async function main() {
 
         let startUid = lastSeen + 1;
         if (lastSeen <= 0 && maxUid > 0) {
-          startUid = Math.max(1, maxUid - 20);
+          startUid = Math.max(1, maxUid - 50);
         }
         if (startUid > maxUid) {
           await supabase
