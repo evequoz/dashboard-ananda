@@ -3,30 +3,67 @@ import { supabase } from '../lib/supabaseClient';
 type RowRecord = Record<string, unknown>;
 type LegacyPayload = Record<string, unknown>;
 
-const N8N_DELETE_EMAIL_WEBHOOK =
-  'https://n8n.ananda-communaute.cloud/webhook/lZ21nLX2InNyGVp6/webhook/delete-email';
-
 export const notifyInboxDeletionSync = async (
   emails: Array<{ id: number; accountEmail?: string | null }>,
   mode: 'trash' | 'hard_delete' = 'trash',
 ) => {
   if (!emails.length) return;
-  try {
-    await fetch(N8N_DELETE_EMAIL_WEBHOOK, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        source: 'dashboard-ananda',
-        action: mode,
-        emails: emails.map(item => ({
-          local_id: item.id,
-          account_email: item.accountEmail || null,
-        })),
-      }),
-    });
-  } catch {
-    // Best effort sync: local workflow still proceeds.
+  const { data, error } = await supabase.functions.invoke('email-delete', {
+    body: { emailIds: emails.map(e => e.id), mode },
+  });
+  if (error) throw error;
+  if (data && typeof data === 'object' && 'success' in data && (data as { success?: boolean }).success === false) {
+    throw new Error((data as { error?: string }).error || 'email-delete failed');
   }
+};
+
+export type SendEmailEdgePayload = {
+  from: string;
+  to: string;
+  subject: string;
+  body: string;
+  cc?: string;
+  bcc?: string;
+  attachments?: Array<{
+    filename: string;
+    content: string;
+    contentType?: string;
+    encoding?: string;
+  }>;
+  replyToEmailId?: number;
+};
+
+export const sendEmailViaEdge = async (payload: SendEmailEdgePayload) => {
+  const { data, error } = await supabase.functions.invoke('email-send', {
+    body: payload,
+  });
+  if (error) throw error;
+  if (data && typeof data === 'object' && 'success' in data && (data as { success?: boolean }).success === false) {
+    throw new Error((data as { error?: string }).error || 'email-send failed');
+  }
+  return data as { success?: boolean; messageId?: string };
+};
+
+export const markInboxEmailNotSpam = async (inboxId: number, senderEmail: string) => {
+  const pattern = senderEmail.trim().toLowerCase();
+  const { error: wErr } = await supabase.from('email_senders').upsert(
+    {
+      email_pattern: pattern,
+      status: 'whitelist',
+      label: 'Dashboard',
+    },
+    { onConflict: 'email_pattern' },
+  );
+  if (wErr) throw wErr;
+  const { error: uErr } = await supabase
+    .from('inbox_emails')
+    .update({
+      spam_score: 0,
+      spam_category: 'legitimate',
+      processed: false,
+    })
+    .eq('id', inboxId);
+  if (uErr) throw uErr;
 };
 
 const legacyTaskFromRow = (row: RowRecord) => ({
@@ -63,6 +100,11 @@ const legacyEmailFromRow = (row: RowRecord) => ({
   'Converti en tâche': !!row.converted_to_task,
   'Date conversion': row.converted_at ?? null,
   'Supprimé le': row.deleted_at ?? null,
+  'Score spam': row.spam_score != null ? Number(row.spam_score) : null,
+  'Catégorie spam': row.spam_category ?? null,
+  'Challenge envoyé': !!row.challenge_sent,
+  'Challenge répondu': !!row.challenge_responded,
+  folder: row.folder ?? 'INBOX',
 });
 
 const legacySentFromRow = (row: RowRecord) => ({
@@ -212,6 +254,10 @@ export const updateInboxEmail = async (id: number, payload: LegacyPayload) => {
   if ('Tâche liée' in payload) patch.linked_task_id = payload['Tâche liée'];
   if ('Converti en tâche' in payload) patch.converted_to_task = payload['Converti en tâche'];
   if ('Date conversion' in payload) patch.converted_at = payload['Date conversion'];
+  if ('spam_score' in payload) patch.spam_score = payload.spam_score;
+  if ('spam_category' in payload) patch.spam_category = payload.spam_category;
+  if ('challenge_responded' in payload) patch.challenge_responded = payload.challenge_responded;
+  if ('folder' in payload) patch.folder = payload.folder;
   const { error } = await supabase.from('inbox_emails').update(patch).eq('id', id);
   if (error) throw error;
 };
@@ -233,13 +279,13 @@ export const moveInboxEmailsBulkToTrash = async (ids: number[]) => {
 };
 
 export const restoreInboxEmail = async (id: number) => {
-  const { error } = await supabase.from('inbox_emails').update({ deleted_at: null }).eq('id', id);
+  const { error } = await supabase.from('inbox_emails').update({ deleted_at: null, folder: 'INBOX' }).eq('id', id);
   if (error) throw error;
 };
 
 export const restoreInboxEmailsBulk = async (ids: number[]) => {
   if (!ids.length) return;
-  const { error } = await supabase.from('inbox_emails').update({ deleted_at: null }).in('id', ids);
+  const { error } = await supabase.from('inbox_emails').update({ deleted_at: null, folder: 'INBOX' }).in('id', ids);
   if (error) throw error;
 };
 

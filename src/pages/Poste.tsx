@@ -3,30 +3,28 @@ import {
   Mail, Inbox, Briefcase, RefreshCw, CheckCircle,
   AlertCircle, Clock, ChevronRight, Send, Plus,
   Eye, EyeOff, Sparkles, X, Paperclip, Trash2,
-  FileText, ExternalLink, User, Users, SendHorizonal
+  FileText, ExternalLink, User, Users, SendHorizonal, Shield, Newspaper
 } from 'lucide-react';
 import {
   listInboxEmails,
   listSentEmails,
   updateInboxEmail,
-  moveInboxEmailToTrash,
   restoreInboxEmail,
-  deleteInboxEmailsBulk,
-  moveInboxEmailsBulkToTrash,
   restoreInboxEmailsBulk,
   notifyInboxDeletionSync,
   createTaskFromEmail,
-  createSentEmail,
   deleteSentEmailsBulk,
   moveSentEmailsBulkToTrash,
   restoreSentEmailsBulk,
   deleteSentEmailsOlderThanDays,
   findAdminByEmail,
+  sendEmailViaEdge,
+  markInboxEmailNotSpam,
 } from '../data/supabaseApi';
+import { parseJsonResponseBody } from '../lib/parseJsonResponseBody';
 
 // Proxy n8n → évite les problèmes CORS avec l'API Systeme.io
 const SYSTEME_PROXY = 'https://n8n.ananda-communaute.cloud/webhook/systeme-proxy';
-const N8N_SEND_WEBHOOK = 'https://n8n.ananda-communaute.cloud/webhook/send-email';
 
 interface BaserowFile {
   url: string;
@@ -70,6 +68,11 @@ interface Email {
   'Converti en tâche'?: boolean;
   'Date conversion'?: string | null;
   'Supprimé le'?: string | null;
+  'Score spam'?: number | null;
+  'Catégorie spam'?: string | null;
+  'Challenge envoyé'?: boolean;
+  'Challenge répondu'?: boolean;
+  folder?: string;
 }
 
 interface SentEmail {
@@ -144,6 +147,12 @@ const extractEmailAddress = (raw: string) => {
   const src = (raw || '').trim();
   const match = src.match(/<([^>]+)>/);
   return (match?.[1] || src).trim();
+};
+
+const spamScoreOf = (e: Email) => {
+  const v = e['Score spam'];
+  if (v == null || !Number.isFinite(Number(v))) return 0;
+  return Number(v);
 };
 
 // ── Modal Tâche ──
@@ -539,10 +548,16 @@ const ContactSidePanel = ({ senderRaw }: { senderRaw: string }) => {
 
     // 1) Cherche dans Systeme.io via proxy n8n
     fetch(`${SYSTEME_PROXY}?email=${encodeURIComponent(email)}`)
-      .then(r => r.json())
-      .then(async d => {
-        if (d.items && d.items.length > 0) {
-          setSysContact(d.items[0]);
+      .then(async (r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return parseJsonResponseBody(r);
+      })
+      .then(async (d) => {
+        const items = d && typeof d === 'object' && d !== null && 'items' in d
+          ? (d as { items?: SysContact[] }).items
+          : undefined;
+        if (items && items.length > 0) {
+          setSysContact(items[0]);
           return;
         }
         const admin = await findAdminByEmail(email);
@@ -710,6 +725,7 @@ export const Poste = () => {
   const [taskSuccess, setTaskSuccess] = useState(false);
   const [composeMode, setComposeMode] = useState(false);
   const [viewMode, setViewMode] = useState<'inbox' | 'sent' | 'trash'>('inbox');
+  const [inboxMailboxTab, setInboxMailboxTab] = useState<'primary' | 'spam' | 'newsletters'>('primary');
   const [sentEmails, setSentEmails] = useState<SentEmail[]>([]);
   const [selectedSent, setSelectedSent] = useState<SentEmail | null>(null);
   const [selectedInboxIds, setSelectedInboxIds] = useState<number[]>([]);
@@ -778,13 +794,38 @@ export const Poste = () => {
     return () => window.removeEventListener('keydown', handler);
   }, [selectedEmail, viewMode]);
 
-  const filteredEmails = emails.filter(e =>
-    normalizeAccountEmail(e.Compte) === activeAccount && !e['Supprimé le'] && (showTreated ? true : !e.Traité)
+  const inAccountInbox = (e: Email) =>
+    normalizeAccountEmail(e.Compte) === activeAccount && !e['Supprimé le'];
+
+  const filteredPrimary = emails.filter(e =>
+    inAccountInbox(e) &&
+    (showTreated ? true : !e.Traité) &&
+    String(e['Catégorie spam'] || '').toLowerCase() !== 'newsletter' &&
+    !(spamScoreOf(e) > 0.8),
   );
+  const filteredSpam = emails.filter(e =>
+    inAccountInbox(e) && spamScoreOf(e) > 0.8,
+  );
+  const filteredNewsletters = emails.filter(e =>
+    inAccountInbox(e) && String(e['Catégorie spam'] || '').toLowerCase() === 'newsletter',
+  );
+  const inboxMailsForList =
+    inboxMailboxTab === 'spam'
+      ? filteredSpam
+      : inboxMailboxTab === 'newsletters'
+        ? filteredNewsletters
+        : filteredPrimary;
   const filteredSent = sentEmails.filter(e => normalizeAccountEmail(e.Compte) === activeAccount && !e['Supprimé le']);
   const trashedInbox = emails.filter(e => normalizeAccountEmail(e.Compte) === activeAccount && !!e['Supprimé le']);
   const trashedSent = sentEmails.filter(e => normalizeAccountEmail(e.Compte) === activeAccount && !!e['Supprimé le']);
-  const unreadCount = (acc: string) => emails.filter(e => normalizeAccountEmail(e.Compte) === acc && !e.Traité && !e['Supprimé le']).length;
+  const unreadCount = (acc: string) =>
+    emails.filter(e =>
+      normalizeAccountEmail(e.Compte) === acc &&
+      !e.Traité &&
+      !e['Supprimé le'] &&
+      String(e['Catégorie spam'] || '').toLowerCase() !== 'newsletter' &&
+      !(spamScoreOf(e) > 0.8),
+    ).length;
   const markAsTreated = async (email: Email) => {
     try {
       await updateInboxEmail(email.id, { Traité: true });
@@ -793,14 +834,34 @@ export const Poste = () => {
     } catch (e) { console.error(e); }
   };
 
+  const markNotSpam = async (email: Email) => {
+    try {
+      const addr = extractEmailAddress(email['Expéditeur'] || '');
+      await markInboxEmailNotSpam(email.id, addr);
+      setEmails(prev => prev.map(e => e.id === email.id ? {
+        ...e,
+        'Score spam': 0,
+        'Catégorie spam': 'legitimate',
+        Traité: false,
+      } : e));
+      if (selectedEmail?.id === email.id) {
+        setSelectedEmail({
+          ...email,
+          'Score spam': 0,
+          'Catégorie spam': 'legitimate',
+          Traité: false,
+        });
+      }
+      setInboxMailboxTab('primary');
+    } catch (e) { console.error(e); }
+  };
+
   // Suppression avec confirmation (bouton)
   const deleteEmail = async (email: Email) => {
     if (!confirm(`Déplacer dans la corbeille ?\n"${email.Sujet}"`)) return;
     try {
-      const deletedAt = new Date().toISOString();
       await notifyInboxDeletionSync([{ id: email.id, accountEmail: email.Compte }], 'trash');
-      await moveInboxEmailToTrash(email.id);
-      setEmails(prev => prev.map(e => e.id === email.id ? { ...e, 'Supprimé le': deletedAt } : e));
+      await fetchEmails();
       if (selectedEmail?.id === email.id) setSelectedEmail(null);
     } catch (e) { console.error(e); }
   };
@@ -808,10 +869,8 @@ export const Poste = () => {
   // Déplacement direct en corbeille (touche Delete) sans confirm
   const deleteEmailDirect = async (email: Email) => {
     try {
-      const deletedAt = new Date().toISOString();
       await notifyInboxDeletionSync([{ id: email.id, accountEmail: email.Compte }], 'trash');
-      await moveInboxEmailToTrash(email.id);
-      setEmails(prev => prev.map(e => e.id === email.id ? { ...e, 'Supprimé le': deletedAt } : e));
+      await fetchEmails();
       setSelectedEmail(null);
     } catch (e) { console.error(e); }
   };
@@ -836,13 +895,11 @@ export const Poste = () => {
     if (!selectedInboxIds.length) return;
     if (!confirm(`Déplacer ${selectedInboxIds.length} email(s) dans la corbeille ?`)) return;
     try {
-      const deletedAt = new Date().toISOString();
       await notifyInboxDeletionSync(
         selectedInboxIds.map(id => ({ id, accountEmail: emails.find(e => e.id === id)?.Compte })),
         'trash',
       );
-      await moveInboxEmailsBulkToTrash(selectedInboxIds);
-      setEmails(prev => prev.map(e => selectedInboxIds.includes(e.id) ? { ...e, 'Supprimé le': deletedAt } : e));
+      await fetchEmails();
       if (selectedEmail && selectedInboxIds.includes(selectedEmail.id)) setSelectedEmail(null);
       setSelectedInboxIds([]);
     } catch (e) { console.error(e); }
@@ -892,16 +949,17 @@ export const Poste = () => {
     if (!total) return;
     if (!confirm(`Supprimer définitivement ${total} email(s) de la corbeille ?`)) return;
     try {
-      await notifyInboxDeletionSync(
-        selectedTrashInboxIds.map(id => ({ id, accountEmail: emails.find(e => e.id === id)?.Compte })),
-        'hard_delete',
-      );
-      await Promise.all([
-        deleteInboxEmailsBulk(selectedTrashInboxIds),
-        deleteSentEmailsBulk(selectedTrashSentIds),
-      ]);
-      setEmails(prev => prev.filter(e => !selectedTrashInboxIds.includes(e.id)));
-      setSentEmails(prev => prev.filter(e => !selectedTrashSentIds.includes(e.id)));
+      if (selectedTrashInboxIds.length) {
+        await notifyInboxDeletionSync(
+          selectedTrashInboxIds.map(id => ({ id, accountEmail: emails.find(e => e.id === id)?.Compte })),
+          'hard_delete',
+        );
+      }
+      if (selectedTrashSentIds.length) {
+        await deleteSentEmailsBulk(selectedTrashSentIds);
+      }
+      await fetchEmails();
+      await fetchSentEmails();
       if (selectedEmail && selectedTrashInboxIds.includes(selectedEmail.id)) setSelectedEmail(null);
       if (selectedSent && selectedTrashSentIds.includes(selectedSent.id)) setSelectedSent(null);
       setSelectedTrashInboxIds([]);
@@ -916,27 +974,19 @@ export const Poste = () => {
     if (!total) return;
     if (!confirm(`Vider la corbeille et supprimer définitivement ${total} email(s) ?`)) return;
     try {
-      await notifyInboxDeletionSync(
-        inboxIds.map(id => ({ id, accountEmail: emails.find(e => e.id === id)?.Compte })),
-        'hard_delete',
-      );
-      await Promise.all([
-        deleteInboxEmailsBulk(inboxIds),
-        deleteSentEmailsBulk(sentIds),
-      ]);
-      setEmails(prev => prev.filter(e => !inboxIds.includes(e.id)));
-      setSentEmails(prev => prev.filter(e => !sentIds.includes(e.id)));
+      if (inboxIds.length) {
+        await notifyInboxDeletionSync(
+          inboxIds.map(id => ({ id, accountEmail: emails.find(e => e.id === id)?.Compte })),
+          'hard_delete',
+        );
+      }
+      if (sentIds.length) await deleteSentEmailsBulk(sentIds);
+      await fetchEmails();
+      await fetchSentEmails();
       setSelectedTrashInboxIds([]);
       setSelectedTrashSentIds([]);
       setSelectedEmail(null);
       setSelectedSent(null);
-    } catch (e) { console.error(e); }
-  };
-
-  const saveToSent = async (from: string, to: string, cc: string, bcc: string, subject: string, body: string) => {
-    try {
-      await createSentEmail({ De: from, 'À': to, CC: cc, BCC: bcc, Sujet: subject, Corps: body, Date: new Date().toISOString(), Compte: from });
-      fetchSentEmails();
     } catch (e) { console.error(e); }
   };
 
@@ -987,31 +1037,24 @@ export const Poste = () => {
     setSending(true);
     try {
       const to = extractEmailAddress(selectedEmail['Expéditeur']);
-      const res = await fetch(N8N_SEND_WEBHOOK, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to,
-          subject: `Re: ${selectedEmail.Sujet || ''}`,
-          body: text,
-          from: normalizeAccountEmail(selectedEmail.Compte),
-          ...(cc.trim()  && { cc:  cc.trim()  }),
-          ...(bcc.trim() && { bcc: bcc.trim() }),
-          attachments: attachments.map(a => ({
-            filename: a.filename,
-            content: a.content,
-            contentType: a.contentType,
-            encoding: 'base64',
-          })),
-        }),
+      await sendEmailViaEdge({
+        to,
+        subject: `Re: ${selectedEmail.Sujet || ''}`,
+        body: text,
+        from: normalizeAccountEmail(selectedEmail.Compte),
+        ...(cc.trim() && { cc: cc.trim() }),
+        ...(bcc.trim() && { bcc: bcc.trim() }),
+        attachments: attachments.map(a => ({
+          filename: a.filename,
+          content: a.content,
+          contentType: a.contentType,
+          encoding: 'base64',
+        })),
+        replyToEmailId: selectedEmail.id,
       });
-      if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        throw new Error(body || `HTTP ${res.status}`);
-      }
       setSendStatus('success');
       await markAsTreated(selectedEmail);
-      await saveToSent(normalizeAccountEmail(selectedEmail.Compte), to, cc, bcc, `Re: ${selectedEmail.Sujet || ''}`, text);
+      await fetchSentEmails();
       setReplyMode(false);
       setTimeout(() => setSendStatus('idle'), 3000);
     } catch {
@@ -1024,26 +1067,22 @@ export const Poste = () => {
     if (!to.trim() || !body.trim()) return;
     setSending(true);
     try {
-      await fetch(N8N_SEND_WEBHOOK, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to,
-          subject,
-          body,
-          from: activeAccount,
-          ...(cc.trim()  && { cc:  cc.trim()  }),
-          ...(bcc.trim() && { bcc: bcc.trim() }),
-          attachments: attachments.map(a => ({
-            filename: a.filename,
-            content: a.content,
-            contentType: a.contentType,
-            encoding: 'base64',
-          })),
-        }),
+      await sendEmailViaEdge({
+        to,
+        subject,
+        body,
+        from: activeAccount,
+        ...(cc.trim() && { cc: cc.trim() }),
+        ...(bcc.trim() && { bcc: bcc.trim() }),
+        attachments: attachments.map(a => ({
+          filename: a.filename,
+          content: a.content,
+          contentType: a.contentType,
+          encoding: 'base64',
+        })),
       });
       setSendStatus('success');
-      await saveToSent(activeAccount, to, cc, bcc, subject, body);
+      await fetchSentEmails();
       setTimeout(() => { setSendStatus('idle'); setComposeMode(false); }, 2000);
     } catch {
       setSendStatus('error');
@@ -1104,6 +1143,7 @@ export const Poste = () => {
               <button key={account.email}
                 onClick={() => {
                   setActiveAccount(account.email);
+                  setInboxMailboxTab('primary');
                   setSelectedEmail(null);
                   setSelectedSent(null);
                   setSelectedInboxIds([]);
@@ -1215,6 +1255,7 @@ export const Poste = () => {
             {(['inbox', 'sent', 'trash'] as const).map(mode => (
               <button key={mode} onClick={() => {
                 setViewMode(mode);
+                setInboxMailboxTab('primary');
                 setSelectedEmail(null);
                 setSelectedSent(null);
                 setSelectedInboxIds([]);
@@ -1233,18 +1274,43 @@ export const Poste = () => {
               </button>
             ))}
           </div>
+          {viewMode === 'inbox' && (
+            <div className="flex border-b border-[var(--border)] bg-[var(--bg-surface)]/50 shrink-0 px-1 gap-0.5">
+              {([
+                { id: 'primary' as const, label: 'Principale', icon: Inbox },
+                { id: 'spam' as const, label: 'Spam', icon: Shield },
+                { id: 'newsletters' as const, label: 'Newsletters', icon: Newspaper },
+              ]).map(tab => {
+                const Icon = tab.icon;
+                const active = inboxMailboxTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => { setInboxMailboxTab(tab.id); setSelectedInboxIds([]); setSelectedEmail(null); }}
+                    className={`flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-semibold uppercase tracking-wide border-b-2 transition-all ${
+                      active ? 'text-[var(--text-primary)] border-b-[#c9a84c]' : 'text-[var(--text-muted)] border-b-transparent hover:text-[var(--text-secondary)]'
+                    }`}
+                  >
+                    <Icon className="w-3 h-3" />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <div className="flex-1 overflow-y-auto">
             {/* Vue Reçus */}
             {viewMode === 'inbox' && (loading ? (
               <div className="flex items-center justify-center h-32">
                 <RefreshCw className="w-5 h-5 text-[var(--text-muted)] animate-spin" />
               </div>
-            ) : filteredEmails.length === 0 ? (
+            ) : inboxMailsForList.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-32 gap-2">
                 <Mail className="w-8 h-8 text-[var(--text-muted)] opacity-30" />
                 <p className="text-xs text-[var(--text-muted)]">Aucun email</p>
               </div>
-            ) : filteredEmails.map(email => {
+            ) : inboxMailsForList.map(email => {
               const isSelected = selectedEmail?.id === email.id;
               const isRead = email.Traité || readInboxIds.includes(email.id);
               const emailFiles: BaserowFile[] = email['Fichier'] || [];
@@ -1278,6 +1344,16 @@ export const Poste = () => {
                           {!isRead && (
                             <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#d4b060]/20 border border-[#d4b060]/35 text-[#d4b060]">
                               NON LU
+                            </span>
+                          )}
+                          {spamScoreOf(email) > 0.5 && spamScoreOf(email) <= 0.8 && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#b8a050]/20 border border-[#b8a050]/40 text-[#d4c060]">
+                              Douteux
+                            </span>
+                          )}
+                          {spamScoreOf(email) > 0.8 && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#d95555]/20 border border-[#d95555]/35 text-[#ff8a8a]">
+                              Spam
                             </span>
                           )}
                           {emailFiles.length > 0 && <Paperclip className="w-3 h-3 text-[var(--text-muted)]" />}
@@ -1477,7 +1553,7 @@ export const Poste = () => {
                     <>
                       <button onClick={async () => {
                         await restoreInboxEmail(selectedEmail.id);
-                        setEmails(prev => prev.map(e => e.id === selectedEmail.id ? { ...e, 'Supprimé le': null } : e));
+                        setEmails(prev => prev.map(e => e.id === selectedEmail.id ? { ...e, 'Supprimé le': null, folder: 'INBOX' } : e));
                         setSelectedEmail(null);
                       }}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#4caf7d]/20 border border-[#4caf7d]/30 text-[#4caf7d] hover:bg-[#4caf7d]/30 transition-all">
@@ -1486,8 +1562,7 @@ export const Poste = () => {
                       <button onClick={async () => {
                         if (!confirm('Supprimer définitivement cet email ?')) return;
                         await notifyInboxDeletionSync([{ id: selectedEmail.id, accountEmail: selectedEmail.Compte }], 'hard_delete');
-                        await deleteInboxEmailsBulk([selectedEmail.id]);
-                        setEmails(prev => prev.filter(e => e.id !== selectedEmail.id));
+                        await fetchEmails();
                         setSelectedEmail(null);
                       }}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#d95555]/10 border border-[#d95555]/20 text-[#d95555] hover:bg-[#d95555]/20 transition-all">
@@ -1505,6 +1580,12 @@ export const Poste = () => {
                         <button onClick={() => markAsTreated(selectedEmail)}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#4caf7d]/20 border border-[#4caf7d]/30 text-[#4caf7d] hover:bg-[#4caf7d]/30 transition-all">
                           <CheckCircle className="w-3.5 h-3.5" /> Traité
+                        </button>
+                      )}
+                      {(spamScoreOf(selectedEmail) > 0.5 || String(selectedEmail['Catégorie spam'] || '').toLowerCase() === 'spam') && (
+                        <button onClick={() => markNotSpam(selectedEmail)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#c9a84c]/15 border border-[#c9a84c]/35 text-[#e8d4a8] hover:bg-[#c9a84c]/25 transition-all">
+                          <Shield className="w-3.5 h-3.5" /> Pas spam
                         </button>
                       )}
                       <button onClick={() => setShowTaskPopup(true)}

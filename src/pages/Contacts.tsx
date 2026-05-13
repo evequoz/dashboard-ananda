@@ -13,6 +13,7 @@ import {
   listInboxEmails,
   listSentEmails,
 } from '../data/supabaseApi';
+import { parseJsonResponseBody } from '../lib/parseJsonResponseBody';
 
 // ── Constants ─────────────────────────────────────────────────────
 const SYSTEME_PROXY     = 'https://n8n.ananda-communaute.cloud/webhook/systeme-proxy';
@@ -254,8 +255,11 @@ const CommunauteTab = ({ onCompose }: { onCompose: (email: string) => void }) =>
       const param   = isEmail ? `email=${encodeURIComponent(q)}` : `firstName=${encodeURIComponent(q)}`;
       const res = await fetch(`${SYSTEME_PROXY}?${param}`);
       if (!res.ok) throw new Error(`Erreur API : ${res.status}`);
-      const data = await res.json();
-      setResults(data.items || []); setSearched(true);
+      const data = await parseJsonResponseBody(res);
+      const items = data && typeof data === 'object' && data !== null && 'items' in data
+        ? (data as { items?: SysContact[] }).items
+        : undefined;
+      setResults(items || []); setSearched(true);
     } catch (e: unknown) { setError(getErrorMessage(e)); }
     finally { setLoading(false); }
   }, []);
@@ -631,8 +635,10 @@ const AdminTab = ({ onCompose }: { onCompose: (email: string) => void }) => {
     setSyncing(true); setSyncResult(null);
     try {
       const res  = await fetch(N8N_GOOGLE_SYNC);
-      const data = await res.json();
-      setSyncResult({ ok: data.ok ?? true, message: data.message, created: data.created, updated: data.updated });
+      const data = await parseJsonResponseBody(res);
+      if (!data || typeof data !== 'object') throw new Error('Réponse vide');
+      const row = data as { ok?: boolean; message?: string; created?: number; updated?: number };
+      setSyncResult({ ok: row.ok ?? true, message: row.message, created: row.created, updated: row.updated });
       await fetchContacts();
     } catch { setSyncResult(null); alert('Erreur lors de la synchronisation Google Contacts.'); }
     finally { setSyncing(false); }

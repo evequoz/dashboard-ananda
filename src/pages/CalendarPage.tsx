@@ -6,6 +6,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 import type { EventApi } from '@fullcalendar/core';
 import frLocale from '@fullcalendar/core/locales/fr';
 import { Sparkles, RefreshCw, Plus, X, Calendar, Clock, MapPin, Edit2, Trash2, Tag } from 'lucide-react';
+import { parseJsonResponseBody } from '../lib/parseJsonResponseBody';
 
 type CalendarDateInput = string | Date | null | undefined;
 
@@ -604,7 +605,9 @@ export const CalendarPage = () => {
         try {
           const res = await fetchWithTimeout(endpoint);
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          data = await res.json();
+          const body = await parseJsonResponseBody(res);
+          if (body === null) throw new Error('Réponse vide (pas de JSON)');
+          data = body;
           lastErr = null;
           break;
         } catch (e) {

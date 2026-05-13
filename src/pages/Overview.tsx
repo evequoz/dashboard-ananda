@@ -12,6 +12,7 @@ import {
   notifyInboxDeletionSync,
   createTaskLegacy,
 } from '../data/supabaseApi';
+import { parseJsonResponseBody } from '../lib/parseJsonResponseBody';
 
 interface Tache {
   id: string; text: string; completed: boolean;
@@ -98,7 +99,7 @@ export const Overview = () => {
     const load = async () => {
       try {
         const res = await fetch('https://n8n.ananda-communaute.cloud/webhook/get-calendar');
-        const data = await res.json();
+        const data = await parseJsonResponseBody(res);
         if (Array.isArray(data)) {
           const now = new Date(); const in7 = new Date(now); in7.setDate(now.getDate() + 7);
           setEvents(data.filter(i => new Date(i.end?.dateTime || i.end?.date) > now && new Date(i.start?.dateTime || i.start?.date) <= in7)
