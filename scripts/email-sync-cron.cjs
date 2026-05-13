@@ -225,6 +225,10 @@ async function main() {
       connectionTimeout: 10000,
     });
 
+    client.on('error', (err) => {
+      console.error('IMAP socket error:', acc.email, err.message);
+    });
+
     let maxUidHandled = lastSeen;
 
     try {
