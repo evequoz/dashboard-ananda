@@ -142,6 +142,31 @@ const formatSenderDisplay = (raw: string) =>
 
 const SIGNATURE_LINE = /^(cordialement|bien à vous|best regards|bien cordialement|à bientôt)\b/i;
 
+const READ_INBOX_STORAGE_KEY = 'dashboard-read-inbox-ids';
+
+const loadReadInboxIds = (): Set<number> => {
+  try {
+    const raw = localStorage.getItem(READ_INBOX_STORAGE_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((n): n is number => typeof n === 'number'));
+  } catch {
+    return new Set();
+  }
+};
+
+const saveReadInboxIds = (ids: Set<number>) => {
+  localStorage.setItem(READ_INBOX_STORAGE_KEY, JSON.stringify([...ids]));
+};
+
+const escapeHtml = (s: string) =>
+  s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
 const stripHtmlToText = (content: string) => {
   try {
     return decodeURIComponent(escape(content))
@@ -157,8 +182,8 @@ const stripHtmlToText = (content: string) => {
   }
 };
 
-const cleanContent = (content: string) => {
-  if (!content) return '';
+const parseEmailBodyLines = (content: string): string[] => {
+  if (!content) return [];
   const raw = stripHtmlToText(content);
   const lines = raw.split(/\r?\n/).map((l) => l.trim());
   const bodyLines: string[] = [];
@@ -167,30 +192,36 @@ const cleanContent = (content: string) => {
     if (SIGNATURE_LINE.test(line)) break;
     bodyLines.push(line);
   }
-  const paragraphs: string[] = [];
-  let current: string[] = [];
-  for (const line of bodyLines) {
-    if (!line) {
-      if (current.length) {
-        paragraphs.push(current.join(' '));
-        current = [];
-      }
-      continue;
-    }
-    current.push(line);
-  }
-  if (current.length) paragraphs.push(current.join(' '));
-  return paragraphs.join('\n\n').trim();
+  return bodyLines;
 };
 
-const MessageBody = ({ content }: { content: string }) => {
+const cleanContentPlain = (content: string) => parseEmailBodyLines(content).join('\n');
+
+const truncateBodyLines = (lines: string[], maxChars: number) => {
+  let total = 0;
+  const kept: string[] = [];
+  for (const line of lines) {
+    if (total + line.length > maxChars) break;
+    kept.push(line);
+    total += line.length;
+  }
+  return kept;
+};
+
+const MessageBody = ({ rawContent }: { rawContent: string }) => {
   const [expanded, setExpanded] = useState(false);
-  const text = content || '—';
-  const needsTruncate = text.length > 500;
-  const shown = !needsTruncate || expanded ? text : `${text.slice(0, 500)}…`;
+  const lines = useMemo(() => parseEmailBodyLines(rawContent), [rawContent]);
+  const plainLen = lines.join('').length;
+  const needsTruncate = plainLen > 500;
+  const displayLines = needsTruncate && !expanded ? truncateBodyLines(lines, 500) : lines;
+  const html = displayLines.length ? displayLines.map(escapeHtml).join('<br/>') : '—';
   return (
     <div>
-      <p className="text-sm text-[var(--text-primary)] leading-relaxed whitespace-pre-wrap">{shown}</p>
+      <div
+        className="text-sm text-[var(--text-primary)]"
+        style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
       {needsTruncate && !expanded && (
         <button
           type="button"
@@ -200,6 +231,40 @@ const MessageBody = ({ content }: { content: string }) => {
           Voir tout
         </button>
       )}
+    </div>
+  );
+};
+
+const MessageAttachments = ({ attachments }: { attachments: EmailAttachment[] }) => {
+  if (!attachments.length) return null;
+  return (
+    <div className="mt-3 pt-3 border-t border-[var(--border)]">
+      <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] mb-2">
+        <Paperclip className="w-3.5 h-3.5 shrink-0" />
+        <span>Pièces jointes</span>
+      </div>
+      <ul className="space-y-1">
+        {attachments.map((att, i) => {
+          const name = att.visible_name || att.name || 'Fichier';
+          const label = `${name} · ${formatSize(att.size || 0)}`;
+          return (
+            <li key={`${name}-${i}`} className="text-xs">
+              {att.url ? (
+                <a
+                  href={att.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#c9a84c] hover:underline"
+                >
+                  {label}
+                </a>
+              ) : (
+                <span className="text-[var(--text-secondary)]">{label}</span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 };
@@ -261,14 +326,15 @@ interface EmailThread {
   latestDate: string | null;
 }
 
-type ThreadStatusDot = 'red' | 'green' | 'gray';
+type ThreadStatusDot = 'red' | 'orange' | 'green' | 'gray';
 
 type ThreadMessage = {
   id: string;
   from: string;
   date: string | null;
-  body: string;
+  bodyRaw: string;
   sortTime: number;
+  attachments: EmailAttachment[];
 };
 
 const sentMatchesThread = (
@@ -288,14 +354,21 @@ const threadHasReply = (thread: EmailThread, sentList: SentEmail[]) => {
   return sentList.some((s) => sentMatchesThread(s, thread.subject, account, thread.inboxEmails));
 };
 
-const getThreadStatusDot = (thread: EmailThread, sentList: SentEmail[]): ThreadStatusDot => {
+const getThreadStatusDot = (
+  thread: EmailThread,
+  sentList: SentEmail[],
+  readIds: Set<number>,
+): ThreadStatusDot => {
   if (threadHasReply(thread, sentList)) return 'green';
   if (thread.inboxEmails.every((e) => e.Traité)) return 'gray';
+  const inboxIds = thread.inboxEmails.map((e) => e.id);
+  if (inboxIds.length > 0 && inboxIds.every((id) => readIds.has(id))) return 'orange';
   return 'red';
 };
 
 const threadDotColor = (dot: ThreadStatusDot) => {
   if (dot === 'green') return '#4caf7d';
+  if (dot === 'orange') return '#e8a030';
   if (dot === 'red') return '#e07070';
   return '#9e9e9e';
 };
@@ -304,7 +377,7 @@ const threadPreview = (thread: EmailThread) => {
   const latest = [...thread.inboxEmails].sort(
     (a, b) => new Date(b['Date réception'] || 0).getTime() - new Date(a['Date réception'] || 0).getTime(),
   )[0];
-  const text = cleanContent(latest?.Contenu || '');
+  const text = cleanContentPlain(latest?.Contenu || '');
   if (!text) return '—';
   return text.length > 120 ? `${text.slice(0, 117)}…` : text;
 };
@@ -365,8 +438,9 @@ const buildThreadMessages = (
       id: `inbox-${e.id}`,
       from: formatSenderDisplay(e['Expéditeur'] || ''),
       date: e['Date réception'],
-      body: cleanContent(e.Contenu),
+      bodyRaw: e.Contenu || '',
       sortTime: new Date(e['Date réception'] || 0).getTime(),
+      attachments: Array.isArray(e['Fichier']) ? e['Fichier'] : [],
     });
   }
   for (const sent of sentList) {
@@ -375,8 +449,9 @@ const buildThreadMessages = (
       id: `sent-${sent.id}`,
       from: formatSenderDisplay(sent.De || account),
       date: sent.Date,
-      body: cleanContent(sent.Corps),
+      bodyRaw: sent.Corps || '',
       sortTime: new Date(sent.Date || 0).getTime(),
+      attachments: [],
     });
   }
   return msgs.sort((a, b) => a.sortTime - b.sortTime);
@@ -394,7 +469,7 @@ interface TaskFormValues {
 }
 
 const descriptionFromEmail = (email: Email) => {
-  const lines = cleanContent(email.Contenu).split('\n').map((l) => l.trim()).filter(Boolean);
+  const lines = parseEmailBodyLines(email.Contenu || '');
   return lines.slice(0, 3).join('\n');
 };
 
@@ -749,6 +824,7 @@ export const Poste = () => {
   const [selectedTrashInboxIds, setSelectedTrashInboxIds] = useState<number[]>([]);
   const [selectedTrashSentIds, setSelectedTrashSentIds] = useState<number[]>([]);
   const [showMailList, setShowMailList] = useState(true);
+  const [readInboxIds, setReadInboxIds] = useState<Set<number>>(() => loadReadInboxIds());
   const replyModeRef = useRef(false);
   replyModeRef.current = replyMode;
 
@@ -1130,7 +1206,18 @@ export const Poste = () => {
     } finally { setSending(false); }
   };
 
+  const markThreadRead = (thread: EmailThread) => {
+    const ids = thread.inboxEmails.map((e) => e.id);
+    setReadInboxIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.add(id));
+      saveReadInboxIds(next);
+      return next;
+    });
+  };
+
   const openThread = (thread: EmailThread) => {
+    markThreadRead(thread);
     setSelectedEmail(thread.representativeEmail);
     setSelectedThreadKey(thread.key);
     setReplyMode(false);
@@ -1389,7 +1476,7 @@ export const Poste = () => {
               </div>
             ) : inboxThreads.map((thread) => {
               const isSelected = selectedThreadKey === thread.key;
-              const statusDot = getThreadStatusDot(thread, sentEmails);
+              const statusDot = getThreadStatusDot(thread, sentEmails, readInboxIds);
               const threadInboxIds = thread.inboxEmails.map((e) => e.id);
               const allSelected = threadInboxIds.length > 0 && threadInboxIds.every((id) => selectedInboxIds.includes(id));
               const hasUntreated = thread.inboxEmails.some((e) => !e.Traité);
@@ -1406,7 +1493,15 @@ export const Poste = () => {
                     <span
                       className="mt-2 w-2 h-2 rounded-full shrink-0"
                       style={{ background: threadDotColor(statusDot) }}
-                      title={statusDot === 'green' ? 'Réponse envoyée' : statusDot === 'red' ? 'Sans réponse' : 'Traité'}
+                      title={
+                        statusDot === 'green'
+                          ? 'Réponse envoyée'
+                          : statusDot === 'orange'
+                            ? 'Lu, sans réponse'
+                            : statusDot === 'red'
+                              ? 'Sans réponse'
+                              : 'Traité'
+                      }
                     />
                     <input
                       type="checkbox"
@@ -1649,7 +1744,10 @@ export const Poste = () => {
               <div className="px-6 py-5 space-y-4">
                 {viewMode === 'trash' ? (
                   <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-4">
-                    <MessageBody content={cleanContent(selectedEmail.Contenu)} />
+                    <MessageBody rawContent={selectedEmail.Contenu || ''} />
+                    {Array.isArray(selectedEmail['Fichier']) && selectedEmail['Fichier'].length > 0 && (
+                      <MessageAttachments attachments={selectedEmail['Fichier']} />
+                    )}
                   </div>
                 ) : (
                   threadMessages.map((msg) => (
@@ -1658,7 +1756,10 @@ export const Poste = () => {
                         <span className="font-medium text-[var(--text-primary)]">{msg.from}</span>
                         <span className="text-[var(--text-muted)]">{formatRelativeDate(msg.date)}</span>
                       </div>
-                      <MessageBody content={msg.body} />
+                      <MessageBody rawContent={msg.bodyRaw} />
+                      {msg.attachments.length > 0 && (
+                        <MessageAttachments attachments={msg.attachments} />
+                      )}
                     </div>
                   ))
                 )}
