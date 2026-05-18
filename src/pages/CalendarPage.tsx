@@ -5,9 +5,7 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import type { EventApi } from '@fullcalendar/core';
 import frLocale from '@fullcalendar/core/locales/fr';
-import { Sparkles, RefreshCw, Plus, X, Calendar, Clock, MapPin, Edit2, Trash2, Tag } from 'lucide-react';
-import { parseJsonResponseBody } from '../lib/parseJsonResponseBody';
-
+import { Sparkles, RefreshCw, X, Calendar, Clock, MapPin, Edit2, Trash2, Tag } from 'lucide-react';
 type CalendarDateInput = string | Date | null | undefined;
 
 interface EventFormData {
@@ -22,37 +20,6 @@ interface EventFormData {
   status: string;
   eventType: string;
   calendar: string;
-}
-
-interface NewEventFormData {
-  title: string;
-  date: string;
-  endDate: string;
-  allDay: boolean;
-  startTime: string;
-  endTime: string;
-  description: string;
-  location: string;
-  status: string;
-  recurrence: string;
-  calendar: string;
-  eventType: string;
-}
-
-interface CalendarApiItem {
-  id?: string;
-  summary?: string;
-  title?: string;
-  events?: string;
-  start?: { dateTime?: string; date?: string } | string;
-  end?: { dateTime?: string; date?: string } | string;
-  transparency?: string;
-  extendedProperties?: { private?: { eventType?: string } };
-  organizer?: { displayName?: string };
-  calendar?: string;
-  description?: string;
-  location?: string;
-  recurrence?: string | null;
 }
 
 interface CalendarUiEvent {
@@ -94,47 +61,6 @@ const getCalendarColor = (calendarName: string) => {
   return CALENDAR_COLORS[calendarName] || { color: C.gold, bg: `${C.gold}18`, label: calendarName };
 };
 
-const extractCalendarItems = (payload: unknown): CalendarApiItem[] => {
-  if (!payload) return [];
-  if (Array.isArray(payload)) return payload as CalendarApiItem[];
-  if (typeof payload === 'string') {
-    try {
-      const parsed = JSON.parse(payload);
-      return extractCalendarItems(parsed);
-    } catch {
-      return [];
-    }
-  }
-  if (typeof payload !== 'object') return [];
-  const record = payload as Record<string, unknown>;
-  if (
-    record.start ||
-    record.end ||
-    record.summary ||
-    record.title ||
-    record.startDateTime
-  ) {
-    return [payload as CalendarApiItem];
-  }
-
-  const directKeys = ['items', 'events', 'data', 'result', 'body', 'records', 'calendar', 'output'];
-  for (const key of directKeys) {
-    const candidate = record[key];
-    const extracted = extractCalendarItems(candidate);
-    if (extracted.length) return extracted;
-  }
-
-  return [];
-};
-
-const normalizeCalendarItem = (raw: unknown): CalendarApiItem | null => {
-  if (!raw) return null;
-  const source = raw as Record<string, unknown>;
-  const candidate = (source.json ?? source.data ?? source.event ?? source) as CalendarApiItem;
-  if (candidate?.start || candidate?.end || candidate?.summary || candidate?.title) return candidate;
-  return null;
-};
-
 const DEFAULT_EVENT_TYPES = [
   { label: 'Live / Q&A', color: '#4caf7d', bg: '#4caf7d18' },
   { label: 'Formation', color: '#5588d0', bg: '#5588d018' },
@@ -164,14 +90,6 @@ const formatTime = (dt: CalendarDateInput) =>
 
 const formatDate = (dt: CalendarDateInput) =>
   dt ? new Date(dt).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
-
-// Retourne HH:MM de l'heure actuelle arrondie à la demie
-const getCurrentTime = () => {
-  const now = new Date();
-  const h = now.getHours().toString().padStart(2, '0');
-  const m = now.getMinutes() >= 30 ? '30' : '00';
-  return `${h}:${m}`;
-};
 
 // Ajoute 1h à un HH:MM
 const addOneHour = (time: string) => {
@@ -406,162 +324,12 @@ const EventModal = ({ event, onClose, onDelete, onUpdate, eventTypes }: {
   );
 };
 
-const NewEventModal = ({ date, onClose, onSave, eventTypes }: {
-  date: string; onClose: () => void; onSave: (e: NewEventFormData) => void; eventTypes: typeof DEFAULT_EVENT_TYPES;
-}) => {
-  const now = getCurrentTime();
-  const [form, setForm] = useState({
-    title: '', date, endDate: date, allDay: false,
-    startTime: now,
-    endTime: addOneHour(now),
-    description: '', location: '', status: 'busy', recurrence: 'none',
-    calendar: 'Calendrier', eventType: eventTypes[0]?.label || 'Autre',
-  });
-
-  const [timeError, setTimeError] = useState('');
-
-  const set = (k: string, v: string | boolean) => {
-    setForm(f => {
-      const updated = { ...f, [k]: v };
-      // Auto-ajustement fin si début change
-      if (k === 'startTime') {
-        updated.endTime = addOneHour(String(v));
-      }
-      return updated;
-    });
-    setTimeError('');
-  };
-
-  const calColor = getCalendarColor(form.calendar);
-
-  const handleSave = () => {
-    if (!form.title.trim()) return;
-    if (!form.allDay && !isEndAfterStart(form.startTime, form.endTime, form.date, form.endDate)) {
-      setTimeError('L\'heure de fin doit être après l\'heure de début');
-      return;
-    }
-    onSave(form);
-    onClose();
-  };
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={onClose}>
-      <div style={{ background: C.card, borderRadius: 16, padding: 28, width: 480, border: `1px solid ${calColor.color}50`, maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
-          <h2 style={{ fontFamily: "'Playfair Display',serif", color: C.goldSoft, fontSize: 18 }}>Nouvel événement</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.muted, cursor: 'pointer' }}><X size={16} /></button>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Titre *</label>
-            <input value={form.title} onChange={e => set('title', e.target.value)} placeholder="Ex: Live EHME, Formation Kriya..." style={inputStyle} autoFocus />
-          </div>
-          <div>
-            <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Type d'événement</label>
-            <select value={form.eventType} onChange={e => set('eventType', e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
-              {eventTypes.map(t => <option key={t.label} value={t.label}>{t.label}</option>)}
-            </select>
-          </div>
-          {/* Agenda avec couleur visuelle */}
-          <div>
-            <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Agenda</label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {Object.entries(CALENDAR_COLORS).map(([key, val]) => (
-                <button key={key} onClick={() => set('calendar', key)}
-                  style={{
-                    flex: 1, padding: '10px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600,
-                    border: `2px solid ${form.calendar === key ? val.color : C.border}`,
-                    background: form.calendar === key ? val.bg : 'transparent',
-                    color: form.calendar === key ? val.color : C.muted,
-                    transition: 'all 0.15s',
-                  }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: val.color, display: 'inline-block', marginRight: 6 }} />
-                  {key}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px', background: C.surface, borderRadius: 8, border: `1px solid ${form.allDay ? C.gold : C.border}`, cursor: 'pointer' }} onClick={() => set('allDay', !form.allDay)}>
-            <input type="checkbox" checked={form.allDay} onChange={() => {}} style={{ width: 16, height: 16, accentColor: C.gold, marginTop: 2 }} />
-            <div>
-              <div style={{ fontSize: 13, color: C.text, fontWeight: 500 }}>📅 Journée entière</div>
-              <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Utile pour les voyages, absences, jours bloqués</div>
-            </div>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div>
-              <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>{form.allDay ? 'Date début' : 'Date'}</label>
-              <input type="date" value={form.date} onChange={e => set('date', e.target.value)} style={inputStyle} />
-            </div>
-            {form.allDay && (
-              <div>
-                <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Date fin</label>
-                <input type="date" value={form.endDate} onChange={e => set('endDate', e.target.value)} style={inputStyle} />
-              </div>
-            )}
-          </div>
-          {!form.allDay && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <div>
-                <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Début</label>
-                <input type="time" value={form.startTime} onChange={e => set('startTime', e.target.value)} style={inputStyle} />
-              </div>
-              <div>
-                <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Fin</label>
-                <input type="time" value={form.endTime} onChange={e => set('endTime', e.target.value)} style={{ ...inputStyle, borderColor: timeError ? C.red : C.border }} />
-              </div>
-            </div>
-          )}
-          {timeError && <p style={{ fontSize: 11, color: C.red, margin: '-8px 0 0' }}>{timeError}</p>}
-          <div>
-            <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Lieu</label>
-            <input value={form.location} onChange={e => set('location', e.target.value)} placeholder="En ligne, ville, adresse..." style={inputStyle} />
-          </div>
-          <div>
-            <label style={{ fontSize: 11, color: C.muted, display: 'block', marginBottom: 5 }}>Description</label>
-            <textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3} placeholder="Notes, lien Zoom..." style={{ ...inputStyle, resize: 'vertical' } as React.CSSProperties} />
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, cursor: 'pointer', fontSize: 13 }}>Annuler</button>
-          <button onClick={handleSave}
-            style={{ flex: 2, padding: '10px 0', borderRadius: 8, border: 'none', background: calColor.color, color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-            ✓ Créer l'événement
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const N8N_WEBHOOK = 'https://n8n.ananda-communaute.cloud/webhook/create-event';
-const CALENDAR_WEBHOOKS = [
-  'https://n8n.ananda-communaute.cloud/webhook/get-calendar',
-  'https://n8n.ananda-communaute.cloud/webhook/get-calendar/',
-];
-
-const fetchWithTimeout = async (url: string, ms = 12000) => {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), ms);
-  try {
-    return await fetch(url, {
-      method: 'GET',
-      cache: 'no-store',
-      signal: controller.signal,
-      headers: { 'Cache-Control': 'no-cache' },
-    });
-  } finally {
-    clearTimeout(timer);
-  }
-};
-
 export const CalendarPage = () => {
   const [events, setEvents] = useState<CalendarUiEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<EventApi | null>(null);
-  const [newEventDate, setNewEventDate] = useState<string | null>(null);
   const [showTypesManager, setShowTypesManager] = useState(false);
   const [eventTypes, setEventTypes] = useState<typeof DEFAULT_EVENT_TYPES>(() => {
     try {
@@ -577,162 +345,17 @@ export const CalendarPage = () => {
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
-    setSyncError(null);
-    try {
-      let data: unknown = null;
-      let lastErr: unknown = null;
-
-      for (const endpoint of CALENDAR_WEBHOOKS) {
-        try {
-          const res = await fetchWithTimeout(endpoint);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const body = await parseJsonResponseBody(res);
-          if (body === null) throw new Error('Réponse vide (pas de JSON)');
-          data = body;
-          lastErr = null;
-          break;
-        } catch (e) {
-          lastErr = e;
-        }
-      }
-      if (lastErr) throw lastErr;
-
-      const rawEvents = extractCalendarItems(data);
-
-      if (rawEvents.length) {
-        const hasStart = (item: CalendarApiItem) => {
-          if (!item.start) return false;
-          if (typeof item.start === 'string') return true;
-          return Boolean(item.start.dateTime || item.start.date);
-        };
-        const formatted = rawEvents
-          .map((raw) => normalizeCalendarItem(raw))
-          .filter((item): item is CalendarApiItem => !!item && hasStart(item))
-          .map((item): CalendarUiEvent => {
-          const startObj = typeof item.start === 'string' ? null : item.start;
-          const endObj = typeof item.end === 'string' ? null : item.end;
-          const isAllDay = !startObj?.dateTime;
-          const isFree = item.transparency === 'transparent';
-          const eventType = item.extendedProperties?.private?.eventType || '';
-          const calendarName = item.organizer?.displayName || item.calendar || 'Calendrier';
-
-          // Couleur prioritaire : celle du calendrier
-          const calColor = getCalendarColor(calendarName);
-
-          let type = eventTypes.find(t => t.label === eventType);
-          if (!type) {
-            const summary = (item.summary || '').toLowerCase();
-            if (summary.includes('live')) type = eventTypes.find(t => t.label.toLowerCase().includes('live'));
-            if (summary.includes('formation')) type = eventTypes.find(t => t.label.toLowerCase().includes('formation'));
-            if (!type) type = eventTypes[eventTypes.length - 1];
-          }
-
-          return {
-            id: item.id || `evt-${Math.random()}`,
-            title: item.summary || item.title || item.events || 'Événement',
-            allDay: isAllDay,
-            start: typeof item.start === 'string' ? item.start : (item.start?.dateTime || item.start?.date || ''),
-            end: typeof item.end === 'string' ? item.end : (endObj?.dateTime || endObj?.date),
-            // Couleur basée sur le calendrier
-            backgroundColor: isFree ? 'transparent' : calColor.bg,
-            borderColor: calColor.color,
-            textColor: calColor.color,
-            borderStyle: isFree ? 'dashed' : 'solid',
-            extendedProps: {
-              description: item.description || '',
-              location: item.location || '',
-              status: isFree ? 'free' : 'busy',
-              recurrence: item.recurrence || null,
-              calendar: calendarName,
-              eventType: type?.label || '',
-            }
-          };
-        });
-        setEvents(formatted);
-        setLastSync(new Date());
-        try { localStorage.setItem('ananda-calendar-cache', JSON.stringify(formatted)); } catch { /* ignore localStorage failures */ }
-      } else if (Array.isArray(data) && data.length === 0) {
-        // Keep explicit empty array behavior when upstream really has no events.
-        setEvents([]);
-        setLastSync(new Date());
-        try { localStorage.setItem('ananda-calendar-cache', JSON.stringify([])); } catch { /* ignore localStorage failures */ }
-      } else {
-        throw new Error('Format webhook inattendu');
-      }
-    } catch (e) {
-      console.error('Erreur calendrier:', e);
-      setSyncError("Sync agenda indisponible (webhook). Affichage du dernier cache local.");
-      try {
-        const cached = localStorage.getItem('ananda-calendar-cache');
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed)) setEvents(parsed);
-        }
-      } catch { /* ignore invalid cache */ }
-    } finally {
-      setLoading(false);
-    }
-  }, [eventTypes]);
+    setSyncError('Agenda en lecture seule — synchronisation Supabase à venir.');
+    setEvents([]);
+    setLastSync(new Date());
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     fetchEvents();
     const interval = setInterval(fetchEvents, 15 * 60 * 1000);
     return () => clearInterval(interval);
   }, [fetchEvents]);
-
-  const handleCreate = async (form: NewEventFormData) => {
-    const calColor = getCalendarColor(form.calendar);
-    const tempId = `local-${Date.now()}`;
-
-    const eventStatus: 'free' | 'busy' = form.status === 'free' ? 'free' : 'busy';
-    let start = '';
-    let end: string | undefined;
-    if (form.allDay) {
-      start = form.date;
-      const endDate = new Date(form.endDate);
-      endDate.setDate(endDate.getDate() + 1);
-      end = endDate.toISOString().split('T')[0];
-    } else {
-      start = `${form.date}T${form.startTime}:00`;
-      end = `${form.date}T${form.endTime}:00`;
-    }
-
-    const newEvent: CalendarUiEvent = {
-      id: tempId,
-      title: form.title,
-      allDay: form.allDay,
-      start,
-      end,
-      backgroundColor: calColor.bg,
-      borderColor: calColor.color,
-      textColor: calColor.color,
-      borderStyle: 'dashed',
-      extendedProps: {
-        description: form.description,
-        location: form.location,
-        status: eventStatus,
-        recurrence: form.recurrence !== 'none' ? form.recurrence : null,
-        calendar: form.calendar,
-        eventType: form.eventType,
-      },
-    };
-
-    setEvents(prev => [...prev, newEvent]);
-
-    try {
-      const res = await fetch(N8N_WEBHOOK, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create', ...newEvent })
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setSyncError(null);
-      setTimeout(fetchEvents, 2000);
-    } catch (e) {
-      console.error('Erreur création:', e);
-      setSyncError("Creation locale OK, mais sync webhook indisponible. Nouvelle tentative auto a la prochaine actualisation.");
-    }
-  };
 
   const handleUpdate = (id: string, data: EventFormData) => {
     const calColor = getCalendarColor(data.calendar || 'Calendrier');
@@ -761,34 +384,10 @@ export const CalendarPage = () => {
         },
       } : e
     ));
-    fetch(N8N_WEBHOOK, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'update', id, ...data })
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        setSyncError(null);
-      })
-      .catch((err) => {
-        console.error(err);
-        setSyncError("Modification locale OK, mais sync webhook indisponible. Nouvelle tentative auto a la prochaine actualisation.");
-      });
   };
 
   const handleDelete = (id: string) => {
     setEvents(prev => prev.filter(e => e.id !== id));
-    fetch(N8N_WEBHOOK, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'delete', id })
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        setSyncError(null);
-      })
-      .catch((err) => {
-        console.error(err);
-        setSyncError("Suppression locale OK, mais sync webhook indisponible. Nouvelle tentative auto a la prochaine actualisation.");
-      });
   };
 
   const todayEvents = events.filter(e => e.start && new Date(e.start).toDateString() === new Date().toDateString());
@@ -854,9 +453,6 @@ export const CalendarPage = () => {
             <button onClick={() => setShowTypesManager(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: 'pointer', fontSize: 12 }}>
               <Tag size={12} /> Types
             </button>
-            <button onClick={() => setNewEventDate(new Date().toISOString().split('T')[0])} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', background: C.gold, border: 'none', borderRadius: 8, color: '#0a0808', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-              <Plus size={12} /> Événement
-            </button>
             <button onClick={fetchEvents} style={{ display: 'flex', alignItems: 'center', padding: '6px 10px', background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: 'pointer' }}>
               <RefreshCw size={13} />
             </button>
@@ -876,24 +472,9 @@ export const CalendarPage = () => {
             slotMinTime={slotMinTime}
             slotMaxTime={slotMaxTime}
             nowIndicator={true}
-            selectable={true}
-            editable={true}
-            select={(info) => setNewEventDate(info.startStr.split('T')[0])}
+            selectable={false}
+            editable={false}
             eventClick={(info) => setSelectedEvent(info.event)}
-            eventDrop={(info) => {
-              setEvents(prev => prev.map(e => e.id === info.event.id ? { ...e, start: info.event.startStr, end: info.event.endStr, allDay: info.event.allDay } : e));
-              fetch(N8N_WEBHOOK, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'update', id: info.event.id, start: info.event.startStr, end: info.event.endStr })
-              }).catch(console.error);
-            }}
-            eventResize={(info) => {
-              setEvents(prev => prev.map(e => e.id === info.event.id ? { ...e, start: info.event.startStr, end: info.event.endStr } : e));
-              fetch(N8N_WEBHOOK, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'update', id: info.event.id, start: info.event.startStr, end: info.event.endStr })
-              }).catch(console.error);
-            }}
             dayMaxEvents={4}
             businessHours={{ daysOfWeek: [1, 2, 3, 4, 5], startTime: '08:00', endTime: '20:00' }}
             eventTimeFormat={{ hour: '2-digit', minute: '2-digit', hour12: false }}
@@ -932,7 +513,6 @@ export const CalendarPage = () => {
       </div>
 
       {selectedEvent && <EventModal event={selectedEvent} onClose={() => setSelectedEvent(null)} onDelete={handleDelete} onUpdate={handleUpdate} eventTypes={eventTypes} />}
-      {newEventDate && <NewEventModal date={newEventDate} onClose={() => setNewEventDate(null)} onSave={handleCreate} eventTypes={eventTypes} />}
       {showTypesManager && <EventTypesManager types={eventTypes} onUpdate={saveEventTypes} onClose={() => setShowTypesManager(false)} />}
 
       <style>{`

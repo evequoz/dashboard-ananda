@@ -562,8 +562,6 @@ export const ensureMonthlyFixedCharges = async (year: number, month: number) => 
 
 export const getFinances = listFinanceEntries;
 export const getEmails = listInboxEmails;
-export const getPosts = async () => [];
-export const getFormations = async () => [];
 
 export const getRevenuesDuMois = async () => {
   const rows = await listFinanceEntries();
@@ -610,11 +608,6 @@ export const getTachesAujourdhui = async () => {
 
 export const updateTacheStatut = async (id: string, completed: boolean) => {
   await updateTaskLegacy(Number(id), { Statut: completed ? 'Fait' : 'En cours', Fait: completed });
-};
-
-export const getPostsParStatut = async (_statut: string) => {
-  void _statut;
-  return [];
 };
 
 export const getDashboardStats = async () => {

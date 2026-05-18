@@ -3,7 +3,7 @@ import {
   Mail, Inbox, Briefcase, RefreshCw, CheckCircle,
   AlertCircle, Clock, ChevronRight, Send, Plus,
   Sparkles, X, Paperclip, Trash2, Copy, Eye, EyeOff,
-  FileText, ExternalLink, User, Users, SendHorizonal, Shield, Newspaper
+  FileText, ExternalLink, SendHorizonal, Shield, Newspaper
 } from 'lucide-react';
 import {
   listInboxEmails,
@@ -17,16 +17,11 @@ import {
   moveSentEmailsBulkToTrash,
   restoreSentEmailsBulk,
   deleteSentEmailsOlderThanDays,
-  findAdminByEmail,
   sendEmailViaEdge,
   markInboxEmailNotSpam,
   refreshUntreatedEmailCount,
 } from '../data/supabaseApi';
 import { dispatchUntreatedEmailCount } from '../lib/emailCountEvents';
-import { parseJsonResponseBody } from '../lib/parseJsonResponseBody';
-
-// Proxy n8n → évite les problèmes CORS avec l'API Systeme.io
-const SYSTEME_PROXY = 'https://n8n.ananda-communaute.cloud/webhook/systeme-proxy';
 
 interface EmailAttachment {
   url: string;
@@ -521,194 +516,6 @@ const ComposeModal = ({ activeAccount, accountColor, onSend, onClose, sending, s
   );
 };
 
-// ── Panneau contact (Systeme.io + fallback contacts_admin) ──
-interface SysContact {
-  id: number; email: string; firstName?: string; lastName?: string;
-  phone?: string; tags?: Array<{ id: number; name: string }>; createdAt?: string; [k: string]: unknown;
-}
-interface AdminContact {
-  id: number; Prénom: string; Nom: string; Email: string; Téléphone: string;
-  Entreprise: string; Catégorie: { value: string } | null; Notes: string;
-}
-
-const fmtDateShort = (d?: string) =>
-  d ? new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-
-const ContactSidePanel = ({ senderRaw }: { senderRaw: string }) => {
-  const [sysContact,   setSysContact]   = useState<SysContact | null>(null);
-  const [adminContact, setAdminContact] = useState<AdminContact | null>(null);
-  const [loading,  setLoading]  = useState(true);
-  const [notFound, setNotFound] = useState(false);
-
-  useEffect(() => {
-    setSysContact(null); setAdminContact(null); setNotFound(false); setLoading(true);
-    const match = senderRaw.match(/<(.+?)>/);
-    const email = (match ? match[1] : senderRaw).trim();
-    if (!email) { setLoading(false); setNotFound(true); return; }
-
-    // 1) Cherche dans Systeme.io via proxy n8n
-    fetch(`${SYSTEME_PROXY}?email=${encodeURIComponent(email)}`)
-      .then(async (r) => {
-        if (!r.ok) throw new Error(String(r.status));
-        return parseJsonResponseBody(r);
-      })
-      .then(async (d) => {
-        const items = d && typeof d === 'object' && d !== null && 'items' in d
-          ? (d as { items?: SysContact[] }).items
-          : undefined;
-        if (items && items.length > 0) {
-          setSysContact(items[0]);
-          return;
-        }
-        const admin = await findAdminByEmail(email);
-        if (admin) {
-          setAdminContact(admin as AdminContact);
-          return;
-        }
-        setNotFound(true);
-      })
-      .catch(() => setNotFound(true))
-      .finally(() => setLoading(false));
-  }, [senderRaw]);
-
-  const sysName = sysContact
-    ? [sysContact.firstName, sysContact.lastName].filter(Boolean).join(' ') || sysContact.email
-    : '';
-  const adminName = adminContact
-    ? [adminContact.Prénom, adminContact.Nom].filter(Boolean).join(' ') || adminContact.Email
-    : '';
-
-  const catColors: Record<string, string> = {
-    Fournisseur: '#3b82f6', Partenaire: '#10b981', Admin: '#f59e0b',
-    Comptable: '#8b5cf6', Autre: '#6b7280',
-  };
-  const catVal = adminContact?.Catégorie?.value || '';
-  const catColor = catColors[catVal] || '#6b7280';
-
-  return (
-    <div className="w-44 shrink-0 border-l border-[var(--border)] bg-[var(--bg-surface)] flex flex-col overflow-y-auto">
-      <div className="px-3 py-3 border-b border-[var(--border)]">
-        <div className="flex items-center gap-1.5">
-          <Users className="w-3.5 h-3.5 text-[#c9a84c]" />
-          <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Contact</span>
-        </div>
-      </div>
-
-      {loading && (
-        <div className="flex items-center justify-center py-8">
-          <RefreshCw className="w-4 h-4 text-[var(--text-muted)] animate-spin" />
-        </div>
-      )}
-
-      {!loading && notFound && (
-        <div className="flex flex-col items-center justify-center py-8 gap-2 px-3">
-          <User className="w-7 h-7 text-[var(--text-muted)] opacity-40" />
-          <p className="text-[10px] text-[var(--text-muted)] text-center">Inconnu dans Systeme.io ni dans les contacts</p>
-        </div>
-      )}
-
-      {/* ── Fiche Systeme.io ── */}
-      {!loading && sysContact && (
-        <div className="px-3 py-3 space-y-3">
-          <div className="flex flex-col items-center gap-2 pb-3 border-b border-[var(--border)]">
-            <div className="w-10 h-10 rounded-full bg-[#c9a84c]/15 border border-[#c9a84c]/30 flex items-center justify-center text-sm font-bold text-[#c9a84c]">
-              {(sysContact.firstName?.[0] || sysContact.email[0]).toUpperCase()}
-            </div>
-            <div className="text-center">
-              <p className="text-xs font-semibold text-[var(--text-primary)] leading-tight">{sysName}</p>
-              <p className="text-[10px] text-[var(--text-muted)] break-all mt-0.5">{sysContact.email}</p>
-              <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[8px] font-bold bg-[#c9a84c]/10 text-[#c9a84c] border border-[#c9a84c]/20">
-                Systeme.io
-              </span>
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            {sysContact.phone && (
-              <div>
-                <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase">Téléphone</p>
-                <p className="text-[10px] text-[var(--text-primary)]">{sysContact.phone}</p>
-              </div>
-            )}
-            <div>
-              <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase">Inscrit</p>
-              <p className="text-[10px] text-[var(--text-primary)]">{fmtDateShort(sysContact.createdAt)}</p>
-            </div>
-          </div>
-
-          {sysContact.tags && sysContact.tags.length > 0 && (
-            <div>
-              <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase mb-1.5">Tags</p>
-              <div className="flex flex-wrap gap-1">
-                {sysContact.tags.slice(0, 6).map(t => (
-                  <span key={t.id} className="px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-[#7b5ea7]/15 text-[#9b7ec7] border border-[#7b5ea7]/20 leading-tight">
-                    {t.name}
-                  </span>
-                ))}
-                {sysContact.tags.length > 6 && (
-                  <span className="text-[9px] text-[var(--text-muted)]">+{sysContact.tags.length - 6}</span>
-                )}
-              </div>
-            </div>
-          )}
-
-          <a href={`https://app.systeme.io/contacts/${sysContact.id}`} target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all">
-            <ExternalLink className="w-3 h-3" /> Voir dans Systeme.io
-          </a>
-        </div>
-      )}
-
-      {/* ── Fiche Admin/Pro ── */}
-      {!loading && adminContact && (
-        <div className="px-3 py-3 space-y-3">
-          <div className="flex flex-col items-center gap-2 pb-3 border-b border-[var(--border)]">
-            <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white"
-              style={{ backgroundColor: catColor }}>
-              {(adminContact.Prénom?.[0] || adminContact.Email?.[0] || '?').toUpperCase()}
-            </div>
-            <div className="text-center">
-              <p className="text-xs font-semibold text-[var(--text-primary)] leading-tight">{adminName}</p>
-              <p className="text-[10px] text-[var(--text-muted)] break-all mt-0.5">{adminContact.Email}</p>
-              {catVal && (
-                <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[8px] font-bold border"
-                  style={{ color: catColor, borderColor: `${catColor}40`, backgroundColor: `${catColor}15` }}>
-                  {catVal}
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            {adminContact.Entreprise && (
-              <div>
-                <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase">Entreprise</p>
-                <p className="text-[10px] text-[var(--text-primary)]">{adminContact.Entreprise}</p>
-              </div>
-            )}
-            {adminContact.Téléphone && (
-              <div>
-                <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase">Téléphone</p>
-                <p className="text-[10px] text-[var(--text-primary)]">{adminContact.Téléphone}</p>
-              </div>
-            )}
-            {adminContact.Notes && (
-              <div>
-                <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase">Notes</p>
-                <p className="text-[10px] text-[var(--text-primary)] line-clamp-4 whitespace-pre-wrap">{adminContact.Notes}</p>
-              </div>
-            )}
-          </div>
-
-          <span className="flex items-center gap-1 text-[9px] text-[var(--text-muted)]">
-            <FileText className="w-2.5 h-2.5" /> Contact Admin/Pro
-          </span>
-        </div>
-      )}
-    </div>
-  );
-};
-
 // ── Composant principal ──
 export const Poste = () => {
   const [activeAccount, setActiveAccount] = useState(ACCOUNTS[0].email);
@@ -734,7 +541,6 @@ export const Poste = () => {
   const [selectedTrashInboxIds, setSelectedTrashInboxIds] = useState<number[]>([]);
   const [selectedTrashSentIds, setSelectedTrashSentIds] = useState<number[]>([]);
   const [showMailList, setShowMailList] = useState(true);
-  const [showContactPanel, setShowContactPanel] = useState(true);
   const [replySeedText, setReplySeedText] = useState('');
   const replyModeRef = useRef(false);
   replyModeRef.current = replyMode;
@@ -1192,13 +998,6 @@ export const Poste = () => {
             title={showMailList ? 'Masquer liste' : 'Afficher liste'}
           >
             <Mail className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => setShowContactPanel(v => !v)}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#a0a0c0] hover:text-[var(--text-primary)] bg-[var(--bg-surface)] border border-[var(--border)] transition-all"
-            title={showContactPanel ? 'Masquer contact' : 'Afficher contact'}
-          >
-            <Users className="w-3.5 h-3.5" />
           </button>
           {viewMode === 'inbox' && selectedInboxIds.length > 0 && (
             <button onClick={deleteSelectedInbox}
@@ -1741,7 +1540,6 @@ export const Poste = () => {
                 )}
               </div>
             </div>
-            {showContactPanel && <ContactSidePanel senderRaw={selectedEmail['Expéditeur'] || ''} />}
             </>
           ))}
         </div>

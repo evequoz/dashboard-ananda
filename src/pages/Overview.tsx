@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   Calendar, Clock, CheckCircle, Mail, Plus,
-  BookOpen, Lightbulb, Flag, Server, X, Trash2, ExternalLink, Users, PauseCircle, TrendingUp
+  Flag, X, Trash2,
 } from 'lucide-react';
 import {
   getTachesAujourdhui,
@@ -13,8 +13,6 @@ import {
   createTaskLegacy,
   refreshUntreatedEmailCount,
 } from '../data/supabaseApi';
-import { parseJsonResponseBody } from '../lib/parseJsonResponseBody';
-
 interface Tache {
   id: string; text: string; completed: boolean;
   priorite: string; projet: string; dateEcheance: string | null;
@@ -45,12 +43,6 @@ const ACCOUNT_COLORS: Record<string, string> = {
   'serge@seme.ch':   '#9b7ec8',
 };
 
-const QUICK_LINKS = [
-  { label: 'AFFiNE',     url: 'https://affine.ananda-communaute.cloud',  icon: BookOpen,  color: '#d4b060' },
-  { label: 'Open WebUI', url: 'https://cloud.ananda-communaute.cloud',   icon: Lightbulb, color: '#9b7ec8' },
-  { label: 'Coolify',    url: 'https://coolify.ananda-communaute.cloud', icon: Server,    color: '#5dc98d' },
-];
-
 const isSameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
@@ -67,15 +59,9 @@ const getInitials = (from: string) => {
   return parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : name.slice(0, 2).toUpperCase();
 };
 
-const MOCK_PARAMPARA_STATS = {
-  nouveauxAbonnes7j: 12,
-  abonnementsSuspendus: 3,
-  activiteSemaine: '+8%',
-};
-
 export const Overview = () => {
   const [taches, setTaches] = useState<Tache[]>([]);
-  const [events, setEvents] = useState<CalendarEventItem[]>([]);
+  const events: CalendarEventItem[] = [];
   const [emails, setEmails] = useState<EmailItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtre, setFiltre] = useState('Tout');
@@ -94,23 +80,6 @@ export const Overview = () => {
 
   useEffect(() => { loadEmails(); const t = setInterval(loadEmails, 3 * 60 * 1000); return () => clearInterval(t); }, []);
   useEffect(() => { getTachesAujourdhui().then(t => { setTaches(t); setLoading(false); }).catch(() => setLoading(false)); }, []);
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetch('https://n8n.ananda-communaute.cloud/webhook/get-calendar');
-        const data = await parseJsonResponseBody(res);
-        if (Array.isArray(data)) {
-          const now = new Date(); const in7 = new Date(now); in7.setDate(now.getDate() + 7);
-          setEvents(data.filter(i => new Date(i.end?.dateTime || i.end?.date) > now && new Date(i.start?.dateTime || i.start?.date) <= in7)
-            .sort((a, b) => new Date(a.start?.dateTime || a.start?.date).getTime() - new Date(b.start?.dateTime || b.start?.date).getTime()));
-        }
-      } catch {
-        // Ignore transient calendar webhook failures on dashboard.
-      }
-    };
-    load(); const t = setInterval(load, 60000); return () => clearInterval(t);
-  }, []);
 
   const toggleTache = async (id: string) => { setTaches(p => p.filter(t => t.id !== id)); await updateTacheStatut(id, true); };
   const openTaskInTasksPage = (id: string) => {
@@ -217,32 +186,6 @@ export const Overview = () => {
         </div>
       </div>
 
-      {/* ── KPI PARAMPARA (fictif en attendant branchement) ── */}
-      <div className="ov-card" style={{ padding: 14, marginBottom: 16 }}>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
-          Donnees fictives pour le layout (a brancher a Parampara ensuite)
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
-          <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', background: 'var(--bg-card)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, color: 'var(--text-muted)', fontSize: 11 }}>
-              <Users size={12} /> Nouveaux abonnes (7j)
-            </div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#5dc98d' }}>{MOCK_PARAMPARA_STATS.nouveauxAbonnes7j}</div>
-          </div>
-          <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', background: 'var(--bg-card)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, color: 'var(--text-muted)', fontSize: 11 }}>
-              <PauseCircle size={12} /> Abonnements suspendus
-            </div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#e07070' }}>{MOCK_PARAMPARA_STATS.abonnementsSuspendus}</div>
-          </div>
-          <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', background: 'var(--bg-card)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, color: 'var(--text-muted)', fontSize: 11 }}>
-              <TrendingUp size={12} /> Activite Parampara
-            </div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#d4b060' }}>{MOCK_PARAMPARA_STATS.activiteSemaine}</div>
-          </div>
-        </div>
-      </div>
 
       {/* ── GRILLE ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
@@ -476,18 +419,6 @@ export const Overview = () => {
               })}
               {unread > 8 && <p style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: '4px 0' }}>+ {unread - 8} autres → aller dans Mails</p>}
             </div>
-          </div>
-
-          {/* LIENS RAPIDES — ligne compacte */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', padding: '4px 2px' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginRight: 4 }}>Accès :</span>
-            {QUICK_LINKS.map((link, i) => (
-              <a key={i} href={link.url} target="_blank" rel="noopener noreferrer" className="ov-quicklink"
-                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 99, textDecoration: 'none', background: 'var(--bg-card)', border: '1px solid var(--border)', fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', transition: 'all 0.15s' }}>
-                {link.label}
-                <ExternalLink size={9} color="var(--text-muted)" />
-              </a>
-            ))}
           </div>
 
         </div>

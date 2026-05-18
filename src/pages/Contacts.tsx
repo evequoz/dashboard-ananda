@@ -1,9 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
-  Search, User, Mail, Phone, Calendar, ExternalLink,
+  Search, Mail, Phone, Calendar,
   X, Loader2, Users, ChevronRight, Send, RefreshCw,
   CheckCircle, AlertCircle, Plus, Pencil, Trash2,
-  Building2, FileText, Cloud, Clock, Inbox,
+  Building2, FileText, Clock, Inbox,
 } from 'lucide-react';
 import {
   listAdminContacts,
@@ -12,25 +12,14 @@ import {
   deleteAdminContact,
   listInboxEmails,
   listSentEmails,
+  sendEmailViaEdge,
 } from '../data/supabaseApi';
-import { parseJsonResponseBody } from '../lib/parseJsonResponseBody';
 
 // ── Constants ─────────────────────────────────────────────────────
-const SYSTEME_PROXY     = 'https://n8n.ananda-communaute.cloud/webhook/systeme-proxy';
-const N8N_WEBHOOK       = 'https://n8n.ananda-communaute.cloud/webhook/send-email';
-const N8N_GOOGLE_SYNC   = 'https://n8n.ananda-communaute.cloud/webhook/sync-google-contacts';
 const ACCOUNTS          = ['serge@eh-me.com', 'admin@eh-me.com', 'serge@seme.ch'];
 const CATEGORIES        = ['Fournisseur', 'Partenaire', 'Admin', 'Comptable', 'Autre'];
 
 // ── Interfaces ────────────────────────────────────────────────────
-interface SysContact {
-  id: number; email: string; firstName?: string; lastName?: string;
-  phone?: string; locale?: string; registrationSource?: string;
-  fields?: Array<{ id: number; slug: string; value: unknown }>;
-  tags?: Array<{ id: number; name: string }>;
-  createdAt?: string; updatedAt?: string; [key: string]: unknown;
-}
-
 interface AdminContact {
   id: number;
   Prénom: string; Nom: string; Email: string; Téléphone: string;
@@ -48,8 +37,6 @@ const fmtShort = (d?: string) =>
   d ? new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '—';
 const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-const sysName     = (c: SysContact)   => [c.firstName, c.lastName].filter(Boolean).join(' ') || c.email;
-const sysInitials = (c: SysContact)   => (c.firstName?.[0] || c.email[0]).toUpperCase();
 const adminName   = (c: AdminContact) => [c.Prénom, c.Nom].filter(Boolean).join(' ') || c.Email;
 const adminInit   = (c: AdminContact) => (c.Prénom?.[0] || c.Email?.[0] || '?').toUpperCase();
 const getCatColor = (cat: string) => ({
@@ -69,10 +56,7 @@ const QuickComposeModal = ({ to, onClose }: { to: string; onClose: () => void })
     if (!body.trim()) return;
     setSending(true);
     try {
-      await fetch(N8N_WEBHOOK, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to, subject, body, from, attachments: [] }),
-      });
+      await sendEmailViaEdge({ from, to, subject, body });
       setStatus('success');
       setTimeout(() => { setStatus('idle'); onClose(); }, 2000);
     } catch { setStatus('error'); setTimeout(() => setStatus('idle'), 3000); }
@@ -130,196 +114,6 @@ const QuickComposeModal = ({ to, onClose }: { to: string; onClose: () => void })
   );
 };
 
-// ════════════════════════════════════════════════════════
-// ONGLET COMMUNAUTÉ — Systeme.io
-// ════════════════════════════════════════════════════════
-const SysContactCard = ({ contact, isSelected, onSelect }: { contact: SysContact; isSelected: boolean; onSelect: () => void }) => (
-  <button onClick={onSelect} className={`w-full text-left rounded-xl p-4 transition-all border ${
-    isSelected ? 'border-[#c9a84c]/50 bg-[#c9a84c]/08' : 'border-[var(--border)] bg-[var(--bg-card)] hover:border-[#c9a84c]/30 hover:bg-[var(--card-hover)]'
-  }`}>
-    <div className="flex items-start gap-3">
-      <div className="w-10 h-10 rounded-full bg-[#c9a84c]/15 border border-[#c9a84c]/25 flex items-center justify-center text-sm font-bold text-[#c9a84c] shrink-0">
-        {sysInitials(contact)}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{sysName(contact)}</p>
-        <p className="text-xs text-[var(--text-muted)] truncate">{contact.email}</p>
-        {contact.phone && <p className="text-xs text-[var(--text-muted)] mt-0.5">{contact.phone}</p>}
-        {contact.tags && contact.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {contact.tags.slice(0, 4).map(t => (
-              <span key={t.id} className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#7b5ea7]/15 text-[#9b7ec7] border border-[#7b5ea7]/20">{t.name}</span>
-            ))}
-            {contact.tags.length > 4 && <span className="text-[10px] text-[var(--text-muted)]">+{contact.tags.length - 4}</span>}
-          </div>
-        )}
-        <p className="text-[10px] text-[var(--text-muted)] mt-1.5 flex items-center gap-1">
-          <Calendar className="w-3 h-3" /> Inscrit le {fmtDate(contact.createdAt)}
-        </p>
-      </div>
-      <ChevronRight className={`w-4 h-4 shrink-0 mt-1 transition-colors ${isSelected ? 'text-[#c9a84c]' : 'text-[var(--text-muted)]'}`} />
-    </div>
-  </button>
-);
-
-const SysContactDetail = ({ contact, onClose, onCompose }: { contact: SysContact; onClose: () => void; onCompose: (e: string) => void }) => {
-  const fields = [
-    { label: 'Email',       value: contact.email },
-    { label: 'Téléphone',  value: contact.phone },
-    { label: 'Prénom',     value: contact.firstName },
-    { label: 'Nom',        value: contact.lastName },
-    { label: 'Locale',     value: contact.locale },
-    { label: 'Source',     value: contact.registrationSource },
-    { label: 'Inscrit le', value: fmtDate(contact.createdAt) },
-    { label: 'Mis à jour', value: fmtDate(contact.updatedAt) },
-  ].filter(f => f.value && f.value !== '—');
-  const customFields = (contact.fields || []).filter(f => f.value !== null && f.value !== '');
-
-  return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] shrink-0">
-        <h3 className="text-sm font-bold text-[var(--text-primary)]">Fiche Systeme.io</h3>
-        <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--border)] transition-all"><X className="w-4 h-4" /></button>
-      </div>
-      <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
-        <div className="flex flex-col items-center gap-3 pb-5 border-b border-[var(--border)]">
-          <div className="w-16 h-16 rounded-full bg-[#c9a84c]/15 border-2 border-[#c9a84c]/30 flex items-center justify-center text-2xl font-bold text-[#c9a84c]">{sysInitials(contact)}</div>
-          <div className="text-center">
-            <p className="text-base font-bold text-[var(--text-primary)]">{sysName(contact)}</p>
-            <p className="text-sm text-[var(--text-muted)]">{contact.email}</p>
-          </div>
-          <div className="flex gap-2 flex-wrap justify-center">
-            <button onClick={() => onCompose(contact.email)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold bg-[#c9a84c]/20 border border-[#c9a84c]/40 text-[var(--gold-soft)] hover:bg-[#c9a84c]/30 transition-all">
-              <Mail className="w-3.5 h-3.5" /> Envoyer un email
-            </button>
-            <a href={`https://app.systeme.io/contacts/${contact.id}`} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-[var(--bg-surface)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all">
-              <ExternalLink className="w-3.5 h-3.5" /> Voir dans Systeme.io
-            </a>
-          </div>
-        </div>
-        <div>
-          <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-3">Informations</p>
-          <div className="space-y-0">
-            {fields.map(f => (
-              <div key={f.label} className="flex items-start gap-3 py-2 border-b border-[var(--border)]/50">
-                <span className="text-xs text-[var(--text-muted)] w-24 shrink-0 mt-0.5">{f.label}</span>
-                <span className="text-xs text-[var(--text-primary)] flex-1 break-all">{f.value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        {contact.tags && contact.tags.length > 0 && (
-          <div>
-            <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-3">Tags ({contact.tags.length})</p>
-            <div className="flex flex-wrap gap-1.5">
-              {contact.tags.map(t => (
-                <span key={t.id} className="px-2.5 py-1 rounded-full text-xs font-medium bg-[#7b5ea7]/15 text-[#9b7ec7] border border-[#7b5ea7]/20">{t.name}</span>
-              ))}
-            </div>
-          </div>
-        )}
-        {customFields.length > 0 && (
-          <div>
-            <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-3">Champs personnalisés</p>
-            <div className="space-y-0">
-              {customFields.map(f => (
-                <div key={f.slug} className="flex items-start gap-3 py-2 border-b border-[var(--border)]/50">
-                  <span className="text-xs text-[var(--text-muted)] w-24 shrink-0 capitalize mt-0.5">{f.slug.replace(/_/g, ' ')}</span>
-                  <span className="text-xs text-[var(--text-primary)] flex-1 break-all">{String(f.value)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        <p className="text-[10px] text-[var(--text-muted)] font-mono">ID Systeme.io : #{contact.id}</p>
-      </div>
-    </div>
-  );
-};
-
-const CommunauteTab = ({ onCompose }: { onCompose: (email: string) => void }) => {
-  const [query, setQuery]   = useState('');
-  const [results, setResults] = useState<SysContact[]>([]);
-  const [selected, setSelected] = useState<SysContact | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
-  const [error, setError]   = useState<string | null>(null);
-
-  const search = useCallback(async (q: string) => {
-    if (q.trim().length < 2) return;
-    setLoading(true); setError(null); setSelected(null); setResults([]);
-    try {
-      const isEmail = q.includes('@');
-      const param   = isEmail ? `email=${encodeURIComponent(q)}` : `firstName=${encodeURIComponent(q)}`;
-      const res = await fetch(`${SYSTEME_PROXY}?${param}`);
-      if (!res.ok) throw new Error(`Erreur API : ${res.status}`);
-      const data = await parseJsonResponseBody(res);
-      const items = data && typeof data === 'object' && data !== null && 'items' in data
-        ? (data as { items?: SysContact[] }).items
-        : undefined;
-      setResults(items || []); setSearched(true);
-    } catch (e: unknown) { setError(getErrorMessage(e)); }
-    finally { setLoading(false); }
-  }, []);
-
-  return (
-    <div className="flex flex-1 overflow-hidden">
-      <div className={`flex flex-col border-r border-[var(--border)] bg-[var(--bg-main)] transition-all shrink-0 ${selected ? 'w-[420px]' : 'w-full'}`}>
-        <div className="px-6 py-4 border-b border-[var(--border)] bg-[var(--bg-surface)] shrink-0">
-          <div className="flex gap-2">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-              <input type="text" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && search(query)}
-                placeholder="Email complet ou prénom..."
-                className="w-full pl-9 pr-4 py-2.5 bg-[var(--bg-main)] border border-[var(--border)] rounded-xl text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[#c9a84c]/50 transition-all" />
-            </div>
-            <button onClick={() => search(query)} disabled={loading || query.trim().length < 2}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-[#c9a84c]/20 border border-[#c9a84c]/40 text-[var(--gold-soft)] hover:bg-[#c9a84c]/30 transition-all disabled:opacity-40">
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Search className="w-4 h-4" /> Chercher</>}
-            </button>
-          </div>
-          <p className="text-xs text-[var(--text-muted)] mt-2">Tape un email complet ou un prénom, puis Entrée</p>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-2">
-          {error && (
-            <div className="p-4 bg-[#d95555]/10 border border-[#d95555]/30 rounded-xl flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-[#d95555] shrink-0 mt-0.5" />
-              <p className="text-sm text-[#d95555]">{error}</p>
-            </div>
-          )}
-          {!loading && searched && results.length === 0 && !error && (
-            <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <User className="w-10 h-10 text-[var(--text-muted)]" />
-              <p className="text-sm text-[var(--text-muted)]">Aucun contact trouvé</p>
-            </div>
-          )}
-          {!searched && !loading && (
-            <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <Users className="w-12 h-12 text-[var(--text-muted)] opacity-30" />
-              <p className="text-sm text-[var(--text-muted)]">Lance une recherche pour trouver un contact</p>
-            </div>
-          )}
-          {results.map(c => (
-            <SysContactCard key={c.id} contact={c} isSelected={selected?.id === c.id} onSelect={() => setSelected(c)} />
-          ))}
-          {results.length > 0 && (
-            <p className="text-xs text-[var(--text-muted)] text-center pt-1">{results.length} contact{results.length > 1 ? 's' : ''} trouvé{results.length > 1 ? 's' : ''}</p>
-          )}
-        </div>
-      </div>
-      {selected && (
-        <div className="flex-1 bg-[var(--bg-card)] border-l border-[var(--border)] overflow-hidden">
-          <SysContactDetail contact={selected} onClose={() => setSelected(null)} onCompose={onCompose} />
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ════════════════════════════════════════════════════════
-// ONGLET ADMIN/PRO — Supabase (admin_contacts)
 // ════════════════════════════════════════════════════════
 
 // ── Formulaire ajout/modification ──
@@ -590,8 +384,6 @@ const AdminTab = ({ onCompose }: { onCompose: (email: string) => void }) => {
   const [selected, setSelected]   = useState<AdminContact | null>(null);
   const [showForm, setShowForm]     = useState(false);
   const [editTarget, setEditTarget] = useState<AdminContact | undefined>(undefined);
-  const [syncing, setSyncing]       = useState(false);
-  const [syncResult, setSyncResult] = useState<{ ok: boolean; message?: string; created?: number; updated?: number } | null>(null);
 
   const fetchContacts = useCallback(async () => {
     setLoading(true);
@@ -631,19 +423,6 @@ const AdminTab = ({ onCompose }: { onCompose: (email: string) => void }) => {
     setSelected(null); await fetchContacts();
   };
 
-  const syncGoogle = async () => {
-    setSyncing(true); setSyncResult(null);
-    try {
-      const res  = await fetch(N8N_GOOGLE_SYNC);
-      const data = await parseJsonResponseBody(res);
-      if (!data || typeof data !== 'object') throw new Error('Réponse vide');
-      const row = data as { ok?: boolean; message?: string; created?: number; updated?: number };
-      setSyncResult({ ok: row.ok ?? true, message: row.message, created: row.created, updated: row.updated });
-      await fetchContacts();
-    } catch { setSyncResult(null); alert('Erreur lors de la synchronisation Google Contacts.'); }
-    finally { setSyncing(false); }
-  };
-
   return (
     <div className="flex flex-1 overflow-hidden">
       {showForm && <AdminContactForm initial={editTarget} onSave={handleSave} onClose={() => { setShowForm(false); setEditTarget(undefined); }} />}
@@ -665,23 +444,6 @@ const AdminTab = ({ onCompose }: { onCompose: (email: string) => void }) => {
           </div>
           <div className="flex items-center justify-between gap-3">
             <span className="text-xs text-[var(--text-muted)]">{filtered.length} contact{filtered.length !== 1 ? 's' : ''}</span>
-            <div className="flex items-center gap-3">
-              {syncResult && (
-                <span className="text-[10px] text-[#4caf7d] flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3" />
-                  {syncResult.message
-                    ? syncResult.message
-                    : `${syncResult.created ?? 0} ajouté${(syncResult.created ?? 0) !== 1 ? 's' : ''}, ${syncResult.updated ?? 0} mis à jour`}
-                </span>
-              )}
-              <button onClick={syncGoogle} disabled={syncing}
-                className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all disabled:opacity-50">
-                {syncing
-                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  : <Cloud className="w-3.5 h-3.5" />}
-                {syncing ? 'Sync…' : 'Sync Google'}
-              </button>
-            </div>
           </div>
           {fetchError && (
             <div className="mt-2 px-3 py-2 bg-[#d95555]/10 border border-[#d95555]/20 rounded-lg text-[10px] text-[#d95555] font-mono break-all flex items-start gap-2">
@@ -728,39 +490,24 @@ const AdminTab = ({ onCompose }: { onCompose: (email: string) => void }) => {
 // COMPOSANT PRINCIPAL
 // ════════════════════════════════════════════════════════
 export const Contacts = () => {
-  const [tab, setTab]               = useState<'communaute' | 'admin'>('communaute');
   const [composeTarget, setComposeTarget] = useState<string | null>(null);
 
   return (
     <div className="flex flex-col" style={{ height: '100%', minHeight: 0 }}>
       {composeTarget && <QuickComposeModal to={composeTarget} onClose={() => setComposeTarget(null)} />}
 
-      {/* Onglets principaux */}
-      <div className="flex items-center gap-1 px-6 border-b border-[var(--border)] bg-[var(--bg-main)] shrink-0">
-        <div className="flex items-center gap-3 py-1 mr-4">
-          <div className="w-7 h-7 rounded-lg bg-[#c9a84c]/20 border border-[#c9a84c]/30 flex items-center justify-center">
-            <Users className="w-3.5 h-3.5 text-[#c9a84c]" />
-          </div>
-          <span className="text-sm font-bold text-[var(--text-primary)]">Contacts</span>
+      <div className="flex items-center gap-3 px-6 py-3 border-b border-[var(--border)] bg-[var(--bg-main)] shrink-0">
+        <div className="w-7 h-7 rounded-lg bg-[#c9a84c]/20 border border-[#c9a84c]/30 flex items-center justify-center">
+          <Building2 className="w-3.5 h-3.5 text-[#c9a84c]" />
         </div>
-        {([
-          { id: 'communaute', label: 'Communauté', icon: <Users className="w-4 h-4" />, desc: 'Systeme.io' },
-          { id: 'admin',      label: 'Admin / Pro', icon: <Building2 className="w-4 h-4" />, desc: 'Contacts pro' },
-        ] as const).map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={`flex items-center gap-2 px-5 py-3.5 text-sm font-semibold transition-all border-b-2 ${
-              tab === t.id ? 'text-[var(--text-primary)] border-b-[#c9a84c]' : 'text-[var(--text-muted)] border-b-transparent hover:text-[var(--text-primary)]'
-            }`}>
-            {t.icon} {t.label}
-            <span className="text-[10px] text-[var(--text-muted)] font-normal">{t.desc}</span>
-          </button>
-        ))}
+        <div>
+          <span className="text-sm font-bold text-[var(--text-primary)]">Contacts Admin / Pro</span>
+          <p className="text-[10px] text-[var(--text-muted)]">Synchronisés via Supabase</p>
+        </div>
       </div>
 
-      {/* Contenu */}
       <div className="flex flex-1 overflow-hidden">
-        {tab === 'communaute' && <CommunauteTab onCompose={setComposeTarget} />}
-        {tab === 'admin'      && <AdminTab      onCompose={setComposeTarget} />}
+        <AdminTab onCompose={setComposeTarget} />
       </div>
     </div>
   );
