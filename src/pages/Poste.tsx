@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Mail, Inbox, Briefcase, RefreshCw, CheckCircle,
   AlertCircle, Clock, Send, Plus,
   X, Paperclip, Trash2,
-  FileText, ExternalLink, SendHorizonal, Shield, Newspaper
+  SendHorizonal, Shield, Newspaper
 } from 'lucide-react';
 import {
   listInboxEmails,
@@ -18,7 +18,6 @@ import {
   restoreSentEmailsBulk,
   deleteSentEmailsOlderThanDays,
   sendEmailViaEdge,
-  markInboxEmailNotSpam,
   refreshUntreatedEmailCount,
 } from '../data/supabaseApi';
 import { dispatchUntreatedEmailCount } from '../lib/emailCountEvents';
@@ -104,21 +103,105 @@ const formatDate = (d: string | null) => {
   catch { return d; }
 };
 
-const cleanContent = (content: string) => {
-  if (!content) return '';
+const RE_SUBJECT_PREFIX = /^(re(\[\d+\])?|fw|fwd):\s*/i;
+
+const normalizeThreadSubject = (subject: string) => {
+  let subj = (subject || '').trim();
+  while (RE_SUBJECT_PREFIX.test(subj)) {
+    subj = subj.replace(RE_SUBJECT_PREFIX, '').trim();
+  }
+  return subj || 'Sans sujet';
+};
+
+const displayThreadSubject = (subject: string) => normalizeThreadSubject(subject);
+
+const threadKeyForEmail = (email: Email) => {
+  const account = normalizeAccountEmail(email.Compte);
+  return `${account}::${normalizeThreadSubject(email.Sujet || '').toLowerCase()}`;
+};
+
+const formatRelativeDate = (d: string | null) => {
+  if (!d) return '—';
   try {
-    return decodeURIComponent(escape(content))
-      .replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim();
+    const date = new Date(d);
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    const diffDays = Math.round((todayStart - dayStart) / 86400000);
+    if (diffDays === 0) return "Aujourd'hui";
+    if (diffDays === 1) return 'Hier';
+    if (diffDays < 7) return date.toLocaleDateString('fr-FR', { weekday: 'long' });
+    return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
   } catch {
-    return content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    return d;
   }
 };
 
-const getFileName = (name: string) => {
-  if (!name) return 'Fichier';
-  const n = name.replace(/^[a-z0-9]+_/, '');
-  return n.length > 28 ? n.slice(0, 25) + '…' : n;
+const formatSenderDisplay = (raw: string) =>
+  (raw || '').replace(/<.*>/, '').replace(/"/g, '').trim() || 'Inconnu';
+
+const SIGNATURE_LINE = /^(cordialement|bien à vous|best regards|bien cordialement|à bientôt)\b/i;
+
+const stripHtmlToText = (content: string) => {
+  try {
+    return decodeURIComponent(escape(content))
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>');
+  } catch {
+    return content.replace(/<[^>]*>/g, ' ');
+  }
+};
+
+const cleanContent = (content: string) => {
+  if (!content) return '';
+  const raw = stripHtmlToText(content);
+  const lines = raw.split(/\r?\n/).map((l) => l.trim());
+  const bodyLines: string[] = [];
+  for (const line of lines) {
+    if (!line || line.startsWith('>')) continue;
+    if (SIGNATURE_LINE.test(line)) break;
+    bodyLines.push(line);
+  }
+  const paragraphs: string[] = [];
+  let current: string[] = [];
+  for (const line of bodyLines) {
+    if (!line) {
+      if (current.length) {
+        paragraphs.push(current.join(' '));
+        current = [];
+      }
+      continue;
+    }
+    current.push(line);
+  }
+  if (current.length) paragraphs.push(current.join(' '));
+  return paragraphs.join('\n\n').trim();
+};
+
+const MessageBody = ({ content }: { content: string }) => {
+  const [expanded, setExpanded] = useState(false);
+  const text = content || '—';
+  const needsTruncate = text.length > 500;
+  const shown = !needsTruncate || expanded ? text : `${text.slice(0, 500)}…`;
+  return (
+    <div>
+      <p className="text-sm text-[var(--text-primary)] leading-relaxed whitespace-pre-wrap">{shown}</p>
+      {needsTruncate && !expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="mt-2 text-xs font-semibold text-[#c9a84c] hover:underline"
+        >
+          Voir tout
+        </button>
+      )}
+    </div>
+  );
 };
 
 const toSafeText = (value: unknown): string => {
@@ -139,6 +222,11 @@ const extractEmailAddress = (raw: string) => {
   const match = src.match(/<([^>]+)>/);
   return (match?.[1] || src).trim();
 };
+
+const OWN_ACCOUNT_EMAILS = new Set(['serge@eh-me.com', 'admin@eh-me.com']);
+
+const isFromOwnAccount = (sender: string) =>
+  OWN_ACCOUNT_EMAILS.has(extractEmailAddress(sender).toLowerCase());
 
 const spamScoreOf = (e: Email) => {
   const v = e['Score spam'];
@@ -164,18 +252,134 @@ const emailHasSentReply = (email: Email, sentList: SentEmail[]) => {
   });
 };
 
-type InboxStatusDot = 'red' | 'green' | null;
+interface EmailThread {
+  key: string;
+  subject: string;
+  inboxEmails: Email[];
+  representativeEmail: Email;
+  messageCount: number;
+  latestDate: string | null;
+}
 
-const getInboxStatusDot = (email: Email, sentList: SentEmail[]): InboxStatusDot => {
-  if (emailHasSentReply(email, sentList)) return 'green';
-  if (!email.Traité) return 'red';
-  return null;
+type ThreadStatusDot = 'red' | 'green' | 'gray';
+
+type ThreadMessage = {
+  id: string;
+  from: string;
+  date: string | null;
+  body: string;
+  sortTime: number;
 };
 
-const inboxContentPreview = (email: Email) => {
-  const text = cleanContent(email.Contenu);
+const sentMatchesThread = (
+  sent: SentEmail,
+  threadSubject: string,
+  account: string,
+  inboxEmails: Email[],
+) => {
+  if (normalizeAccountEmail(sent.Compte) !== account || sent['Supprimé le']) return false;
+  if (sent.replyToEmailId != null && inboxEmails.some((e) => e.id === sent.replyToEmailId)) return true;
+  return sentSubjectRepliesToInbox(sent.Sujet || '', threadSubject);
+};
+
+const threadHasReply = (thread: EmailThread, sentList: SentEmail[]) => {
+  const account = normalizeAccountEmail(thread.representativeEmail.Compte);
+  if (thread.inboxEmails.some((e) => emailHasSentReply(e, sentList))) return true;
+  return sentList.some((s) => sentMatchesThread(s, thread.subject, account, thread.inboxEmails));
+};
+
+const getThreadStatusDot = (thread: EmailThread, sentList: SentEmail[]): ThreadStatusDot => {
+  if (threadHasReply(thread, sentList)) return 'green';
+  if (thread.inboxEmails.every((e) => e.Traité)) return 'gray';
+  return 'red';
+};
+
+const threadDotColor = (dot: ThreadStatusDot) => {
+  if (dot === 'green') return '#4caf7d';
+  if (dot === 'red') return '#e07070';
+  return '#9e9e9e';
+};
+
+const threadPreview = (thread: EmailThread) => {
+  const latest = [...thread.inboxEmails].sort(
+    (a, b) => new Date(b['Date réception'] || 0).getTime() - new Date(a['Date réception'] || 0).getTime(),
+  )[0];
+  const text = cleanContent(latest?.Contenu || '');
   if (!text) return '—';
   return text.length > 120 ? `${text.slice(0, 117)}…` : text;
+};
+
+const buildInboxThreads = (
+  allMails: Email[],
+  sentList: SentEmail[],
+  listPool: Email[],
+): EmailThread[] => {
+  const byKey = new Map<string, Email[]>();
+  for (const e of allMails) {
+    const key = threadKeyForEmail(e);
+    const list = byKey.get(key) || [];
+    list.push(e);
+    byKey.set(key, list);
+  }
+  const visibleKeys = new Set(listPool.map(threadKeyForEmail));
+  const threads: EmailThread[] = [];
+  for (const [key, inboxEmails] of byKey) {
+    if (!visibleKeys.has(key)) continue;
+    inboxEmails.sort(
+      (a, b) => new Date(a['Date réception'] || 0).getTime() - new Date(b['Date réception'] || 0).getTime(),
+    );
+    const external = inboxEmails.filter((e) => !isFromOwnAccount(e['Expéditeur'] || ''));
+    const representativeEmail = external.length ? external[external.length - 1] : inboxEmails[inboxEmails.length - 1];
+    const account = normalizeAccountEmail(representativeEmail.Compte);
+    const subject = displayThreadSubject(representativeEmail.Sujet || '');
+    const sentInThread = sentList.filter((sent) => sentMatchesThread(sent, subject, account, inboxEmails)).length;
+    const latestDate = inboxEmails.reduce<string | null>((best, e) => {
+      const d = e['Date réception'];
+      if (!d) return best;
+      if (!best || new Date(d) > new Date(best)) return d;
+      return best;
+    }, null);
+    threads.push({
+      key,
+      subject,
+      inboxEmails,
+      representativeEmail,
+      messageCount: inboxEmails.length + sentInThread,
+      latestDate,
+    });
+  }
+  return threads.sort(
+    (a, b) => new Date(b.latestDate || 0).getTime() - new Date(a.latestDate || 0).getTime(),
+  );
+};
+
+const buildThreadMessages = (
+  inboxEmails: Email[],
+  sentList: SentEmail[],
+  threadSubject: string,
+  account: string,
+): ThreadMessage[] => {
+  const msgs: ThreadMessage[] = [];
+  for (const e of inboxEmails) {
+    msgs.push({
+      id: `inbox-${e.id}`,
+      from: formatSenderDisplay(e['Expéditeur'] || ''),
+      date: e['Date réception'],
+      body: cleanContent(e.Contenu),
+      sortTime: new Date(e['Date réception'] || 0).getTime(),
+    });
+  }
+  for (const sent of sentList) {
+    if (!sentMatchesThread(sent, threadSubject, account, inboxEmails)) continue;
+    msgs.push({
+      id: `sent-${sent.id}`,
+      from: formatSenderDisplay(sent.De || account),
+      date: sent.Date,
+      body: cleanContent(sent.Corps),
+      sortTime: new Date(sent.Date || 0).getTime(),
+    });
+  }
+  return msgs.sort((a, b) => a.sortTime - b.sortTime);
 };
 
 // ── Modal Tâche ──
@@ -280,7 +484,6 @@ const formatSendError = (error: unknown) =>
 
 // ── Modal Répondre ──
 interface ReplyModalProps {
-  email: Email;
   accountColor: string;
   onSend: (text: string) => void;
   onClose: () => void;
@@ -288,53 +491,38 @@ interface ReplyModalProps {
   sendStatus: 'idle' | 'success' | 'error';
   sendErrorDetail: string | null;
 }
-const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus, sendErrorDetail }: ReplyModalProps) => {
+const ReplyModal = ({ accountColor, onSend, onClose, sending, sendStatus, sendErrorDetail }: ReplyModalProps) => {
   const [text, setText] = useState('');
 
-  useEffect(() => {
-    setText('');
-  }, [email.id]);
-
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col w-full max-w-lg" style={{ maxHeight: '85vh' }}>
-        <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border)]">
-          <p className="text-sm font-semibold text-[var(--text-primary)] truncate pr-4">
-            Re: {email.Sujet || 'Sans sujet'}
-          </p>
-          <button type="button" onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="p-5">
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            className="w-full min-h-[200px] bg-[var(--bg-main)] border border-[var(--border)] rounded-xl p-4 text-sm text-[var(--text-primary)] resize-y focus:outline-none focus:border-[#c9a84c]/40 leading-relaxed"
-            placeholder="Votre réponse…"
-            autoFocus
-          />
-        </div>
-        <div className="px-5 pb-5 space-y-3">
-          {sendStatus === 'error' && sendErrorDetail && (
-            <div className="rounded-lg border border-[#d95555]/40 bg-[#d95555]/10 px-3 py-2 text-xs text-[#e07070] break-words">
-              {sendErrorDetail}
-            </div>
-          )}
-          {sendStatus === 'success' && (
-            <p className="text-xs text-[#4caf7d]">Email envoyé</p>
-          )}
-          <button
-            type="button"
-            onClick={() => onSend(text)}
-            disabled={sending || !text.trim()}
-            className="w-full flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold disabled:opacity-40"
-            style={{ background: `linear-gradient(135deg, ${accountColor}, ${accountColor}cc)`, color: '#05050a' }}
-          >
-            {sending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            {sending ? 'Envoi…' : 'Envoyer'}
-          </button>
-        </div>
+    <div
+      className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl w-full max-w-lg p-5 space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          className="w-full min-h-[220px] bg-[var(--bg-main)] border border-[var(--border)] rounded-xl p-4 text-sm text-[var(--text-primary)] resize-y focus:outline-none focus:border-[#c9a84c]/40 leading-relaxed"
+          placeholder="Votre réponse…"
+          autoFocus
+        />
+        {sendStatus === 'error' && sendErrorDetail && (
+          <p className="text-xs text-[#e07070] break-words">{sendErrorDetail}</p>
+        )}
+        <button
+          type="button"
+          onClick={() => onSend(text)}
+          disabled={sending || !text.trim()}
+          className="w-full flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold disabled:opacity-40"
+          style={{ background: `linear-gradient(135deg, ${accountColor}, ${accountColor}cc)`, color: '#05050a' }}
+        >
+          {sending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+          {sending ? 'Envoi…' : 'Envoyer'}
+        </button>
       </div>
     </div>
   );
@@ -468,6 +656,7 @@ export const Poste = () => {
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
+  const [selectedThreadKey, setSelectedThreadKey] = useState<string | null>(null);
   const [treatmentFilter, setTreatmentFilter] = useState<'all' | 'untreated' | 'treated'>('untreated');
   const [replyMode, setReplyMode] = useState(false);
   const [sending, setSending] = useState(false);
@@ -561,6 +750,33 @@ export const Poste = () => {
       : inboxMailboxTab === 'newsletters'
         ? filteredNewsletters
         : filteredPrimary;
+
+  const listPool = useMemo(
+    () => inboxMailsForList.filter((e) => !isFromOwnAccount(e['Expéditeur'] || '')),
+    [inboxMailsForList],
+  );
+
+  const inboxThreads = useMemo(
+    () => buildInboxThreads(inboxMailsForList, sentEmails, listPool),
+    [inboxMailsForList, sentEmails, listPool],
+  );
+
+  const selectedThread = useMemo(() => {
+    if (!selectedThreadKey) return null;
+    return inboxThreads.find((t) => t.key === selectedThreadKey) ?? null;
+  }, [selectedThreadKey, inboxThreads]);
+
+  const threadMessages = useMemo(() => {
+    if (!selectedThread) return [];
+    const account = normalizeAccountEmail(selectedThread.representativeEmail.Compte);
+    return buildThreadMessages(
+      selectedThread.inboxEmails,
+      sentEmails,
+      selectedThread.subject,
+      account,
+    );
+  }, [selectedThread, sentEmails]);
+
   const filteredSent = sentEmails.filter(e => normalizeAccountEmail(e.Compte) === activeAccount && !e['Supprimé le']);
   const trashedInbox = emails.filter(e => normalizeAccountEmail(e.Compte) === activeAccount && !!e['Supprimé le']);
   const trashedSent = sentEmails.filter(e => normalizeAccountEmail(e.Compte) === activeAccount && !!e['Supprimé le']);
@@ -581,28 +797,6 @@ export const Poste = () => {
     } catch (e) { console.error(e); }
   };
 
-  const markNotSpam = async (email: Email) => {
-    try {
-      const addr = extractEmailAddress(email['Expéditeur'] || '');
-      await markInboxEmailNotSpam(email.id, addr);
-      setEmails(prev => prev.map(e => e.id === email.id ? {
-        ...e,
-        'Score spam': 0,
-        'Catégorie spam': 'legitimate',
-        Traité: false,
-      } : e));
-      if (selectedEmail?.id === email.id) {
-        setSelectedEmail({
-          ...email,
-          'Score spam': 0,
-          'Catégorie spam': 'legitimate',
-          Traité: false,
-        });
-      }
-      setInboxMailboxTab('primary');
-    } catch (e) { console.error(e); }
-  };
-
   // Suppression avec confirmation (bouton)
   const deleteEmail = async (email: Email) => {
     if (!confirm(`Déplacer dans la corbeille ?\n"${email.Sujet}"`)) return;
@@ -620,10 +814,6 @@ export const Poste = () => {
       await fetchEmails();
       setSelectedEmail(null);
     } catch (e) { console.error(e); }
-  };
-
-  const toggleInboxSelection = (id: number) => {
-    setSelectedInboxIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
   };
 
   const toggleSentSelection = (id: number) => {
@@ -785,7 +975,7 @@ export const Poste = () => {
     const from = normalizeAccountEmail(selectedEmail.Compte);
     const payload = {
       to,
-      subject: `Re: ${selectedEmail.Sujet || ''}`,
+      subject: `Re: ${displayThreadSubject(selectedEmail.Sujet || '')}`,
       body: text,
       from,
       replyToEmailId: selectedEmail.id,
@@ -846,15 +1036,21 @@ export const Poste = () => {
     } finally { setSending(false); }
   };
 
-  const openEmail = (email: Email) => {
-    setSelectedEmail(email);
+  const openThread = (thread: EmailThread) => {
+    setSelectedEmail(thread.representativeEmail);
+    setSelectedThreadKey(thread.key);
     setReplyMode(false);
     setSendStatus('idle');
     setSendErrorDetail(null);
   };
 
+  const markThreadAsTreated = async (thread: EmailThread) => {
+    for (const e of thread.inboxEmails.filter((x) => !x.Traité)) {
+      await markAsTreated(e);
+    }
+  };
+
   const activeAccountData = ACCOUNTS.find(a => a.email === activeAccount)!;
-  const files: EmailAttachment[] = selectedEmail?.['Fichier'] || [];
 
   return (
     <div className="flex flex-col" style={{ height: '100%', minHeight: 0 }}>
@@ -864,7 +1060,6 @@ export const Poste = () => {
       )}
       {replyMode && selectedEmail && (
         <ReplyModal
-          email={selectedEmail}
           accountColor={activeAccountData.color}
           onSend={sendReply}
           onClose={() => { setReplyMode(false); setSendStatus('idle'); setSendErrorDetail(null); }}
@@ -898,6 +1093,7 @@ export const Poste = () => {
                   setActiveAccount(account.email);
                   setInboxMailboxTab('primary');
                   setSelectedEmail(null);
+                  setSelectedThreadKey(null);
                   setSelectedSent(null);
                   setSelectedInboxIds([]);
                   setSelectedSentIds([]);
@@ -996,6 +1192,7 @@ export const Poste = () => {
                 setViewMode(mode);
                 setInboxMailboxTab('primary');
                 setSelectedEmail(null);
+                setSelectedThreadKey(null);
                 setSelectedSent(null);
                 setSelectedInboxIds([]);
                 setSelectedSentIds([]);
@@ -1023,7 +1220,7 @@ export const Poste = () => {
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => { setTreatmentFilter(tab.id); setSelectedEmail(null); }}
+                  onClick={() => { setTreatmentFilter(tab.id); setSelectedEmail(null); setSelectedThreadKey(null); }}
                   className={`flex-1 py-2 text-[10px] font-semibold uppercase tracking-wide border-b-2 transition-all ${
                     treatmentFilter === tab.id
                       ? 'text-[var(--text-primary)] border-b-[#c9a84c]'
@@ -1048,7 +1245,7 @@ export const Poste = () => {
                   <button
                     key={tab.id}
                     type="button"
-                    onClick={() => { setInboxMailboxTab(tab.id); setSelectedInboxIds([]); setSelectedEmail(null); }}
+                    onClick={() => { setInboxMailboxTab(tab.id); setSelectedInboxIds([]); setSelectedEmail(null); setSelectedThreadKey(null); }}
                     className={`flex-1 flex items-center justify-center gap-1 py-2 text-[10px] font-semibold uppercase tracking-wide border-b-2 transition-all ${
                       active ? 'text-[var(--text-primary)] border-b-[#c9a84c]' : 'text-[var(--text-muted)] border-b-transparent hover:text-[var(--text-secondary)]'
                     }`}
@@ -1066,63 +1263,61 @@ export const Poste = () => {
               <div className="flex items-center justify-center h-32">
                 <RefreshCw className="w-5 h-5 text-[var(--text-muted)] animate-spin" />
               </div>
-            ) : inboxMailsForList.length === 0 ? (
+            ) : inboxThreads.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-32 gap-2">
                 <Mail className="w-8 h-8 text-[var(--text-muted)] opacity-30" />
                 <p className="text-xs text-[var(--text-muted)]">Aucun email</p>
               </div>
-            ) : inboxMailsForList.map(email => {
-              const isSelected = selectedEmail?.id === email.id;
-              const isTreated = !!email.Traité;
-              const statusDot = getInboxStatusDot(email, sentEmails);
-              const emailFiles: EmailAttachment[] = email['Fichier'] || [];
+            ) : inboxThreads.map((thread) => {
+              const isSelected = selectedThreadKey === thread.key;
+              const statusDot = getThreadStatusDot(thread, sentEmails);
+              const threadInboxIds = thread.inboxEmails.map((e) => e.id);
+              const allSelected = threadInboxIds.length > 0 && threadInboxIds.every((id) => selectedInboxIds.includes(id));
+              const hasUntreated = thread.inboxEmails.some((e) => !e.Traité);
               return (
-                <button key={email.id} onClick={() => openEmail(email)}
+                <button
+                  key={thread.key}
+                  type="button"
+                  onClick={() => openThread(thread)}
                   className={`w-full text-left p-3 border-b border-[var(--border)]/50 transition-all hover:bg-[var(--bg-surface)] ${
                     isSelected ? 'bg-[var(--bg-card)]' : ''
-                  } ${isTreated ? 'opacity-80' : ''}`}>
+                  }`}
+                >
                   <div className="flex items-start gap-2">
                     <span
                       className="mt-2 w-2 h-2 rounded-full shrink-0"
-                      style={{
-                        background: statusDot === 'green' ? '#4caf7d' : statusDot === 'red' ? '#e07070' : 'transparent',
-                        boxShadow: statusDot ? `0 0 0 2px ${statusDot === 'green' ? 'rgba(76,175,125,0.25)' : 'rgba(224,112,112,0.25)'}` : undefined,
-                      }}
-                      title={statusDot === 'green' ? 'Réponse envoyée' : statusDot === 'red' ? 'Non traité, sans réponse' : undefined}
+                      style={{ background: threadDotColor(statusDot) }}
+                      title={statusDot === 'green' ? 'Réponse envoyée' : statusDot === 'red' ? 'Sans réponse' : 'Traité'}
                     />
                     <input
                       type="checkbox"
-                      checked={selectedInboxIds.includes(email.id)}
-                      onClick={e => e.stopPropagation()}
-                      onChange={e => { e.stopPropagation(); toggleInboxSelection(email.id); }}
+                      checked={allSelected}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        setSelectedInboxIds((prev) => {
+                          if (allSelected) return prev.filter((id) => !threadInboxIds.includes(id));
+                          return [...new Set([...prev, ...threadInboxIds])];
+                        });
+                      }}
                       className="mt-2 h-3.5 w-3.5 accent-[#c9a84c]"
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-1 mb-0.5">
-                        <p className={`text-xs truncate ${!isTreated ? 'font-bold text-[var(--text-primary)]' : 'font-normal text-[var(--text-secondary)]'}`}>
-                          {email['Expéditeur']?.replace(/<.*>/, '').replace(/"/g, '').trim() || 'Inconnu'}
+                      <div className="flex items-center justify-between gap-2 mb-0.5">
+                        <p className={`text-xs truncate ${hasUntreated ? 'font-bold text-[var(--text-primary)]' : 'font-medium text-[var(--text-secondary)]'}`}>
+                          {formatSenderDisplay(thread.representativeEmail['Expéditeur'] || '')}
                         </p>
-                        <div className="flex items-center gap-0.5 shrink-0">
-                          {spamScoreOf(email) > 0.5 && spamScoreOf(email) <= 0.8 && (
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#b8a050]/20 border border-[#b8a050]/40 text-[#d4c060]">
-                              Douteux
-                            </span>
-                          )}
-                          {spamScoreOf(email) > 0.8 && (
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#d95555]/20 border border-[#d95555]/35 text-[#ff8a8a]">
-                              Spam
-                            </span>
-                          )}
-                          {emailFiles.length > 0 && <Paperclip className="w-3 h-3 text-[var(--text-muted)]" />}
-                        </div>
+                        <span className="text-[10px] text-[var(--text-muted)] shrink-0">
+                          {formatRelativeDate(thread.latestDate)}
+                        </span>
                       </div>
-                      <p className={`text-xs truncate mb-0.5 ${!isTreated ? 'font-bold text-[var(--text-primary)]' : 'font-normal text-[var(--text-secondary)]'}`}>
-                        {email.Sujet || 'Sans sujet'}
+                      <p className={`text-xs truncate mb-0.5 ${hasUntreated ? 'font-bold text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
+                        {thread.subject}
+                        {thread.messageCount > 1 ? ` (${thread.messageCount})` : ''}
                       </p>
                       <p className="text-[10px] text-[var(--text-muted)] line-clamp-2 leading-relaxed">
-                        {inboxContentPreview(email)}
+                        {threadPreview(thread)}
                       </p>
-                      <span className="text-[10px] text-[var(--text-muted)]">{formatDate(email['Date réception'])}</span>
                     </div>
                   </div>
                 </button>
@@ -1266,24 +1461,24 @@ export const Poste = () => {
             <>
             <div className="flex-1 flex flex-col h-full overflow-hidden">
 
-              {/* Header */}
               <div className="px-6 py-3 border-b border-[var(--border)] shrink-0 bg-[var(--bg-surface)]">
                 <div className="space-y-0.5 text-xs text-[var(--text-secondary)] mb-3">
                   <p>
                     <span className="text-[var(--text-muted)]">Expéditeur : </span>
-                    {selectedEmail['Expéditeur']?.replace(/"/g, '').trim() || '—'}
+                    {formatSenderDisplay(selectedEmail['Expéditeur'] || '')}
                   </p>
                   <p>
                     <span className="text-[var(--text-muted)]">Sujet : </span>
-                    <span className="text-[var(--text-primary)] font-medium">{selectedEmail.Sujet || 'Sans sujet'}</span>
+                    <span className="text-[var(--text-primary)] font-medium">
+                      {selectedThread?.subject ?? displayThreadSubject(selectedEmail.Sujet || '')}
+                    </span>
                   </p>
                   <p>
                     <span className="text-[var(--text-muted)]">Date : </span>
-                    {formatDate(selectedEmail['Date réception'])}
+                    {formatRelativeDate(selectedThread?.latestDate ?? selectedEmail['Date réception'])}
                   </p>
                 </div>
 
-                {/* Actions */}
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {viewMode === 'trash' ? (
                     <>
@@ -1312,57 +1507,42 @@ export const Poste = () => {
                         style={{ background: `linear-gradient(135deg, ${activeAccountData.color}, ${activeAccountData.color}cc)`, color: '#05050a' }}>
                         <Send className="w-3.5 h-3.5" /> Répondre
                       </button>
-                      {!selectedEmail.Traité && (
-                        <button onClick={() => markAsTreated(selectedEmail)}
+                      {selectedThread && !selectedThread.inboxEmails.every((e) => e.Traité) && (
+                        <button type="button" onClick={() => markThreadAsTreated(selectedThread)}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#4caf7d]/20 border border-[#4caf7d]/30 text-[#4caf7d] hover:bg-[#4caf7d]/30 transition-all">
                           <CheckCircle className="w-3.5 h-3.5" /> Traité
                         </button>
                       )}
-                      {(spamScoreOf(selectedEmail) > 0.5 || String(selectedEmail['Catégorie spam'] || '').toLowerCase() === 'spam') && (
-                        <button onClick={() => markNotSpam(selectedEmail)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#c9a84c]/15 border border-[#c9a84c]/35 text-[#e8d4a8] hover:bg-[#c9a84c]/25 transition-all">
-                          <Shield className="w-3.5 h-3.5" /> Pas spam
-                        </button>
-                      )}
-                      <button onClick={() => setShowTaskPopup(true)}
+                      <button type="button" onClick={() => setShowTaskPopup(true)}
                         disabled={!!selectedEmail['Converti en tâche']}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[var(--bg-card)] border border-[var(--border)] text-[#c8c4b8] hover:text-[var(--text-primary)] hover:border-[#c9a84c]/30 transition-all">
-                        <Plus className="w-3.5 h-3.5" /> {selectedEmail['Converti en tâche'] ? 'Déjà converti' : 'Tâche'}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all disabled:opacity-50">
+                        <Plus className="w-3.5 h-3.5" /> Tâche
                       </button>
-                      {selectedEmail['Tâche liée'] && (
-                        <button
-                          onClick={() => {
-                            localStorage.setItem('dashboard-open-task-id', String(selectedEmail['Tâche liée']));
-                            window.dispatchEvent(new CustomEvent('dashboard:navigate', { detail: { page: 'tasks' } }));
-                          }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#4caf7d]/12 border border-[#4caf7d]/30 text-[#4caf7d] hover:bg-[#4caf7d]/20 transition-all"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" /> Voir tâche liée #{selectedEmail['Tâche liée']}
-                        </button>
-                      )}
+                      <button type="button" onClick={() => deleteEmail(selectedEmail)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#d95555]/10 border border-[#d95555]/20 text-[#d95555] hover:bg-[#d95555]/20 transition-all">
+                        <Trash2 className="w-3.5 h-3.5" /> Corbeille
+                      </button>
                     </>
-                  )}
-                  {files.map((file, i) => (
-                    <a key={i} href={file.url} target="_blank" rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--bg-card)] border border-[var(--border)] text-[#a0a0c0] hover:text-[#c9a84c] hover:border-[#c9a84c]/40 transition-all">
-                      <FileText className="w-3.5 h-3.5 shrink-0" />
-                      <span className="max-w-[160px] truncate">{getFileName(file.visible_name)}</span>
-                      <ExternalLink className="w-3 h-3 shrink-0 opacity-50" />
-                    </a>
-                  ))}
-                  {viewMode !== 'trash' && (
-                    <button onClick={() => deleteEmail(selectedEmail)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#d95555]/10 border border-[#d95555]/20 text-[#d95555] hover:bg-[#d95555]/20 transition-all ml-auto">
-                      <Trash2 className="w-3.5 h-3.5" /> Corbeille
-                    </button>
                   )}
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-6 py-5">
-                <div className="text-sm leading-relaxed whitespace-pre-wrap text-[var(--text-primary)]">
-                  {selectedEmail.Contenu ? cleanContent(selectedEmail.Contenu) : '—'}
-                </div>
+              <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+                {viewMode === 'trash' ? (
+                  <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-4">
+                    <MessageBody content={cleanContent(selectedEmail.Contenu)} />
+                  </div>
+                ) : (
+                  threadMessages.map((msg) => (
+                    <div key={msg.id} className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-4">
+                      <div className="flex items-center justify-between gap-2 mb-3 text-xs">
+                        <span className="font-medium text-[var(--text-primary)]">{msg.from}</span>
+                        <span className="text-[var(--text-muted)]">{formatRelativeDate(msg.date)}</span>
+                      </div>
+                      <MessageBody content={msg.body} />
+                    </div>
+                  ))
+                )}
               </div>
             </div>
             </>
