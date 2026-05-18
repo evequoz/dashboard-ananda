@@ -330,7 +330,23 @@ async function main() {
 
           if (msg.source) {
             const parsed = await simpleParser(msg.source);
-            textBody = parsed.text || '';
+            const rawText = parsed.text || '';
+            textBody = rawText
+              .split('\n')
+              .reduce((acc, line) => {
+                if (line.startsWith('>') ||
+                    /^From:/i.test(line) ||
+                    /^De :/i.test(line) ||
+                    /^-{3,}/.test(line) ||
+                    /^_{3,}/.test(line) ||
+                    /^On .* wrote:/i.test(line) ||
+                    /^Le .* a écrit/i.test(line)) {
+                  acc.stop = true;
+                }
+                if (!acc.stop) acc.lines.push(line);
+                return acc;
+              }, { lines: [], stop: false })
+              .lines.join('\n').trim();
             htmlBody = typeof parsed.html === 'string' ? parsed.html : '';
             if (!messageId && parsed.messageId) {
               messageId = String(parsed.messageId).replace(/^<|>$/g, '');
