@@ -127,6 +127,7 @@ serve(async (req) => {
       body: body.body,
       sent_at: new Date().toISOString(),
       account_email: from,
+      reply_to_email_id: body.replyToEmailId ?? null,
     });
 
     if (body.replyToEmailId) {

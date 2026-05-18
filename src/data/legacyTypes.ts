@@ -91,6 +91,7 @@ export interface LegacySentRow {
   Date: string;
   Compte: string;
   'Supprimé le': string | null;
+  replyToEmailId?: number | null;
 }
 
 export interface LegacyAdminRow {
@@ -194,6 +195,7 @@ export function legacySentFromRow(row: DbRow): LegacySentRow {
     Date: fieldAsString(row.sent_at),
     Compte: fieldAsString(row.account_email),
     'Supprimé le': fieldAsNullableString(row.deleted_at),
+    replyToEmailId: row.reply_to_email_id != null ? fieldAsId(row.reply_to_email_id) : null,
   };
 }
 

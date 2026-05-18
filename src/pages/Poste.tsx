@@ -83,6 +83,7 @@ interface SentEmail {
   Date: string;
   Compte: string;
   'Supprimé le'?: string | null;
+  replyToEmailId?: number | null;
 }
 
 const ACCOUNTS = [
@@ -145,13 +146,11 @@ const spamScoreOf = (e: Email) => {
   return Number(v);
 };
 
-const normalizeSubjectForMatch = (subject: string) =>
-  (subject || '').replace(/^(re:\s*)+/gi, '').trim().toLowerCase();
-
-const subjectsMatch = (a: string, b: string) => {
-  const na = normalizeSubjectForMatch(a);
-  const nb = normalizeSubjectForMatch(b);
-  return Boolean(na && nb && na === nb);
+/** Sujet envoyé contenant « Re: » + sujet du message reçu (insensible à la casse). */
+const sentSubjectRepliesToInbox = (sentSubject: string, inboxSubject: string) => {
+  const base = (inboxSubject || '').trim();
+  if (!base) return false;
+  return (sentSubject || '').toLowerCase().includes(`re: ${base.toLowerCase()}`);
 };
 
 const emailHasSentReply = (email: Email, sentList: SentEmail[]) => {
@@ -160,9 +159,8 @@ const emailHasSentReply = (email: Email, sentList: SentEmail[]) => {
   const inboxSubject = email.Sujet || '';
   return sentList.some((s) => {
     if (normalizeAccountEmail(s.Compte) !== account || s['Supprimé le']) return false;
-    const sentSubject = s.Sujet || '';
-    return subjectsMatch(sentSubject, inboxSubject)
-      || subjectsMatch(sentSubject, `Re: ${inboxSubject}`);
+    if (s.replyToEmailId != null && s.replyToEmailId === email.id) return true;
+    return sentSubjectRepliesToInbox(s.Sujet || '', inboxSubject);
   });
 };
 
@@ -512,7 +510,7 @@ export const Poste = () => {
 
   const fetchSentEmails = useCallback(async () => {
     try {
-      const data = await listSentEmails(400, true);
+      const data = await listSentEmails(2000, true);
       setSentEmails((data || []) as SentEmail[]);
     } catch (e) { console.error(e); }
   }, []);
