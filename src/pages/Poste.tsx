@@ -249,37 +249,27 @@ const AttachmentPicker = ({ attachments, onChange }: {
   );
 };
 
+const formatSendError = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+
 // ── Modal Répondre ──
 interface ReplyModalProps {
   email: Email;
   accountColor: string;
-  onSend: (text: string, cc: string, bcc: string, attachments: Attachment[]) => void;
+  onSend: (text: string, attachments: Attachment[]) => void;
   onClose: () => void;
   sending: boolean;
   sendStatus: 'idle' | 'success' | 'error';
+  sendErrorDetail: string | null;
   initialText?: string;
 }
-const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus, initialText = '' }: ReplyModalProps) => {
-  const suggestions = [
-    { label: 'Réponse 1 — Directe', value: toSafeText(email['Réponse 1']) },
-    { label: 'Réponse 2 — Développée', value: toSafeText(email['Réponse 2']) },
-    { label: 'Réponse 3 — Spirituelle', value: toSafeText(email['Réponse 3']) },
-  ].filter(s => s.value.trim().length > 0);
-
-  const [text, setText] = useState(initialText || suggestions[0]?.value || '');
-  const [activeTab, setActiveTab] = useState(0);
-  const [cc, setCc] = useState('');
-  const [bcc, setBcc] = useState('');
-  const [showCc, setShowCc] = useState(false);
-  const [showBcc, setShowBcc] = useState(false);
+const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus, sendErrorDetail, initialText = '' }: ReplyModalProps) => {
+  const [text, setText] = useState(initialText);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
-  const selectSuggestion = (idx: number) => { setActiveTab(idx); setText(suggestions[idx].value); };
-
   useEffect(() => {
-    setText(initialText || suggestions[0]?.value || '');
-    setActiveTab(0);
-  }, [email.id, initialText, suggestions]);
+    setText(initialText);
+  }, [email.id, initialText]);
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -287,107 +277,46 @@ const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus,
         style={{ width: '820px', maxHeight: '92vh' }}>
 
         {/* Header */}
-        <div className="px-6 pt-4 pb-0 border-b border-[var(--border)] shrink-0">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
+        <div className="px-6 pt-4 pb-3 border-b border-[var(--border)] shrink-0">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
               <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
                 style={{ background: `${accountColor}20`, border: `1px solid ${accountColor}30` }}>
                 <Send className="w-4 h-4" style={{ color: accountColor }} />
               </div>
-              <div>
+              <div className="min-w-0">
                 <h3 className="text-sm font-bold text-[var(--text-primary)]">Répondre</h3>
-                <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                  → {email['Expéditeur']?.replace(/<.*>/, '').replace(/"/g, '').trim()}
+                <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate">
+                  Re: {email.Sujet || 'Sans sujet'} · {email['Expéditeur']?.replace(/<.*>/, '').replace(/"/g, '').trim()}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => setShowCc(v => !v)}
-                className={`px-2.5 py-1 rounded-md text-xs font-semibold border transition-all ${showCc ? 'bg-[var(--border)] text-[var(--text-primary)] border-[var(--border)]' : 'text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text-primary)]'}`}>
-                CC
-              </button>
-              <button onClick={() => setShowBcc(v => !v)}
-                className={`px-2.5 py-1 rounded-md text-xs font-semibold border transition-all ${showBcc ? 'bg-[var(--border)] text-[var(--text-primary)] border-[var(--border)]' : 'text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text-primary)]'}`}>
-                BCC
-              </button>
-              <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--border)] transition-all">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+            <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--border)] transition-all shrink-0">
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          {showCc && (
-            <div className="flex items-center gap-3 border-t border-[var(--border)] py-2">
-              <span className="text-xs font-semibold text-[var(--text-muted)] w-14 shrink-0">CC</span>
-              <input value={cc} onChange={e => setCc(e.target.value)}
-                className="flex-1 bg-transparent text-sm text-[var(--text-primary)] focus:outline-none placeholder:text-[var(--text-muted)]"
-                placeholder="copie@email.com, autre@email.com" />
-            </div>
-          )}
-          {showBcc && (
-            <div className="flex items-center gap-3 border-t border-[var(--border)] py-2">
-              <span className="text-xs font-semibold text-[var(--text-muted)] w-14 shrink-0">BCC</span>
-              <input value={bcc} onChange={e => setBcc(e.target.value)}
-                className="flex-1 bg-transparent text-sm text-[var(--text-primary)] focus:outline-none placeholder:text-[var(--text-muted)]"
-                placeholder="copie-cachée@email.com" />
-            </div>
-          )}
         </div>
 
-        {/* Suggestions IA */}
-        {suggestions.length > 0 && (
-          <div className="px-6 pt-4 shrink-0">
-            <div className="flex items-center gap-2 mb-3">
-              <Sparkles className="w-3.5 h-3.5 text-[#7b5ea7]" />
-              <span className="text-xs font-bold text-[#9b7ec7]">Suggestions IA — dans ton style</span>
-            </div>
-            <div className="flex gap-2 mb-3">
-              {suggestions.map((s, i) => (
-                <button key={i} onClick={() => selectSuggestion(i)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                    activeTab === i
-                      ? 'bg-[#7b5ea7]/30 border-[#7b5ea7]/50 text-[#9b7ec7]'
-                      : 'bg-[var(--bg-surface)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-                  }`}>
-                  {s.label}
-                </button>
-              ))}
-            </div>
-            <div className="p-4 bg-[var(--bg-surface)] border border-[#7b5ea7]/20 rounded-xl mb-3 max-h-36 overflow-y-auto">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold text-[#7b5ea7] uppercase tracking-wider">{suggestions[activeTab]?.label}</span>
-                <button onClick={() => setText(suggestions[activeTab].value)}
-                  className="flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold bg-[#7b5ea7]/20 border border-[#7b5ea7]/30 text-[#7b5ea7] hover:bg-[#7b5ea7]/40 transition-all">
-                  Utiliser <ChevronRight className="w-3 h-3" />
-                </button>
-              </div>
-              <p className="text-xs text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap">
-                {suggestions[activeTab]?.value}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Zone d'écriture */}
-        <div className="flex-1 px-6 pb-2 min-h-0">
+        <div className="flex-1 px-6 py-4 min-h-0 flex flex-col gap-3">
           <textarea value={text} onChange={e => setText(e.target.value)}
-            className="w-full h-full min-h-[180px] bg-[var(--bg-main)] border border-[var(--border)] rounded-xl p-4 text-sm text-[var(--text-primary)] resize-none focus:outline-none focus:border-[#c9a84c]/40 transition-all leading-relaxed"
-            placeholder="Rédigez ou modifiez votre réponse..." autoFocus />
-        </div>
-
-        {/* Pièces jointes */}
-        <div className="px-6 pb-2 shrink-0">
+            className="w-full flex-1 min-h-[220px] bg-[var(--bg-main)] border border-[var(--border)] rounded-xl p-4 text-sm text-[var(--text-primary)] resize-none focus:outline-none focus:border-[#c9a84c]/40 transition-all leading-relaxed"
+            placeholder="Votre réponse…" autoFocus />
           <AttachmentPicker attachments={attachments} onChange={setAttachments} />
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--border)] shrink-0">
-          <div>
-            {sendStatus === 'success' && <span className="text-xs text-[#4caf7d] flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5" /> Envoyé</span>}
-            {sendStatus === 'error' && <span className="text-xs text-[#d95555] flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5" /> Erreur d'envoi</span>}
-          </div>
-          <div className="flex gap-3">
+        <div className="px-6 py-4 border-t border-[var(--border)] shrink-0 space-y-3">
+          {sendStatus === 'success' && (
+            <p className="text-xs text-[#4caf7d] flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5 shrink-0" /> Email envoyé</p>
+          )}
+          {sendStatus === 'error' && sendErrorDetail && (
+            <div className="rounded-lg border border-[#d95555]/40 bg-[#d95555]/10 px-3 py-2 text-xs text-[#e07070] flex gap-2">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span className="break-words">{sendErrorDetail}</span>
+            </div>
+          )}
+          <div className="flex justify-end gap-3">
             <button onClick={onClose} className="px-5 py-2 rounded-lg text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[var(--border)] transition-all">Annuler</button>
-            <button onClick={() => onSend(text, cc, bcc, attachments)} disabled={sending || !text.trim()}
+            <button onClick={() => onSend(text, attachments)} disabled={sending || !text.trim()}
               className="flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all hover:scale-105 disabled:opacity-40 disabled:hover:scale-100"
               style={{ background: `linear-gradient(135deg, ${accountColor}, ${accountColor}cc)`, color: '#05050a' }}>
               {sending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -399,7 +328,6 @@ const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus,
     </div>
   );
 };
-
 // ── Modal Nouveau mail ──
 interface ComposeModalProps {
   activeAccount: string;
@@ -408,8 +336,9 @@ interface ComposeModalProps {
   onClose: () => void;
   sending: boolean;
   sendStatus: 'idle' | 'success' | 'error';
+  sendErrorDetail: string | null;
 }
-const ComposeModal = ({ activeAccount, accountColor, onSend, onClose, sending, sendStatus }: ComposeModalProps) => {
+const ComposeModal = ({ activeAccount, accountColor, onSend, onClose, sending, sendStatus, sendErrorDetail }: ComposeModalProps) => {
   const [to, setTo] = useState('');
   const [cc, setCc] = useState('');
   const [bcc, setBcc] = useState('');
@@ -496,12 +425,17 @@ const ComposeModal = ({ activeAccount, accountColor, onSend, onClose, sending, s
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--border)] shrink-0">
-          <div>
-            {sendStatus === 'success' && <span className="text-xs text-[#4caf7d] flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5" /> Envoyé !</span>}
-            {sendStatus === 'error' && <span className="text-xs text-[#d95555] flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5" /> Erreur d'envoi</span>}
-          </div>
-          <div className="flex gap-3">
+        <div className="flex flex-col gap-3 px-6 py-4 border-t border-[var(--border)] shrink-0">
+          {sendStatus === 'success' && (
+            <p className="text-xs text-[#4caf7d] flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5 shrink-0" /> Envoyé !</p>
+          )}
+          {sendStatus === 'error' && sendErrorDetail && (
+            <div className="rounded-lg border border-[#d95555]/40 bg-[#d95555]/10 px-3 py-2 text-xs text-[#e07070] flex gap-2">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span className="break-words">{sendErrorDetail}</span>
+            </div>
+          )}
+          <div className="flex justify-end gap-3">
             <button onClick={onClose} className="px-5 py-2 rounded-lg text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[var(--border)] transition-all">Annuler</button>
             <button onClick={() => onSend(to, cc, bcc, subject, body, attachments)} disabled={sending || !to.trim() || !body.trim()}
               className="flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all hover:scale-105 disabled:opacity-40 disabled:hover:scale-100"
@@ -527,6 +461,7 @@ export const Poste = () => {
   const [replyMode, setReplyMode] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendStatus, setSendStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [sendErrorDetail, setSendErrorDetail] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showTaskPopup, setShowTaskPopup] = useState(false);
   const [showFullContent, setShowFullContent] = useState(false);
@@ -847,42 +782,55 @@ export const Poste = () => {
     } catch (e) { console.error(e); }
   };
 
-  const sendReply = async (text: string, cc: string, bcc: string, attachments: Attachment[] = []) => {
+  const sendReply = async (text: string, attachments: Attachment[] = []) => {
     if (!selectedEmail || !text.trim()) return;
+    const to = extractEmailAddress(selectedEmail['Expéditeur']);
+    const from = normalizeAccountEmail(selectedEmail.Compte);
+    const payload = {
+      to,
+      subject: `Re: ${selectedEmail.Sujet || ''}`,
+      body: text,
+      from,
+      attachments: attachments.map(a => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.contentType,
+        encoding: 'base64' as const,
+      })),
+      replyToEmailId: selectedEmail.id,
+    };
+
     setSending(true);
+    setSendStatus('idle');
+    setSendErrorDetail(null);
+    console.log('[Poste] email-send — début', { to, from, subject: payload.subject, replyToEmailId: payload.replyToEmailId });
+
     try {
-      const to = extractEmailAddress(selectedEmail['Expéditeur']);
-      await sendEmailViaEdge({
-        to,
-        subject: `Re: ${selectedEmail.Sujet || ''}`,
-        body: text,
-        from: normalizeAccountEmail(selectedEmail.Compte),
-        ...(cc.trim() && { cc: cc.trim() }),
-        ...(bcc.trim() && { bcc: bcc.trim() }),
-        attachments: attachments.map(a => ({
-          filename: a.filename,
-          content: a.content,
-          contentType: a.contentType,
-          encoding: 'base64',
-        })),
-        replyToEmailId: selectedEmail.id,
-      });
+      const result = await sendEmailViaEdge(payload);
+      console.log('[Poste] email-send — succès', result);
       setSendStatus('success');
       await markAsTreated(selectedEmail);
       await fetchSentEmails();
       setReplyMode(false);
-      setTimeout(() => setSendStatus('idle'), 3000);
-    } catch {
+      setReplySeedText('');
+      setTimeout(() => { setSendStatus('idle'); setSendErrorDetail(null); }, 3000);
+    } catch (error) {
+      const detail = formatSendError(error);
+      console.error('[Poste] email-send — échec', error);
       setSendStatus('error');
-      setTimeout(() => setSendStatus('idle'), 3000);
-    } finally { setSending(false); }
+      setSendErrorDetail(detail);
+    } finally {
+      setSending(false);
+    }
   };
 
   const sendNewEmail = async (to: string, cc: string, bcc: string, subject: string, body: string, attachments: Attachment[]) => {
     if (!to.trim() || !body.trim()) return;
     setSending(true);
+    setSendErrorDetail(null);
+    console.log('[Poste] email-send (nouveau) — début', { to, from: activeAccount, subject });
     try {
-      await sendEmailViaEdge({
+      const result = await sendEmailViaEdge({
         to,
         subject,
         body,
@@ -896,12 +844,15 @@ export const Poste = () => {
           encoding: 'base64',
         })),
       });
+      console.log('[Poste] email-send (nouveau) — succès', result);
       setSendStatus('success');
       await fetchSentEmails();
-      setTimeout(() => { setSendStatus('idle'); setComposeMode(false); }, 2000);
-    } catch {
+      setTimeout(() => { setSendStatus('idle'); setSendErrorDetail(null); setComposeMode(false); }, 2000);
+    } catch (error) {
+      const detail = formatSendError(error);
+      console.error('[Poste] email-send (nouveau) — échec', error);
       setSendStatus('error');
-      setTimeout(() => setSendStatus('idle'), 3000);
+      setSendErrorDetail(detail);
     } finally { setSending(false); }
   };
 
@@ -910,6 +861,7 @@ export const Poste = () => {
     setReplyMode(false);
     setShowFullContent(false);
     setSendStatus('idle');
+    setSendErrorDetail(null);
   };
 
   const hasSuggestions = (email: Email) =>
@@ -929,9 +881,10 @@ export const Poste = () => {
           email={selectedEmail}
           accountColor={activeAccountData.color}
           onSend={sendReply}
-          onClose={() => { setReplyMode(false); setReplySeedText(''); setSendStatus('idle'); }}
+          onClose={() => { setReplyMode(false); setReplySeedText(''); setSendStatus('idle'); setSendErrorDetail(null); }}
           sending={sending}
           sendStatus={sendStatus}
+          sendErrorDetail={sendErrorDetail}
           initialText={replySeedText}
         />
       )}
@@ -940,9 +893,10 @@ export const Poste = () => {
           activeAccount={activeAccount}
           accountColor={activeAccountData.color}
           onSend={sendNewEmail}
-          onClose={() => { setComposeMode(false); setSendStatus('idle'); }}
+          onClose={() => { setComposeMode(false); setSendStatus('idle'); setSendErrorDetail(null); }}
           sending={sending}
           sendStatus={sendStatus}
+          sendErrorDetail={sendErrorDetail}
         />
       )}
 

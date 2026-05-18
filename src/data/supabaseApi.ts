@@ -49,11 +49,30 @@ export type SendEmailEdgePayload = {
   replyToEmailId?: number;
 };
 
+const edgeInvokeErrorMessage = async (error: unknown): Promise<string> => {
+  if (!(error instanceof Error)) return String(error);
+  const ctx = (error as { context?: Response }).context;
+  if (ctx && typeof ctx.json === 'function') {
+    try {
+      const body = await ctx.json() as { error?: string; message?: string };
+      const extra = body?.error || body?.message;
+      if (extra) return `${error.message} — ${extra}`;
+      return `${error.message} — ${JSON.stringify(body)}`;
+    } catch {
+      try {
+        const text = await ctx.text();
+        if (text) return `${error.message} — ${text}`;
+      } catch { /* ignore */ }
+    }
+  }
+  return error.message;
+};
+
 export const sendEmailViaEdge = async (payload: SendEmailEdgePayload) => {
   const { data, error } = await supabase.functions.invoke('email-send', {
     body: payload,
   });
-  if (error) throw error;
+  if (error) throw new Error(await edgeInvokeErrorMessage(error));
   if (data && typeof data === 'object' && 'success' in data && (data as { success?: boolean }).success === false) {
     throw new Error((data as { error?: string }).error || 'email-send failed');
   }
