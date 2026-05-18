@@ -273,7 +273,11 @@ export const countUntreatedInboxEmails = async () => {
   return count ?? 0;
 };
 
-export const updateInboxEmail = async (id: number, payload: LegacyPayload) => {
+export const updateInboxEmail = async (
+  id: number,
+  payload: LegacyPayload,
+  options?: { skipCountDispatch?: boolean },
+) => {
   const patch: LegacyPayload = {};
   if ('Traité' in payload) patch.processed = payload.Traité;
   if ('Sujet' in payload) patch.subject = payload.Sujet;
@@ -287,7 +291,7 @@ export const updateInboxEmail = async (id: number, payload: LegacyPayload) => {
   if ('folder' in payload) patch.folder = payload.folder;
   const { error } = await supabase.from('inbox_emails').update(patch).eq('id', id);
   if (error) throw error;
-  if ('Traité' in payload && payload.Traité === true) {
+  if ('Traité' in payload && payload.Traité === true && !options?.skipCountDispatch) {
     const n = await countUntreatedInboxEmails();
     dispatchUntreatedEmailCount(n);
   }

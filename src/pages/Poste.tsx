@@ -382,15 +382,40 @@ const buildThreadMessages = (
   return msgs.sort((a, b) => a.sortTime - b.sortTime);
 };
 
+const TASK_PROJECT_OPTIONS = ['Formation', 'Admin', 'Publications', 'Routines', 'Perso'] as const;
+type TaskPriority = 'Basse' | 'Normale' | 'Haute';
+
+interface TaskFormValues {
+  titre: string;
+  description: string;
+  dueDate: string;
+  priorite: TaskPriority;
+  projet: string;
+}
+
+const descriptionFromEmail = (email: Email) => {
+  const lines = cleanContent(email.Contenu).split('\n').map((l) => l.trim()).filter(Boolean);
+  return lines.slice(0, 3).join('\n');
+};
+
+const todayIsoDate = () => new Date().toISOString().split('T')[0];
+
+const countUntreatedInEmails = (list: Email[]) =>
+  list.filter((e) => !e.Traité && !e['Supprimé le']).length;
+
 // ── Modal Tâche ──
 interface TaskPopupProps {
   email: Email;
-  onConfirm: (name: string, desc: string) => void;
+  onConfirm: (values: TaskFormValues) => void;
   onClose: () => void;
+  submitting?: boolean;
 }
-const TaskPopup = ({ email, onConfirm, onClose }: TaskPopupProps) => {
-  const [taskName, setTaskName] = useState(email.Sujet || 'Sans sujet');
-  const [taskDesc, setTaskDesc] = useState(email['Résumé IA'] || '');
+const TaskPopup = ({ email, onConfirm, onClose, submitting }: TaskPopupProps) => {
+  const [titre, setTitre] = useState(displayThreadSubject(email.Sujet || '') || 'Sans sujet');
+  const [description, setDescription] = useState(descriptionFromEmail(email));
+  const [dueDate, setDueDate] = useState(todayIsoDate);
+  const [priorite, setPriorite] = useState<TaskPriority>('Normale');
+  const [projet, setProjet] = useState('');
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
       <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-6 w-[500px] shadow-2xl">
@@ -407,21 +432,69 @@ const TaskPopup = ({ email, onConfirm, onClose }: TaskPopupProps) => {
         </div>
         <div className="space-y-4">
           <div>
-            <label className="text-xs font-semibold text-[#a0a0c0] mb-2 block">Nom de la tâche</label>
-            <input type="text" value={taskName} onChange={e => setTaskName(e.target.value)}
-              className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#c9a84c]/50 transition-all" />
+            <label className="text-xs font-semibold text-[var(--text-muted)] mb-2 block">Titre</label>
+            <input
+              type="text"
+              value={titre}
+              onChange={(e) => setTitre(e.target.value)}
+              className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#c9a84c]/50"
+            />
           </div>
           <div>
             <label className="text-xs font-semibold text-[#a0a0c0] mb-2 block">Description</label>
-            <textarea value={taskDesc} onChange={e => setTaskDesc(e.target.value)}
-              className="w-full h-24 bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-3 py-2.5 text-sm text-[var(--text-primary)] resize-none focus:outline-none focus:border-[#c9a84c]/50 transition-all" />
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full h-28 bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-3 py-2.5 text-sm text-[var(--text-primary)] resize-y focus:outline-none focus:border-[#c9a84c]/50"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-[var(--text-muted)] mb-2 block">Date échéance</label>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#c9a84c]/50"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-[var(--text-muted)] mb-2 block">Priorité</label>
+            <div className="flex gap-2">
+              {(['Basse', 'Normale', 'Haute'] as const).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPriorite(p)}
+                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold border transition-all ${
+                    priorite === p
+                      ? 'bg-[#c9a84c]/20 border-[#c9a84c]/50 text-[#e8d4a8]'
+                      : 'bg-[var(--bg-main)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-[var(--text-muted)] mb-2 block">Projet</label>
+            <select
+              value={projet}
+              onChange={(e) => setProjet(e.target.value)}
+              className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-lg px-3 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[#c9a84c]/50"
+            >
+              <option value="">—</option>
+              {TASK_PROJECT_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
           </div>
         </div>
-        <div className="flex justify-end gap-3 mt-5">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-[#a0a0c0] hover:text-[var(--text-primary)] border border-[var(--border)] transition-all">Annuler</button>
-          <button onClick={() => onConfirm(taskName, taskDesc)} disabled={!taskName.trim()}
-            className="px-5 py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-[#c9a84c] to-[#e8c97a] text-[#05050a] hover:scale-105 transition-all disabled:opacity-40">
-            Créer
+        <div className="flex justify-end gap-3 mt-6">
+          <button type="button" onClick={onClose} disabled={submitting} className="px-4 py-2 rounded-lg text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[var(--border)] disabled:opacity-50">Annuler</button>
+          <button type="button" onClick={() => onConfirm({ titre, description, dueDate, priorite, projet })} disabled={!titre.trim() || submitting}
+            className="px-5 py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-[#c9a84c] to-[#e8c97a] text-[#05050a] hover:scale-105 transition-all disabled:opacity-40 disabled:hover:scale-100">
+            {submitting ? 'Création…' : 'Créer'}
           </button>
         </div>
       </div>
@@ -664,6 +737,7 @@ export const Poste = () => {
   const [sendErrorDetail, setSendErrorDetail] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showTaskPopup, setShowTaskPopup] = useState(false);
+  const [taskSubmitting, setTaskSubmitting] = useState(false);
   const [taskSuccess, setTaskSuccess] = useState(false);
   const [composeMode, setComposeMode] = useState(false);
   const [viewMode, setViewMode] = useState<'inbox' | 'sent' | 'trash'>('inbox');
@@ -789,12 +863,20 @@ export const Poste = () => {
       !(spamScoreOf(e) > 0.8),
     ).length;
   const markAsTreated = async (email: Email) => {
+    setEmails((prev) => {
+      const next = prev.map((e) => (e.id === email.id ? { ...e, Traité: true } : e));
+      dispatchUntreatedEmailCount(countUntreatedInEmails(next));
+      return next;
+    });
+    if (selectedEmail?.id === email.id) setSelectedEmail({ ...email, Traité: true });
     try {
-      await updateInboxEmail(email.id, { Traité: true });
-      setEmails(prev => prev.map(e => e.id === email.id ? { ...e, Traité: true } : e));
-      if (selectedEmail?.id === email.id) setSelectedEmail({ ...email, Traité: true });
-      await syncUntreatedBadge();
-    } catch (e) { console.error(e); }
+      await updateInboxEmail(email.id, { Traité: true }, { skipCountDispatch: true });
+      const count = await refreshUntreatedEmailCount();
+      dispatchUntreatedEmailCount(count);
+    } catch (e) {
+      console.error(e);
+      await fetchEmails();
+    }
   };
 
   // Suppression avec confirmation (bouton)
@@ -927,46 +1009,58 @@ export const Poste = () => {
     } catch (e) { console.error(e); }
   };
 
-  const getTaskDefaultsFromEmail = (email: Email) => {
-    const subject = (email.Sujet || '').toLowerCase();
-    const content = (email.Contenu || '').toLowerCase();
-    const haystack = `${subject} ${content}`;
-
-    let projet = 'Admin';
-    if (haystack.includes('facture') || haystack.includes('paiement') || haystack.includes('stripe')) projet = 'Admin';
-    if (haystack.includes('formation') || haystack.includes('cours')) projet = 'Formation';
-    if (haystack.includes('publication') || haystack.includes('post') || haystack.includes('réseau')) projet = 'Publications';
-
-    const priorite = email['Action requise'] ? 'Haute' : 'Normale';
-    const dueDate = new Date(Date.now() + (email['Action requise'] ? 24 : 48) * 60 * 60 * 1000).toISOString().split('T')[0];
-    return { projet, priorite, dueDate };
-  };
-
-  const createTask = async (name: string, desc: string) => {
+  const createTask = async (values: TaskFormValues) => {
     if (!selectedEmail) return;
+    setTaskSubmitting(true);
     try {
-      const defaults = getTaskDefaultsFromEmail(selectedEmail);
       const { task, alreadyExisted } = await createTaskFromEmail(selectedEmail.id, {
-        Titre: name,
-        Description: desc,
+        Titre: values.titre.trim(),
+        Description: values.description,
         Statut: 'En cours',
-        Priorité: defaults.priorite,
-        Projet: defaults.projet,
-        'Date échéance': defaults.dueDate,
+        Priorité: values.priorite,
+        Projet: values.projet || null,
+        'Date échéance': values.dueDate,
       });
-      setEmails(prev => prev.map(e => (
-        e.id === selectedEmail.id
-          ? { ...e, 'Tâche liée': Number(task.id), 'Converti en tâche': true, 'Date conversion': new Date().toISOString() }
-          : e
-      )));
-      setSelectedEmail(prev => prev ? { ...prev, 'Tâche liée': Number(task.id), 'Converti en tâche': true, 'Date conversion': new Date().toISOString() } : prev);
+      await updateInboxEmail(selectedEmail.id, { Traité: true }, { skipCountDispatch: true });
+      setEmails((prev) => {
+        const next = prev.map((e) => (
+          e.id === selectedEmail.id
+            ? {
+                ...e,
+                Traité: true,
+                'Tâche liée': Number(task.id),
+                'Converti en tâche': true,
+                'Date conversion': new Date().toISOString(),
+              }
+            : e
+        ));
+        dispatchUntreatedEmailCount(countUntreatedInEmails(next));
+        return next;
+      });
+      setSelectedEmail((prev) => (
+        prev
+          ? {
+              ...prev,
+              Traité: true,
+              'Tâche liée': Number(task.id),
+              'Converti en tâche': true,
+              'Date conversion': new Date().toISOString(),
+            }
+          : prev
+      ));
       setShowTaskPopup(false);
       setTaskSuccess(true);
       setTimeout(() => setTaskSuccess(false), 3500);
+      const count = await refreshUntreatedEmailCount();
+      dispatchUntreatedEmailCount(count);
       if (alreadyExisted) {
         alert(`Une tâche existe déjà pour cet email (ID: ${task.id}).`);
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setTaskSubmitting(false);
+    }
   };
 
   const sendReply = async (text: string) => {
@@ -1045,8 +1139,28 @@ export const Poste = () => {
   };
 
   const markThreadAsTreated = async (thread: EmailThread) => {
-    for (const e of thread.inboxEmails.filter((x) => !x.Traité)) {
-      await markAsTreated(e);
+    const untreated = thread.inboxEmails.filter((x) => !x.Traité);
+    if (!untreated.length) return;
+    const ids = new Set(untreated.map((e) => e.id));
+
+    setEmails((prev) => {
+      const next = prev.map((e) => (ids.has(e.id) ? { ...e, Traité: true } : e));
+      dispatchUntreatedEmailCount(countUntreatedInEmails(next));
+      return next;
+    });
+    if (selectedEmail && ids.has(selectedEmail.id)) {
+      setSelectedEmail((prev) => (prev ? { ...prev, Traité: true } : prev));
+    }
+
+    try {
+      await Promise.all(
+        untreated.map((e) => updateInboxEmail(e.id, { Traité: true }, { skipCountDispatch: true })),
+      );
+      const count = await refreshUntreatedEmailCount();
+      dispatchUntreatedEmailCount(count);
+    } catch (e) {
+      console.error(e);
+      await fetchEmails();
     }
   };
 
@@ -1056,7 +1170,12 @@ export const Poste = () => {
     <div className="flex flex-col" style={{ height: '100%', minHeight: 0 }}>
 
       {showTaskPopup && selectedEmail && (
-        <TaskPopup email={selectedEmail} onConfirm={createTask} onClose={() => setShowTaskPopup(false)} />
+        <TaskPopup
+          email={selectedEmail}
+          onConfirm={createTask}
+          onClose={() => { if (!taskSubmitting) setShowTaskPopup(false); }}
+          submitting={taskSubmitting}
+        />
       )}
       {replyMode && selectedEmail && (
         <ReplyModal
@@ -1459,9 +1578,9 @@ export const Poste = () => {
             </div>
           ) : (
             <>
-            <div className="flex-1 flex flex-col h-full overflow-hidden">
+            <div className="flex-1 flex flex-col h-full overflow-y-auto">
 
-              <div className="px-6 py-3 border-b border-[var(--border)] shrink-0 bg-[var(--bg-surface)]">
+              <div className="sticky top-0 z-10 px-6 py-3 border-b border-[var(--border)] bg-[var(--bg-surface)]">
                 <div className="space-y-0.5 text-xs text-[var(--text-secondary)] mb-3">
                   <p>
                     <span className="text-[var(--text-muted)]">Expéditeur : </span>
@@ -1527,7 +1646,7 @@ export const Poste = () => {
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+              <div className="px-6 py-5 space-y-4">
                 {viewMode === 'trash' ? (
                   <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-4">
                     <MessageBody content={cleanContent(selectedEmail.Contenu)} />
