@@ -1,6 +1,9 @@
+import { useState, useEffect } from 'react';
 import { LayoutDashboard, Mail, Users, DollarSign, Calendar, CheckSquare, LogOut, Sun, Moon } from 'lucide-react';
 import { useAuth, type PageKey } from '../contexts/AuthContext';
 import { useTheme } from '../App';
+import { refreshUntreatedEmailCount } from '../data/supabaseApi';
+import { UNTREATED_EMAIL_COUNT_EVENT } from '../lib/emailCountEvents';
 
 interface SidebarProps {
   currentPage: string;
@@ -31,6 +34,29 @@ export const Sidebar = ({ currentPage, onPageChange }: SidebarProps) => {
   const visibleItems = menuItems.filter(item => canAccess(ACCESS_BY_MENU_PAGE[item.page]));
   const roleLabel = user?.role === 'admin' ? 'Administrateur' : 'Assistante';
   const isDark = theme === 'dark';
+  const [untreatedMailCount, setUntreatedMailCount] = useState(0);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const n = await refreshUntreatedEmailCount();
+        setUntreatedMailCount(n);
+      } catch {
+        // Ignore count fetch errors in sidebar.
+      }
+    };
+    load();
+    const onCount = (evt: Event) => {
+      const detail = (evt as CustomEvent<{ count?: number }>).detail;
+      if (typeof detail?.count === 'number') setUntreatedMailCount(detail.count);
+    };
+    window.addEventListener(UNTREATED_EMAIL_COUNT_EVENT, onCount as EventListener);
+    const t = setInterval(load, 3 * 60 * 1000);
+    return () => {
+      window.removeEventListener(UNTREATED_EMAIL_COUNT_EVENT, onCount as EventListener);
+      clearInterval(t);
+    };
+  }, []);
 
   return (
     <aside style={{
@@ -73,7 +99,26 @@ export const Sidebar = ({ currentPage, onPageChange }: SidebarProps) => {
             onMouseLeave={e => { if (!isActive) { (e.currentTarget as HTMLButtonElement).style.color = '#6060a0'; (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; } }}
             >
               <Icon size={16} />
-              <span>{item.label}</span>
+              <span style={{ flex: 1 }}>{item.label}</span>
+              {item.id === 'poste' && untreatedMailCount > 0 && (
+                <span
+                  style={{
+                    minWidth: 20,
+                    height: 20,
+                    padding: '0 6px',
+                    borderRadius: 99,
+                    background: '#d95555',
+                    color: '#fff',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {untreatedMailCount > 99 ? '99+' : untreatedMailCount}
+                </span>
+              )}
             </button>
           );
         })}

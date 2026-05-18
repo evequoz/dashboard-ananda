@@ -118,7 +118,7 @@ function AppContent() {
         transition: 'background 0.3s, color 0.3s',
         fontFamily: "'DM Sans', system-ui, sans-serif",
       }}>
-        <Sidebar currentPage={safePage} onPageChange={setCurrentPage} />
+        <Sidebar currentPage={safePage} onPageChange={(page) => setCurrentPage(page as DashboardPage)} />
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <Header />
           <main style={{ flex: 1, overflowY: 'auto', padding: '32px' }}>

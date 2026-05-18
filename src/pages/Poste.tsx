@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Mail, Inbox, Briefcase, RefreshCw, CheckCircle,
   AlertCircle, Clock, ChevronRight, Send, Plus,
-  Eye, EyeOff, Sparkles, X, Paperclip, Trash2,
+  Sparkles, X, Paperclip, Trash2, Copy, Eye, EyeOff,
   FileText, ExternalLink, User, Users, SendHorizonal, Shield, Newspaper
 } from 'lucide-react';
 import {
@@ -20,13 +20,15 @@ import {
   findAdminByEmail,
   sendEmailViaEdge,
   markInboxEmailNotSpam,
+  refreshUntreatedEmailCount,
 } from '../data/supabaseApi';
+import { dispatchUntreatedEmailCount } from '../lib/emailCountEvents';
 import { parseJsonResponseBody } from '../lib/parseJsonResponseBody';
 
 // Proxy n8n → évite les problèmes CORS avec l'API Systeme.io
 const SYSTEME_PROXY = 'https://n8n.ananda-communaute.cloud/webhook/systeme-proxy';
 
-interface BaserowFile {
+interface EmailAttachment {
   url: string;
   name: string;
   visible_name: string;
@@ -63,7 +65,7 @@ interface Email {
   'Réponse 2': string;
   'Réponse 3': string;
   'A une pièce jointe': boolean;
-  'Fichier': BaserowFile[];
+  'Fichier': EmailAttachment[];
   'Tâche liée'?: number | null;
   'Converti en tâche'?: boolean;
   'Date conversion'?: string | null;
@@ -162,10 +164,8 @@ interface TaskPopupProps {
   onClose: () => void;
 }
 const TaskPopup = ({ email, onConfirm, onClose }: TaskPopupProps) => {
-  const [taskName, setTaskName] = useState(`Répondre à: ${email.Sujet || 'Sans sujet'}`);
-  const [taskDesc, setTaskDesc] = useState(
-    `Email de ${email['Expéditeur']?.replace(/<.*>/, '').replace(/"/g, '').trim()}\n\n${email['Résumé IA'] || ''}`
-  );
+  const [taskName, setTaskName] = useState(email.Sujet || 'Sans sujet');
+  const [taskDesc, setTaskDesc] = useState(email['Résumé IA'] || '');
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
       <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-6 w-[500px] shadow-2xl">
@@ -659,7 +659,7 @@ const ContactSidePanel = ({ senderRaw }: { senderRaw: string }) => {
         </div>
       )}
 
-      {/* ── Fiche Admin/Pro (fallback Baserow) ── */}
+      {/* ── Fiche Admin/Pro ── */}
       {!loading && adminContact && (
         <div className="px-3 py-3 space-y-3">
           <div className="flex flex-col items-center gap-2 pb-3 border-b border-[var(--border)]">
@@ -715,7 +715,8 @@ export const Poste = () => {
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
-  const [showTreated, setShowTreated] = useState(false);
+  const [treatmentFilter, setTreatmentFilter] = useState<'all' | 'untreated' | 'treated'>('untreated');
+  const [copiedSuggestionKey, setCopiedSuggestionKey] = useState<string | null>(null);
   const [replyMode, setReplyMode] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendStatus, setSendStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -734,44 +735,33 @@ export const Poste = () => {
   const [selectedTrashSentIds, setSelectedTrashSentIds] = useState<number[]>([]);
   const [showMailList, setShowMailList] = useState(true);
   const [showContactPanel, setShowContactPanel] = useState(true);
-  const [readInboxIds, setReadInboxIds] = useState<number[]>([]);
   const [replySeedText, setReplySeedText] = useState('');
   const replyModeRef = useRef(false);
   replyModeRef.current = replyMode;
 
-  useEffect(() => {
+  const syncUntreatedBadge = useCallback(async () => {
     try {
-      const raw = localStorage.getItem('dashboard-read-inbox-ids');
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) setReadInboxIds(parsed.filter((id: unknown) => Number.isFinite(Number(id))).map((id: unknown) => Number(id)));
+      const count = await refreshUntreatedEmailCount();
+      dispatchUntreatedEmailCount(count);
     } catch {
-      // Ignore corrupted local state.
+      // Ignore badge sync errors.
     }
   }, []);
-
-  const markEmailAsRead = (id: number) => {
-    setReadInboxIds(prev => {
-      if (prev.includes(id)) return prev;
-      const next = [...prev, id];
-      localStorage.setItem('dashboard-read-inbox-ids', JSON.stringify(next));
-      return next;
-    });
-  };
 
   const fetchEmails = useCallback(async () => {
     try {
       setRefreshing(true);
       const data = await listInboxEmails(400, true);
-      setEmails(data || []);
+      setEmails((data || []) as Email[]);
+      await syncUntreatedBadge();
     } catch (e) { console.error(e); }
     finally { setLoading(false); setRefreshing(false); }
-  }, []);
+  }, [syncUntreatedBadge]);
 
   const fetchSentEmails = useCallback(async () => {
     try {
       const data = await listSentEmails(400, true);
-      setSentEmails(data || []);
+      setSentEmails((data || []) as SentEmail[]);
     } catch (e) { console.error(e); }
   }, []);
 
@@ -797,17 +787,23 @@ export const Poste = () => {
   const inAccountInbox = (e: Email) =>
     normalizeAccountEmail(e.Compte) === activeAccount && !e['Supprimé le'];
 
+  const matchesTreatmentFilter = (e: Email) => {
+    if (treatmentFilter === 'untreated') return !e.Traité;
+    if (treatmentFilter === 'treated') return !!e.Traité;
+    return true;
+  };
+
   const filteredPrimary = emails.filter(e =>
     inAccountInbox(e) &&
-    (showTreated ? true : !e.Traité) &&
+    matchesTreatmentFilter(e) &&
     String(e['Catégorie spam'] || '').toLowerCase() !== 'newsletter' &&
     !(spamScoreOf(e) > 0.8),
   );
   const filteredSpam = emails.filter(e =>
-    inAccountInbox(e) && spamScoreOf(e) > 0.8,
+    inAccountInbox(e) && matchesTreatmentFilter(e) && spamScoreOf(e) > 0.8,
   );
   const filteredNewsletters = emails.filter(e =>
-    inAccountInbox(e) && String(e['Catégorie spam'] || '').toLowerCase() === 'newsletter',
+    inAccountInbox(e) && matchesTreatmentFilter(e) && String(e['Catégorie spam'] || '').toLowerCase() === 'newsletter',
   );
   const inboxMailsForList =
     inboxMailboxTab === 'spam'
@@ -831,7 +827,20 @@ export const Poste = () => {
       await updateInboxEmail(email.id, { Traité: true });
       setEmails(prev => prev.map(e => e.id === email.id ? { ...e, Traité: true } : e));
       if (selectedEmail?.id === email.id) setSelectedEmail({ ...email, Traité: true });
+      await syncUntreatedBadge();
     } catch (e) { console.error(e); }
+  };
+
+  const copySuggestion = async (key: string, text: string) => {
+    const value = toSafeText(text);
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedSuggestionKey(key);
+      setTimeout(() => setCopiedSuggestionKey(null), 2000);
+    } catch {
+      // Ignore clipboard errors.
+    }
   };
 
   const markNotSpam = async (email: Email) => {
@@ -1025,7 +1034,7 @@ export const Poste = () => {
       setSelectedEmail(prev => prev ? { ...prev, 'Tâche liée': Number(task.id), 'Converti en tâche': true, 'Date conversion': new Date().toISOString() } : prev);
       setShowTaskPopup(false);
       setTaskSuccess(true);
-      setTimeout(() => setTaskSuccess(false), 3000);
+      setTimeout(() => setTaskSuccess(false), 3500);
       if (alreadyExisted) {
         alert(`Une tâche existe déjà pour cet email (ID: ${task.id}).`);
       }
@@ -1092,7 +1101,6 @@ export const Poste = () => {
 
   const openEmail = (email: Email) => {
     setSelectedEmail(email);
-    markEmailAsRead(email.id);
     setReplyMode(false);
     setShowFullContent(false);
     setSendStatus('idle');
@@ -1102,7 +1110,7 @@ export const Poste = () => {
     !!(email['Réponse 1'] || email['Réponse 2'] || email['Réponse 3']);
 
   const activeAccountData = ACCOUNTS.find(a => a.email === activeAccount)!;
-  const files: BaserowFile[] = selectedEmail?.['Fichier'] || [];
+  const files: EmailAttachment[] = selectedEmail?.['Fichier'] || [];
 
   return (
     <div className="flex flex-col" style={{ height: '100%', minHeight: 0 }}>
@@ -1166,16 +1174,9 @@ export const Poste = () => {
         <div className="flex items-center gap-2">
           {taskSuccess && (
             <span className="flex items-center gap-1 px-2 py-1 bg-[#4caf7d]/20 border border-[#4caf7d]/30 rounded-full text-xs font-semibold text-[#4caf7d]">
-              <CheckCircle className="w-3 h-3" /> Tâche créée
+              <CheckCircle className="w-3 h-3" /> Tâche créée ✓
             </span>
           )}
-          <button onClick={() => setShowTreated(!showTreated)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-              showTreated ? 'bg-[#c9a84c]/20 border-[#c9a84c]/40 text-[#c9a84c]' : 'bg-[var(--bg-surface)] border-[var(--border)] text-[#a0a0c0] hover:text-[var(--text-primary)]'
-            }`}>
-            {showTreated ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-            {showTreated ? 'Masquer traités' : 'Traités'}
-          </button>
           <button onClick={() => { setComposeMode(true); setSendStatus('idle'); }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105"
             style={{ background: `linear-gradient(135deg, ${activeAccountData.color}, ${activeAccountData.color}cc)`, color: '#05050a' }}>
@@ -1275,6 +1276,28 @@ export const Poste = () => {
             ))}
           </div>
           {viewMode === 'inbox' && (
+            <div className="flex border-b border-[var(--border)] bg-[var(--bg-surface)] shrink-0">
+              {([
+                { id: 'all' as const, label: 'Tous' },
+                { id: 'untreated' as const, label: 'Non traités' },
+                { id: 'treated' as const, label: 'Traités' },
+              ]).map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => { setTreatmentFilter(tab.id); setSelectedEmail(null); }}
+                  className={`flex-1 py-2 text-[10px] font-semibold uppercase tracking-wide border-b-2 transition-all ${
+                    treatmentFilter === tab.id
+                      ? 'text-[var(--text-primary)] border-b-[#c9a84c]'
+                      : 'text-[var(--text-muted)] border-b-transparent hover:text-[var(--text-secondary)]'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {viewMode === 'inbox' && (
             <div className="flex border-b border-[var(--border)] bg-[var(--bg-surface)]/50 shrink-0 px-1 gap-0.5">
               {([
                 { id: 'primary' as const, label: 'Principale', icon: Inbox },
@@ -1312,18 +1335,28 @@ export const Poste = () => {
               </div>
             ) : inboxMailsForList.map(email => {
               const isSelected = selectedEmail?.id === email.id;
-              const isRead = email.Traité || readInboxIds.includes(email.id);
-              const emailFiles: BaserowFile[] = email['Fichier'] || [];
+              const isTreated = !!email.Traité;
+              const emailFiles: EmailAttachment[] = email['Fichier'] || [];
               return (
                 <button key={email.id} onClick={() => openEmail(email)}
                   className={`w-full text-left p-3 border-b border-[var(--border)]/50 transition-all hover:bg-[var(--bg-surface)] ${
-                    isSelected ? 'bg-[var(--bg-card)] border-l-2' : ''
-                  } ${isRead ? 'opacity-55' : ''}`}
+                    isSelected ? 'bg-[var(--bg-card)]' : ''
+                  } ${isTreated ? 'opacity-70' : ''}`}
                   style={{
-                    borderLeftColor: isSelected ? activeAccountData.color : (!isRead ? '#d4b060' : undefined),
-                    background: !isRead && !isSelected ? 'rgba(212,176,96,0.06)' : undefined,
+                    borderLeft: `2px solid ${isSelected ? activeAccountData.color : isTreated ? 'transparent' : '#c9a84c'}`,
+                    background: !isTreated && !isSelected ? 'rgba(201,168,76,0.08)' : undefined,
                   }}>
                   <div className="flex items-start gap-2">
+                    {!isTreated && (
+                      <button
+                        type="button"
+                        title="Marquer comme traité"
+                        onClick={e => { e.stopPropagation(); void markAsTreated(email); }}
+                        className="mt-1.5 p-1 rounded-md text-[#4caf7d] hover:bg-[#4caf7d]/15 transition-all shrink-0"
+                      >
+                        <CheckCircle className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     <input
                       type="checkbox"
                       checked={selectedInboxIds.includes(email.id)}
@@ -1337,15 +1370,10 @@ export const Poste = () => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1 mb-0.5">
-                        <p className={`text-xs font-bold truncate ${!isRead ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
+                        <p className={`text-xs truncate ${!isTreated ? 'font-bold text-[var(--text-primary)]' : 'font-normal text-[var(--text-secondary)]'}`}>
                           {email['Expéditeur']?.replace(/<.*>/, '').replace(/"/g, '').trim() || 'Inconnu'}
                         </p>
                         <div className="flex items-center gap-0.5 shrink-0">
-                          {!isRead && (
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#d4b060]/20 border border-[#d4b060]/35 text-[#d4b060]">
-                              NON LU
-                            </span>
-                          )}
                           {spamScoreOf(email) > 0.5 && spamScoreOf(email) <= 0.8 && (
                             <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#b8a050]/20 border border-[#b8a050]/40 text-[#d4c060]">
                               Douteux
@@ -1363,7 +1391,7 @@ export const Poste = () => {
                           {email.Traité && <CheckCircle className="w-3 h-3 text-[#4caf7d]" />}
                         </div>
                       </div>
-                      <p className={`text-xs truncate mb-0.5 font-semibold ${!isRead ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'}`}>
+                      <p className={`text-xs truncate mb-0.5 ${!isTreated ? 'font-bold text-[var(--text-primary)]' : 'font-normal text-[var(--text-secondary)]'}`}>
                         {email.Sujet || 'Sans sujet'}
                       </p>
                       <p className="text-[10px] text-[var(--text-muted)] line-clamp-2 leading-relaxed">
@@ -1659,14 +1687,24 @@ export const Poste = () => {
                             <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: s.color }}>
                               {s.label}
                             </span>
-                            <button onClick={() => {
-                              setReplySeedText(toSafeText(selectedEmail[s.key]));
-                              setReplyMode(true);
-                            }}
-                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all"
-                              style={{ background: s.color + '20', border: `1px solid ${s.color}40`, color: s.color }}>
-                              Utiliser <ChevronRight className="w-3 h-3" />
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => copySuggestion(`${selectedEmail.id}-${s.key}`, toSafeText(selectedEmail[s.key]))}
+                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                              >
+                                <Copy className="w-3 h-3" />
+                                {copiedSuggestionKey === `${selectedEmail.id}-${s.key}` ? 'Copié' : 'Copier'}
+                              </button>
+                              <button onClick={() => {
+                                setReplySeedText(toSafeText(selectedEmail[s.key]));
+                                setReplyMode(true);
+                              }}
+                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all"
+                                style={{ background: s.color + '20', border: `1px solid ${s.color}40`, color: s.color }}>
+                                Utiliser <ChevronRight className="w-3 h-3" />
+                              </button>
+                            </div>
                           </div>
                           <p className="text-xs leading-relaxed whitespace-pre-wrap text-[var(--text-primary)]">
                             {selectedEmail[s.key] as string}

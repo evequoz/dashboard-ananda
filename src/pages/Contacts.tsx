@@ -319,7 +319,7 @@ const CommunauteTab = ({ onCompose }: { onCompose: (email: string) => void }) =>
 };
 
 // ════════════════════════════════════════════════════════
-// ONGLET ADMIN/PRO — Baserow
+// ONGLET ADMIN/PRO — Supabase (admin_contacts)
 // ════════════════════════════════════════════════════════
 
 // ── Formulaire ajout/modification ──
@@ -344,7 +344,7 @@ const AdminContactForm = ({ initial, onSave, onClose }: {
   const handleSave = async () => {
     if (!form.Email.trim()) return;
     setSaving(true);
-    await onSave({ ...form, Catégorie: form.Catégorie ? form.Catégorie : undefined });
+    await onSave({ ...form, Catégorie: form.Catégorie ? { value: form.Catégorie } : null });
     setSaving(false);
   };
 
@@ -410,8 +410,8 @@ const EmailHistory = ({ email }: { email: string }) => {
       try {
         const [recData, sentData] = await Promise.all([listInboxEmails(200), listSentEmails(200)]);
         const lc = email.toLowerCase();
-        setReceived((recData || []).filter((r: EmailRecord) => (r['Expéditeur'] || '').toLowerCase().includes(lc)).slice(0, 20));
-        setSent((sentData || []).filter((s: SentRecord) => (s['À'] || '').toLowerCase().includes(lc)).slice(0, 20));
+        setReceived((recData || []).filter((r) => (r['Expéditeur'] || '').toLowerCase().includes(lc)).slice(0, 20) as EmailRecord[]);
+        setSent((sentData || []).filter((s) => (s['À'] || '').toLowerCase().includes(lc)).slice(0, 20) as SentRecord[]);
       } catch { /* silently fail */ }
       finally { setLoading(false); }
     };
@@ -745,7 +745,7 @@ export const Contacts = () => {
         </div>
         {([
           { id: 'communaute', label: 'Communauté', icon: <Users className="w-4 h-4" />, desc: 'Systeme.io' },
-          { id: 'admin',      label: 'Admin / Pro', icon: <Building2 className="w-4 h-4" />, desc: 'Baserow' },
+          { id: 'admin',      label: 'Admin / Pro', icon: <Building2 className="w-4 h-4" />, desc: 'Contacts pro' },
         ] as const).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`flex items-center gap-2 px-5 py-3.5 text-sm font-semibold transition-all border-b-2 ${

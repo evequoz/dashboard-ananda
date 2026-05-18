@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   Calendar, Clock, CheckCircle, Mail, Plus,
-  BookOpen, Lightbulb, FileText, Flag, Server, X, Trash2, ExternalLink, Users, PauseCircle, TrendingUp
+  BookOpen, Lightbulb, Flag, Server, X, Trash2, ExternalLink, Users, PauseCircle, TrendingUp
 } from 'lucide-react';
 import {
   getTachesAujourdhui,
@@ -11,6 +11,7 @@ import {
   deleteInboxEmail,
   notifyInboxDeletionSync,
   createTaskLegacy,
+  refreshUntreatedEmailCount,
 } from '../data/supabaseApi';
 import { parseJsonResponseBody } from '../lib/parseJsonResponseBody';
 
@@ -47,7 +48,6 @@ const ACCOUNT_COLORS: Record<string, string> = {
 const QUICK_LINKS = [
   { label: 'AFFiNE',     url: 'https://affine.ananda-communaute.cloud',  icon: BookOpen,  color: '#d4b060' },
   { label: 'Open WebUI', url: 'https://cloud.ananda-communaute.cloud',   icon: Lightbulb, color: '#9b7ec8' },
-  { label: 'Baserow',    url: 'https://baserow.ananda-communaute.cloud', icon: FileText,  color: '#6699e0' },
   { label: 'Coolify',    url: 'https://coolify.ananda-communaute.cloud', icon: Server,    color: '#5dc98d' },
 ];
 
@@ -86,7 +86,7 @@ export const Overview = () => {
   const loadEmails = async () => {
     try {
       const data = await listInboxEmails(50);
-      setEmails((data || []).filter((e: EmailItem) => !e.Traité).reverse());
+      setEmails((data || []).filter((e) => !e.Traité).reverse() as EmailItem[]);
     } catch {
       // Ignore transient inbox fetch errors on dashboard.
     }
@@ -117,7 +117,15 @@ export const Overview = () => {
     localStorage.setItem('dashboard-open-task-id', id);
     window.dispatchEvent(new CustomEvent('dashboard:navigate', { detail: { page: 'tasks' } }));
   };
-  const marquerTraite = async (id: number) => { setEmails(p => p.filter(e => e.id !== id)); try { await updateInboxEmail(id, { Traité: true }); } catch { /* no-op: optimistic UI */ } };
+  const marquerTraite = async (id: number) => {
+    setEmails(p => p.filter(e => e.id !== id));
+    try {
+      await updateInboxEmail(id, { Traité: true });
+      await refreshUntreatedEmailCount();
+    } catch {
+      /* optimistic UI */
+    }
+  };
   const supprimerEmail = async (id: number) => {
     setEmails(p => p.filter(e => e.id !== id));
     try {
@@ -144,7 +152,11 @@ export const Overview = () => {
   const tachesFiltrees = taches.filter(t => filtre === 'Tout' || t.projet === filtre);
   const urgentes = taches.filter(t => t.priorite === 'Haute').length;
   const unread = emails.length;
-  const todayEvents = events.filter(e => isSameDay(new Date(e.start?.dateTime || e.start?.date), today));
+  const eventStartValue = (e: CalendarEventItem) => e.start?.dateTime || e.start?.date || '';
+  const todayEvents = events.filter(e => {
+    const start = eventStartValue(e);
+    return start ? isSameDay(new Date(start), today) : false;
+  });
   const todayIso = new Date().toISOString().split('T')[0];
   const urgentTasks = tachesFiltrees.filter(t => !t.completed && t.priorite === 'Haute');
   const dueTodayTasks = tachesFiltrees.filter(t => !t.completed && !!t.dateEcheance && t.dateEcheance.split('T')[0] === todayIso);
@@ -158,7 +170,13 @@ export const Overview = () => {
   const tachesApercu = tachesAffichees.slice(0, 6);
 
   const eventsByDay: Record<string, CalendarEventItem[]> = {};
-  events.forEach(e => { const k = new Date(e.start?.dateTime || e.start?.date).toDateString(); if (!eventsByDay[k]) eventsByDay[k] = []; eventsByDay[k].push(e); });
+  events.forEach(e => {
+    const start = eventStartValue(e);
+    if (!start) return;
+    const k = new Date(start).toDateString();
+    if (!eventsByDay[k]) eventsByDay[k] = [];
+    eventsByDay[k].push(e);
+  });
   const agendaPanelHeight = events.length <= 2 ? '48vh' : '62vh';
 
   return (
@@ -259,8 +277,10 @@ export const Overview = () => {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                     {items.map((item, i) => {
-                      const start = new Date(item.start?.dateTime || item.start?.date);
-                      const end = new Date(item.end?.dateTime || item.end?.date);
+                      const startRaw = item.start?.dateTime || item.start?.date || '';
+                      const endRaw = item.end?.dateTime || item.end?.date || startRaw;
+                      const start = startRaw ? new Date(startRaw) : new Date();
+                      const end = endRaw ? new Date(endRaw) : start;
                       const isAllDay = !item.start?.dateTime;
                       const isNow = !isAllDay && start <= today && end > today;
                       const timeStr = isAllDay ? 'Journée entière' : start.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + ' → ' + end.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });

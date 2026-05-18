@@ -18,9 +18,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 
 export async function getValidSession() {
   const { data, error } = await supabase.auth.getSession();
-  if (error) return { session: null as const, error };
+  if (error) return { session: null, error };
   const session = data.session;
-  if (!session?.access_token) return { session: null as const, error: null };
+  if (!session?.access_token) return { session: null, error: null };
   return { session, error: null };
 }
 

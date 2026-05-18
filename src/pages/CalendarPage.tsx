@@ -75,25 +75,6 @@ interface CalendarUiEvent {
   };
 }
 
-interface LocalEventDraft {
-  id: string;
-  title: string;
-  allDay: boolean;
-  start?: string;
-  end?: string;
-  backgroundColor: string;
-  borderColor: string;
-  textColor: string;
-  extendedProps: {
-    description: string;
-    location: string;
-    status: string;
-    recurrence: string | null;
-    calendar: string;
-    eventType: string;
-  };
-}
-
 const C = {
   bg: 'var(--bg-main)', surface: 'var(--bg-surface)', card: 'var(--bg-card)',
   border: 'var(--border)', gold: 'var(--gold)', goldSoft: 'var(--gold-soft)',
@@ -703,32 +684,38 @@ export const CalendarPage = () => {
     const calColor = getCalendarColor(form.calendar);
     const tempId = `local-${Date.now()}`;
 
-    const newEvent: LocalEventDraft = {
+    const eventStatus: 'free' | 'busy' = form.status === 'free' ? 'free' : 'busy';
+    let start = '';
+    let end: string | undefined;
+    if (form.allDay) {
+      start = form.date;
+      const endDate = new Date(form.endDate);
+      endDate.setDate(endDate.getDate() + 1);
+      end = endDate.toISOString().split('T')[0];
+    } else {
+      start = `${form.date}T${form.startTime}:00`;
+      end = `${form.date}T${form.endTime}:00`;
+    }
+
+    const newEvent: CalendarUiEvent = {
       id: tempId,
       title: form.title,
       allDay: form.allDay,
+      start,
+      end,
       backgroundColor: calColor.bg,
       borderColor: calColor.color,
       textColor: calColor.color,
+      borderStyle: 'dashed',
       extendedProps: {
         description: form.description,
         location: form.location,
-        status: form.status,
+        status: eventStatus,
         recurrence: form.recurrence !== 'none' ? form.recurrence : null,
         calendar: form.calendar,
         eventType: form.eventType,
-      }
+      },
     };
-
-    if (form.allDay) {
-      newEvent.start = form.date;
-      const end = new Date(form.endDate);
-      end.setDate(end.getDate() + 1);
-      newEvent.end = end.toISOString().split('T')[0];
-    } else {
-      newEvent.start = `${form.date}T${form.startTime}:00`;
-      newEvent.end = `${form.date}T${form.endTime}:00`;
-    }
 
     setEvents(prev => [...prev, newEvent]);
 
@@ -749,6 +736,7 @@ export const CalendarPage = () => {
 
   const handleUpdate = (id: string, data: EventFormData) => {
     const calColor = getCalendarColor(data.calendar || 'Calendrier');
+    const eventStatus: 'free' | 'busy' = data.status === 'free' ? 'free' : 'busy';
     setEvents(prev => prev.map(e =>
       e.id === id ? {
         ...e,
@@ -756,14 +744,21 @@ export const CalendarPage = () => {
         allDay: data.allDay,
         start: data.allDay ? data.startDate : `${data.startDate}T${data.startTime}:00`,
         end: data.allDay ? (() => {
-          const end = new Date(data.endDate);
-          end.setDate(end.getDate() + 1);
-          return end.toISOString().split('T')[0];
+          const endDate = new Date(data.endDate);
+          endDate.setDate(endDate.getDate() + 1);
+          return endDate.toISOString().split('T')[0];
         })() : `${data.startDate}T${data.endTime}:00`,
         backgroundColor: calColor.bg,
         borderColor: calColor.color,
         textColor: calColor.color,
-        extendedProps: { ...e.extendedProps, description: data.description, location: data.location, status: data.status, eventType: data.eventType, calendar: data.calendar }
+        extendedProps: {
+          ...e.extendedProps,
+          description: data.description,
+          location: data.location,
+          status: eventStatus,
+          eventType: data.eventType,
+          calendar: data.calendar,
+        },
       } : e
     ));
     fetch(N8N_WEBHOOK, {

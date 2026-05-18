@@ -1,6 +1,22 @@
 import { supabase } from '../lib/supabaseClient';
+import { dispatchUntreatedEmailCount } from '../lib/emailCountEvents';
+import {
+  type DbRow,
+  type LegacyEmailRow,
+  type LegacyTaskRow,
+  fieldAsString,
+  isActiveFlag,
+  legacyAdminFromRow,
+  legacyBudgetFromRow,
+  legacyEmailFromRow,
+  legacyFinanceFromRow,
+  legacySentFromRow,
+  legacyTaskFromRow,
+  mapTodayTask,
+} from './legacyTypes';
 
-type RowRecord = Record<string, unknown>;
+export type { LegacyEmailRow, LegacyTaskRow } from './legacyTypes';
+
 type LegacyPayload = Record<string, unknown>;
 
 export const notifyInboxDeletionSync = async (
@@ -66,100 +82,13 @@ export const markInboxEmailNotSpam = async (inboxId: number, senderEmail: string
   if (uErr) throw uErr;
 };
 
-const legacyTaskFromRow = (row: RowRecord) => ({
-  id: row.id,
-  Titre: row.title,
-  Description: row.description,
-  Projet: row.project,
-  Priorité: row.priority,
-  Statut: row.status,
-  Récurrence: row.recurrence,
-  Fait: row.done,
-  'Date échéance': row.due_date,
-  'Date faite': row.done_date,
-  'Tâche parente': row.parent_task_id ? [{ id: row.parent_task_id }] : [],
-  'Email source id': row.source_email_id ?? null,
-});
-
-const legacyEmailFromRow = (row: RowRecord) => ({
-  id: row.id,
-  Sujet: row.subject,
-  'Expéditeur': row.sender,
-  'Date réception': row.received_at,
-  'Résumé IA': row.ai_summary,
-  Contenu: row.content,
-  'Action requise': row.action_required,
-  Traité: row.processed,
-  Compte: row.account_email,
-  'Réponse 1': row.reply_1,
-  'Réponse 2': row.reply_2,
-  'Réponse 3': row.reply_3,
-  'A une pièce jointe': row.has_attachment,
-  Fichier: row.attachments || [],
-  'Tâche liée': row.linked_task_id ?? null,
-  'Converti en tâche': !!row.converted_to_task,
-  'Date conversion': row.converted_at ?? null,
-  'Supprimé le': row.deleted_at ?? null,
-  'Score spam': row.spam_score != null ? Number(row.spam_score) : null,
-  'Catégorie spam': row.spam_category ?? null,
-  'Challenge envoyé': !!row.challenge_sent,
-  'Challenge répondu': !!row.challenge_responded,
-  folder: row.folder ?? 'INBOX',
-});
-
-const legacySentFromRow = (row: RowRecord) => ({
-  id: row.id,
-  De: row.from_email,
-  'À': row.to_emails,
-  CC: row.cc,
-  BCC: row.bcc,
-  Sujet: row.subject,
-  Corps: row.body,
-  Date: row.sent_at,
-  Compte: row.account_email,
-  'Supprimé le': row.deleted_at ?? null,
-});
-
-const legacyAdminFromRow = (row: RowRecord) => ({
-  id: row.id,
-  Prénom: row.first_name,
-  Nom: row.last_name,
-  Email: row.email,
-  Téléphone: row.phone,
-  Entreprise: row.company,
-  Catégorie: row.category ? { value: row.category } : null,
-  Notes: row.notes,
-  'Date création': row.created_at,
-});
-
-const legacyFinanceFromRow = (row: RowRecord) => ({
-  id: row.id,
-  Date: row.invoice_date,
-  'Date paiement': row.payment_date,
-  Libellé: row.label,
-  Montant: row.amount,
-  Type: row.type,
-  Source: row.source,
-  Catégorie: row.category,
-  Notes: row.notes,
-  Validé: row.validated,
-});
-
-const legacyBudgetFromRow = (row: RowRecord) => ({
-  id: row.id,
-  Libellé: row.label,
-  Mensuel: row.monthly_amount,
-  Actif: row.active,
-  Catégorie: row.category,
-});
-
-export const listTaskRows = async () => {
+export const listTaskRows = async (): Promise<LegacyTaskRow[]> => {
   const { data, error } = await supabase.from('tasks').select('*').order('created_at', { ascending: false }).limit(200);
   if (error) throw error;
   return (data || []).map(legacyTaskFromRow);
 };
 
-export const createTaskLegacy = async (payload: LegacyPayload) => {
+export const createTaskLegacy = async (payload: LegacyPayload): Promise<LegacyTaskRow> => {
   const insert = {
     title: payload.Titre,
     description: payload.Description ?? null,
@@ -238,12 +167,28 @@ export const createTaskFromEmail = async (
   return { task: created, alreadyExisted: false };
 };
 
-export const listInboxEmails = async (size = 200, includeDeleted = false) => {
+export const listInboxEmails = async (
+  size = 200,
+  includeDeleted = false,
+  options?: { treated?: boolean | null },
+): Promise<LegacyEmailRow[]> => {
   let query = supabase.from('inbox_emails').select('*').order('id', { ascending: false }).limit(size);
   if (!includeDeleted) query = query.is('deleted_at', null);
+  if (options?.treated === false) query = query.eq('processed', false);
+  if (options?.treated === true) query = query.eq('processed', true);
   const { data, error } = await query;
   if (error) throw error;
   return (data || []).map(legacyEmailFromRow);
+};
+
+export const countUntreatedInboxEmails = async () => {
+  const { count, error } = await supabase
+    .from('inbox_emails')
+    .select('id', { count: 'exact', head: true })
+    .eq('processed', false)
+    .is('deleted_at', null);
+  if (error) throw error;
+  return count ?? 0;
 };
 
 export const updateInboxEmail = async (id: number, payload: LegacyPayload) => {
@@ -260,6 +205,10 @@ export const updateInboxEmail = async (id: number, payload: LegacyPayload) => {
   if ('folder' in payload) patch.folder = payload.folder;
   const { error } = await supabase.from('inbox_emails').update(patch).eq('id', id);
   if (error) throw error;
+  if ('Traité' in payload && payload.Traité === true) {
+    const n = await countUntreatedInboxEmails();
+    dispatchUntreatedEmailCount(n);
+  }
 };
 
 export const deleteInboxEmail = async (id: number) => {
@@ -450,13 +399,9 @@ export const ensureMonthlyFixedCharges = async (year: number, month: number) => 
     .select('id,label,monthly_amount,category,active');
   if (budgetError) throw budgetError;
 
-  const activeBudgetItems = (budgetItems || []).filter((item: RowRecord) => {
-    const activeRaw = item?.active;
-    const activeStr = String(activeRaw ?? '').trim().toLowerCase();
-    if ([false, 0].includes(activeRaw)) return false;
-    if (['false', 'faux', '0', 'no', 'non'].includes(activeStr)) return false;
-    return true;
-  });
+  const activeBudgetItems = (budgetItems || []).filter((item: DbRow) =>
+    isActiveFlag(item.active),
+  );
 
   const { data: existingAutoRows, error: existingError } = await supabase
     .from('finance_entries')
@@ -468,7 +413,7 @@ export const ensureMonthlyFixedCharges = async (year: number, month: number) => 
   if (existingError) throw existingError;
 
   const existingKeys = new Set(
-    (existingAutoRows || []).map((row: RowRecord) => {
+    (existingAutoRows || []).map((row: DbRow) => {
       const label = String(row.label || '').trim().toLowerCase();
       const amount = Number(row.amount || 0).toFixed(2);
       return `${label}|${amount}`;
@@ -476,11 +421,11 @@ export const ensureMonthlyFixedCharges = async (year: number, month: number) => 
   );
 
   let sourceItems: Array<{ label: string; amount: number; category: string | null }> = activeBudgetItems
-    .filter((item: RowRecord) => Number(item.monthly_amount || 0) > 0 && String(item.label || '').trim())
-    .map((item: RowRecord) => ({
-      label: String(item.label || '').trim(),
+    .filter((item: DbRow) => Number(item.monthly_amount || 0) > 0 && fieldAsString(item.label).trim())
+    .map((item: DbRow) => ({
+      label: fieldAsString(item.label).trim(),
       amount: Number(item.monthly_amount || 0),
-      category: item.category || 'Divers',
+      category: fieldAsString(item.category, 'Divers'),
     }));
 
   if (!sourceItems.length) {
@@ -494,12 +439,12 @@ export const ensureMonthlyFixedCharges = async (year: number, month: number) => 
     if (prevAutoError) throw prevAutoError;
 
     const uniq = new Map<string, { label: string; amount: number; category: string | null }>();
-    (prevAutoRows || []).forEach((row: RowRecord) => {
-      const label = String(row.label || '').trim();
+    (prevAutoRows || []).forEach((row: DbRow) => {
+      const label = fieldAsString(row.label).trim();
       const amount = Number(row.amount || 0);
       if (!label || amount <= 0) return;
       const key = `${label.toLowerCase()}|${amount.toFixed(2)}`;
-      if (!uniq.has(key)) uniq.set(key, { label, amount, category: row.category || 'Divers' });
+      if (!uniq.has(key)) uniq.set(key, { label, amount, category: fieldAsString(row.category, 'Divers') });
     });
     sourceItems = Array.from(uniq.values());
   }
@@ -518,13 +463,13 @@ export const ensureMonthlyFixedCharges = async (year: number, month: number) => 
     if (historicalAutoError) throw historicalAutoError;
 
     const latestByKey = new Map<string, { label: string; amount: number; category: string | null }>();
-    (historicalAutoRows || []).forEach((row: RowRecord) => {
-      const label = String(row.label || '').trim();
+    (historicalAutoRows || []).forEach((row: DbRow) => {
+      const label = fieldAsString(row.label).trim();
       const amount = Number(row.amount || 0);
       if (!label || amount <= 0) return;
       const key = `${label.toLowerCase()}|${amount.toFixed(2)}`;
       if (!latestByKey.has(key)) {
-        latestByKey.set(key, { label, amount, category: row.category || 'Divers' });
+        latestByKey.set(key, { label, amount, category: fieldAsString(row.category, 'Divers') });
       }
     });
     sourceItems = Array.from(latestByKey.values());
@@ -552,7 +497,6 @@ export const ensureMonthlyFixedCharges = async (year: number, month: number) => 
   return (data || []).length;
 };
 
-// Compat layer from former baserowApi.ts
 export const getFinances = listFinanceEntries;
 export const getEmails = listInboxEmails;
 export const getPosts = async () => [];
@@ -561,27 +505,30 @@ export const getFormations = async () => [];
 export const getRevenuesDuMois = async () => {
   const rows = await listFinanceEntries();
   const now = new Date();
-  return Math.round(rows.filter((row: RowRecord) => {
+  return Math.round(rows.filter((row) => {
     if (!row.Date) return false;
     const d = new Date(row.Date);
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() && row.Type === 'Entrée';
-  }).reduce((sum: number, row: RowRecord) => sum + (parseFloat(String(row.Montant ?? 0)) || 0), 0));
+  }).reduce((sum, row) => sum + (row.Montant || 0), 0));
 };
 
 export const getDepensesDuMois = async () => {
   const rows = await listFinanceEntries();
   const now = new Date();
-  return Math.round(rows.filter((row: RowRecord) => {
+  return Math.round(rows.filter((row) => {
     if (!row.Date) return false;
     const d = new Date(row.Date);
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() && row.Type === 'Dépense';
-  }).reduce((sum: number, row: RowRecord) => sum + (parseFloat(String(row.Montant ?? 0)) || 0), 0));
+  }).reduce((sum, row) => sum + (row.Montant || 0), 0));
 };
 
 export const getEmailsNonTraites = async () => {
-  const rows = await listInboxEmails();
-  return rows.filter((row: RowRecord) => !row.Traité).length;
+  const count = await countUntreatedInboxEmails();
+  dispatchUntreatedEmailCount(count);
+  return count;
 };
+
+export const refreshUntreatedEmailCount = countUntreatedInboxEmails;
 
 export const getTaches = listTaskRows;
 
@@ -589,22 +536,13 @@ export const getTachesAujourdhui = async () => {
   const rows = await listTaskRows();
   const today = new Date().toISOString().split('T')[0];
   return rows
-    .filter((row: RowRecord) => {
-      if (row['Tâche parente'] && row['Tâche parente'].length > 0) return false;
-      const statut = row.Statut?.value || row.Statut || '';
-      if (statut === 'Fait') return false;
+    .filter((row) => {
+      if (row['Tâche parente'].length > 0) return false;
+      if (fieldAsString(row.Statut) === 'Fait') return false;
       const dateEch = row['Date échéance']?.split('T')[0];
       return !dateEch || dateEch <= today;
     })
-    .map((row: RowRecord) => ({
-      id: row.id.toString(),
-      text: row.Titre || '(Sans titre)',
-      completed: (row.Statut?.value || row.Statut || '') === 'Fait',
-      statut: row.Statut?.value || row.Statut || '',
-      priorite: row.Priorité?.value || row.Priorité || '',
-      projet: row.Projet?.value || row.Projet || '',
-      dateEcheance: row['Date échéance']?.split('T')[0] || null,
-    }));
+    .map(mapTodayTask);
 };
 
 export const updateTacheStatut = async (id: string, completed: boolean) => {
@@ -616,7 +554,7 @@ export const getPostsParStatut = async (_statut: string) => {
   return [];
 };
 
-export const getStatsBaserow = async () => {
+export const getDashboardStats = async () => {
   const [revenus, depenses, emailsNonTraites] = await Promise.all([
     getRevenuesDuMois(),
     getDepensesDuMois(),

@@ -22,7 +22,7 @@ const getVal = (field: unknown) => {
 };
 const isActiveBudget = (value: unknown) => {
   const str = String(value ?? '').trim().toLowerCase();
-  if ([false, 0].includes(value)) return false;
+  if (value === false || value === 0) return false;
   if (['false', 'faux', '0', 'no', 'non'].includes(str)) return false;
   return true;
 };
@@ -248,7 +248,7 @@ export const Finance = () => {
             <RefreshCw size={14} style={recalculating ? { animation: 'spin 1s linear infinite' } : undefined} />
             Réinjecter / Recalculer
           </button>
-          <button onClick={() => fetchData(false)} style={{ padding: '8px', background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: 'pointer' }}>
+          <button onClick={() => fetchData()} style={{ padding: '8px', background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: 'pointer' }}>
             <RefreshCw size={15} />
           </button>
           <button onClick={() => { setFormType('Entrée'); setEditingId(null); setShowForm(true); }}
