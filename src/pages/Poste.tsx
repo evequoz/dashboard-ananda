@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Mail, Inbox, Briefcase, RefreshCw, CheckCircle,
-  AlertCircle, Clock, ChevronRight, Send, Plus,
-  Sparkles, X, Paperclip, Trash2, Copy, Eye, EyeOff,
+  AlertCircle, Clock, Send, Plus,
+  X, Paperclip, Trash2,
   FileText, ExternalLink, SendHorizonal, Shield, Newspaper
 } from 'lucide-react';
 import {
@@ -103,13 +103,6 @@ const formatDate = (d: string | null) => {
   catch { return d; }
 };
 
-const getInitials = (from: string) => {
-  if (!from) return '?';
-  const name = from.replace(/<.*>/, '').replace(/"/g, '').trim();
-  const parts = name.split(' ');
-  return parts.length >= 2 ? (parts[0][0] + parts[1][0]).toUpperCase() : name.slice(0, 2).toUpperCase();
-};
-
 const cleanContent = (content: string) => {
   if (!content) return '';
   try {
@@ -150,6 +143,41 @@ const spamScoreOf = (e: Email) => {
   const v = e['Score spam'];
   if (v == null || !Number.isFinite(Number(v))) return 0;
   return Number(v);
+};
+
+const normalizeSubjectForMatch = (subject: string) =>
+  (subject || '').replace(/^(re:\s*)+/gi, '').trim().toLowerCase();
+
+const subjectsMatch = (a: string, b: string) => {
+  const na = normalizeSubjectForMatch(a);
+  const nb = normalizeSubjectForMatch(b);
+  return Boolean(na && nb && na === nb);
+};
+
+const emailHasSentReply = (email: Email, sentList: SentEmail[]) => {
+  if (email['Converti en tâche']) return true;
+  const account = normalizeAccountEmail(email.Compte);
+  const inboxSubject = email.Sujet || '';
+  return sentList.some((s) => {
+    if (normalizeAccountEmail(s.Compte) !== account || s['Supprimé le']) return false;
+    const sentSubject = s.Sujet || '';
+    return subjectsMatch(sentSubject, inboxSubject)
+      || subjectsMatch(sentSubject, `Re: ${inboxSubject}`);
+  });
+};
+
+type InboxStatusDot = 'red' | 'green' | null;
+
+const getInboxStatusDot = (email: Email, sentList: SentEmail[]): InboxStatusDot => {
+  if (emailHasSentReply(email, sentList)) return 'green';
+  if (!email.Traité) return 'red';
+  return null;
+};
+
+const inboxContentPreview = (email: Email) => {
+  const text = cleanContent(email.Contenu);
+  if (!text) return '—';
+  return text.length > 120 ? `${text.slice(0, 117)}…` : text;
 };
 
 // ── Modal Tâche ──
@@ -256,78 +284,64 @@ const formatSendError = (error: unknown) =>
 interface ReplyModalProps {
   email: Email;
   accountColor: string;
-  onSend: (text: string, attachments: Attachment[]) => void;
+  onSend: (text: string) => void;
   onClose: () => void;
   sending: boolean;
   sendStatus: 'idle' | 'success' | 'error';
   sendErrorDetail: string | null;
-  initialText?: string;
 }
-const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus, sendErrorDetail, initialText = '' }: ReplyModalProps) => {
-  const [text, setText] = useState(initialText);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+const ReplyModal = ({ email, accountColor, onSend, onClose, sending, sendStatus, sendErrorDetail }: ReplyModalProps) => {
+  const [text, setText] = useState('');
 
   useEffect(() => {
-    setText(initialText);
-  }, [email.id, initialText]);
+    setText('');
+  }, [email.id]);
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col"
-        style={{ width: '820px', maxHeight: '92vh' }}>
-
-        {/* Header */}
-        <div className="px-6 pt-4 pb-3 border-b border-[var(--border)] shrink-0">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                style={{ background: `${accountColor}20`, border: `1px solid ${accountColor}30` }}>
-                <Send className="w-4 h-4" style={{ color: accountColor }} />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-sm font-bold text-[var(--text-primary)]">Répondre</h3>
-                <p className="text-xs text-[var(--text-muted)] mt-0.5 truncate">
-                  Re: {email.Sujet || 'Sans sujet'} · {email['Expéditeur']?.replace(/<.*>/, '').replace(/"/g, '').trim()}
-                </p>
-              </div>
-            </div>
-            <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--border)] transition-all shrink-0">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col w-full max-w-lg" style={{ maxHeight: '85vh' }}>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border)]">
+          <p className="text-sm font-semibold text-[var(--text-primary)] truncate pr-4">
+            Re: {email.Sujet || 'Sans sujet'}
+          </p>
+          <button type="button" onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+            <X className="w-4 h-4" />
+          </button>
         </div>
-
-        <div className="flex-1 px-6 py-4 min-h-0 flex flex-col gap-3">
-          <textarea value={text} onChange={e => setText(e.target.value)}
-            className="w-full flex-1 min-h-[220px] bg-[var(--bg-main)] border border-[var(--border)] rounded-xl p-4 text-sm text-[var(--text-primary)] resize-none focus:outline-none focus:border-[#c9a84c]/40 transition-all leading-relaxed"
-            placeholder="Votre réponse…" autoFocus />
-          <AttachmentPicker attachments={attachments} onChange={setAttachments} />
+        <div className="p-5">
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            className="w-full min-h-[200px] bg-[var(--bg-main)] border border-[var(--border)] rounded-xl p-4 text-sm text-[var(--text-primary)] resize-y focus:outline-none focus:border-[#c9a84c]/40 leading-relaxed"
+            placeholder="Votre réponse…"
+            autoFocus
+          />
         </div>
-
-        <div className="px-6 py-4 border-t border-[var(--border)] shrink-0 space-y-3">
-          {sendStatus === 'success' && (
-            <p className="text-xs text-[#4caf7d] flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5 shrink-0" /> Email envoyé</p>
-          )}
+        <div className="px-5 pb-5 space-y-3">
           {sendStatus === 'error' && sendErrorDetail && (
-            <div className="rounded-lg border border-[#d95555]/40 bg-[#d95555]/10 px-3 py-2 text-xs text-[#e07070] flex gap-2">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-              <span className="break-words">{sendErrorDetail}</span>
+            <div className="rounded-lg border border-[#d95555]/40 bg-[#d95555]/10 px-3 py-2 text-xs text-[#e07070] break-words">
+              {sendErrorDetail}
             </div>
           )}
-          <div className="flex justify-end gap-3">
-            <button onClick={onClose} className="px-5 py-2 rounded-lg text-sm text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[var(--border)] transition-all">Annuler</button>
-            <button onClick={() => onSend(text, attachments)} disabled={sending || !text.trim()}
-              className="flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all hover:scale-105 disabled:opacity-40 disabled:hover:scale-100"
-              style={{ background: `linear-gradient(135deg, ${accountColor}, ${accountColor}cc)`, color: '#05050a' }}>
-              {sending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              {sending ? 'Envoi...' : 'Envoyer'}
-            </button>
-          </div>
+          {sendStatus === 'success' && (
+            <p className="text-xs text-[#4caf7d]">Email envoyé</p>
+          )}
+          <button
+            type="button"
+            onClick={() => onSend(text)}
+            disabled={sending || !text.trim()}
+            className="w-full flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold disabled:opacity-40"
+            style={{ background: `linear-gradient(135deg, ${accountColor}, ${accountColor}cc)`, color: '#05050a' }}
+          >
+            {sending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {sending ? 'Envoi…' : 'Envoyer'}
+          </button>
         </div>
       </div>
     </div>
   );
 };
+
 // ── Modal Nouveau mail ──
 interface ComposeModalProps {
   activeAccount: string;
@@ -457,14 +471,12 @@ export const Poste = () => {
   const [loading, setLoading] = useState(true);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [treatmentFilter, setTreatmentFilter] = useState<'all' | 'untreated' | 'treated'>('untreated');
-  const [copiedSuggestionKey, setCopiedSuggestionKey] = useState<string | null>(null);
   const [replyMode, setReplyMode] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendStatus, setSendStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [sendErrorDetail, setSendErrorDetail] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showTaskPopup, setShowTaskPopup] = useState(false);
-  const [showFullContent, setShowFullContent] = useState(false);
   const [taskSuccess, setTaskSuccess] = useState(false);
   const [composeMode, setComposeMode] = useState(false);
   const [viewMode, setViewMode] = useState<'inbox' | 'sent' | 'trash'>('inbox');
@@ -476,7 +488,6 @@ export const Poste = () => {
   const [selectedTrashInboxIds, setSelectedTrashInboxIds] = useState<number[]>([]);
   const [selectedTrashSentIds, setSelectedTrashSentIds] = useState<number[]>([]);
   const [showMailList, setShowMailList] = useState(true);
-  const [replySeedText, setReplySeedText] = useState('');
   const replyModeRef = useRef(false);
   replyModeRef.current = replyMode;
 
@@ -570,18 +581,6 @@ export const Poste = () => {
       if (selectedEmail?.id === email.id) setSelectedEmail({ ...email, Traité: true });
       await syncUntreatedBadge();
     } catch (e) { console.error(e); }
-  };
-
-  const copySuggestion = async (key: string, text: string) => {
-    const value = toSafeText(text);
-    if (!value) return;
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopiedSuggestionKey(key);
-      setTimeout(() => setCopiedSuggestionKey(null), 2000);
-    } catch {
-      // Ignore clipboard errors.
-    }
   };
 
   const markNotSpam = async (email: Email) => {
@@ -782,7 +781,7 @@ export const Poste = () => {
     } catch (e) { console.error(e); }
   };
 
-  const sendReply = async (text: string, attachments: Attachment[] = []) => {
+  const sendReply = async (text: string) => {
     if (!selectedEmail || !text.trim()) return;
     const to = extractEmailAddress(selectedEmail['Expéditeur']);
     const from = normalizeAccountEmail(selectedEmail.Compte);
@@ -791,12 +790,6 @@ export const Poste = () => {
       subject: `Re: ${selectedEmail.Sujet || ''}`,
       body: text,
       from,
-      attachments: attachments.map(a => ({
-        filename: a.filename,
-        content: a.content,
-        contentType: a.contentType,
-        encoding: 'base64' as const,
-      })),
       replyToEmailId: selectedEmail.id,
     };
 
@@ -812,7 +805,6 @@ export const Poste = () => {
       await markAsTreated(selectedEmail);
       await fetchSentEmails();
       setReplyMode(false);
-      setReplySeedText('');
       setTimeout(() => { setSendStatus('idle'); setSendErrorDetail(null); }, 3000);
     } catch (error) {
       const detail = formatSendError(error);
@@ -859,13 +851,9 @@ export const Poste = () => {
   const openEmail = (email: Email) => {
     setSelectedEmail(email);
     setReplyMode(false);
-    setShowFullContent(false);
     setSendStatus('idle');
     setSendErrorDetail(null);
   };
-
-  const hasSuggestions = (email: Email) =>
-    !!(email['Réponse 1'] || email['Réponse 2'] || email['Réponse 3']);
 
   const activeAccountData = ACCOUNTS.find(a => a.email === activeAccount)!;
   const files: EmailAttachment[] = selectedEmail?.['Fichier'] || [];
@@ -881,11 +869,10 @@ export const Poste = () => {
           email={selectedEmail}
           accountColor={activeAccountData.color}
           onSend={sendReply}
-          onClose={() => { setReplyMode(false); setReplySeedText(''); setSendStatus('idle'); setSendErrorDetail(null); }}
+          onClose={() => { setReplyMode(false); setSendStatus('idle'); setSendErrorDetail(null); }}
           sending={sending}
           sendStatus={sendStatus}
           sendErrorDetail={sendErrorDetail}
-          initialText={replySeedText}
         />
       )}
       {composeMode && (
@@ -1089,27 +1076,22 @@ export const Poste = () => {
             ) : inboxMailsForList.map(email => {
               const isSelected = selectedEmail?.id === email.id;
               const isTreated = !!email.Traité;
+              const statusDot = getInboxStatusDot(email, sentEmails);
               const emailFiles: EmailAttachment[] = email['Fichier'] || [];
               return (
                 <button key={email.id} onClick={() => openEmail(email)}
                   className={`w-full text-left p-3 border-b border-[var(--border)]/50 transition-all hover:bg-[var(--bg-surface)] ${
                     isSelected ? 'bg-[var(--bg-card)]' : ''
-                  } ${isTreated ? 'opacity-70' : ''}`}
-                  style={{
-                    borderLeft: `2px solid ${isSelected ? activeAccountData.color : isTreated ? 'transparent' : '#c9a84c'}`,
-                    background: !isTreated && !isSelected ? 'rgba(201,168,76,0.08)' : undefined,
-                  }}>
+                  } ${isTreated ? 'opacity-80' : ''}`}>
                   <div className="flex items-start gap-2">
-                    {!isTreated && (
-                      <button
-                        type="button"
-                        title="Marquer comme traité"
-                        onClick={e => { e.stopPropagation(); void markAsTreated(email); }}
-                        className="mt-1.5 p-1 rounded-md text-[#4caf7d] hover:bg-[#4caf7d]/15 transition-all shrink-0"
-                      >
-                        <CheckCircle className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+                    <span
+                      className="mt-2 w-2 h-2 rounded-full shrink-0"
+                      style={{
+                        background: statusDot === 'green' ? '#4caf7d' : statusDot === 'red' ? '#e07070' : 'transparent',
+                        boxShadow: statusDot ? `0 0 0 2px ${statusDot === 'green' ? 'rgba(76,175,125,0.25)' : 'rgba(224,112,112,0.25)'}` : undefined,
+                      }}
+                      title={statusDot === 'green' ? 'Réponse envoyée' : statusDot === 'red' ? 'Non traité, sans réponse' : undefined}
+                    />
                     <input
                       type="checkbox"
                       checked={selectedInboxIds.includes(email.id)}
@@ -1117,10 +1099,6 @@ export const Poste = () => {
                       onChange={e => { e.stopPropagation(); toggleInboxSelection(email.id); }}
                       className="mt-2 h-3.5 w-3.5 accent-[#c9a84c]"
                     />
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5"
-                      style={{ background: `${activeAccountData.color}20`, color: activeAccountData.color, border: `1px solid ${activeAccountData.color}30` }}>
-                      {getInitials(email['Expéditeur'] || '')}
-                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1 mb-0.5">
                         <p className={`text-xs truncate ${!isTreated ? 'font-bold text-[var(--text-primary)]' : 'font-normal text-[var(--text-secondary)]'}`}>
@@ -1138,22 +1116,15 @@ export const Poste = () => {
                             </span>
                           )}
                           {emailFiles.length > 0 && <Paperclip className="w-3 h-3 text-[var(--text-muted)]" />}
-                          {hasSuggestions(email) && <Sparkles className="w-3 h-3 text-[#7b5ea7]" />}
-                          {email['Converti en tâche'] && <CheckCircle className="w-3 h-3 text-[#4caf7d]" />}
-                          {email['Action requise'] && <AlertCircle className="w-3 h-3 text-[#d95555]" />}
-                          {email.Traité && <CheckCircle className="w-3 h-3 text-[#4caf7d]" />}
                         </div>
                       </div>
                       <p className={`text-xs truncate mb-0.5 ${!isTreated ? 'font-bold text-[var(--text-primary)]' : 'font-normal text-[var(--text-secondary)]'}`}>
                         {email.Sujet || 'Sans sujet'}
                       </p>
                       <p className="text-[10px] text-[var(--text-muted)] line-clamp-2 leading-relaxed">
-                        {email['Résumé IA'] || '—'}
+                        {inboxContentPreview(email)}
                       </p>
-                      <div className="flex items-center gap-1 mt-1">
-                        <Clock className="w-3 h-3 text-[var(--text-muted)]" />
-                        <span className="text-[10px] text-[var(--text-muted)]">{formatDate(email['Date réception'])}</span>
-                      </div>
+                      <span className="text-[10px] text-[var(--text-muted)]">{formatDate(email['Date réception'])}</span>
                     </div>
                   </div>
                 </button>
@@ -1299,33 +1270,19 @@ export const Poste = () => {
 
               {/* Header */}
               <div className="px-6 py-3 border-b border-[var(--border)] shrink-0 bg-[var(--bg-surface)]">
-                <div className="flex items-center justify-between gap-4 mb-2">
-                  <div className="flex-1 min-w-0">
-                    <h2 className="text-base font-bold text-[var(--text-primary)] leading-tight truncate">
-                      {selectedEmail.Sujet || 'Sans sujet'}
-                    </h2>
-                    <div className="flex items-center gap-3 mt-0.5">
-                      <span className="text-xs text-[#c8c4b8]">
-                        <span className="text-[var(--text-muted)]">De : </span>
-                        {selectedEmail['Expéditeur']?.replace(/"/g, '') || '—'}
-                      </span>
-                      <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
-                        <Clock className="w-3 h-3" />{formatDate(selectedEmail['Date réception'])}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {selectedEmail['Action requise'] && (
-                      <span className="flex items-center gap-1 px-2 py-0.5 bg-[#d95555]/20 border border-[#d95555]/30 rounded-lg text-xs font-bold text-[#d95555]">
-                        <AlertCircle className="w-3 h-3" /> Action
-                      </span>
-                    )}
-                    {selectedEmail.Traité && (
-                      <span className="flex items-center gap-1 px-2 py-0.5 bg-[#4caf7d]/20 border border-[#4caf7d]/30 rounded-lg text-xs font-bold text-[#4caf7d]">
-                        <CheckCircle className="w-3 h-3" /> Traité
-                      </span>
-                    )}
-                  </div>
+                <div className="space-y-0.5 text-xs text-[var(--text-secondary)] mb-3">
+                  <p>
+                    <span className="text-[var(--text-muted)]">Expéditeur : </span>
+                    {selectedEmail['Expéditeur']?.replace(/"/g, '').trim() || '—'}
+                  </p>
+                  <p>
+                    <span className="text-[var(--text-muted)]">Sujet : </span>
+                    <span className="text-[var(--text-primary)] font-medium">{selectedEmail.Sujet || 'Sans sujet'}</span>
+                  </p>
+                  <p>
+                    <span className="text-[var(--text-muted)]">Date : </span>
+                    {formatDate(selectedEmail['Date réception'])}
+                  </p>
                 </div>
 
                 {/* Actions */}
@@ -1352,7 +1309,7 @@ export const Poste = () => {
                     </>
                   ) : (
                     <>
-                      <button onClick={() => { setReplySeedText(''); setReplyMode(true); }}
+                      <button onClick={() => setReplyMode(true)}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105"
                         style={{ background: `linear-gradient(135deg, ${activeAccountData.color}, ${activeAccountData.color}cc)`, color: '#05050a' }}>
                         <Send className="w-3.5 h-3.5" /> Répondre
@@ -1404,94 +1361,10 @@ export const Poste = () => {
                 </div>
               </div>
 
-              {/* Corps */}
-              <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-
-                {/* Résumé IA */}
-                <div className="bg-[var(--bg-card)] rounded-xl border border-[#c9a84c]/25 p-5">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-6 h-6 rounded-lg bg-[#c9a84c]/20 flex items-center justify-center">
-                      <Sparkles className="w-3.5 h-3.5 text-[#c9a84c]" />
-                    </div>
-                    <span className="text-xs font-bold text-[#c9a84c]">Résumé IA</span>
-                  </div>
-                  <p className="text-sm text-[var(--text-primary)] leading-relaxed">
-                    {selectedEmail['Résumé IA'] || 'Aucun résumé.'}
-                  </p>
+              <div className="flex-1 overflow-y-auto px-6 py-5">
+                <div className="text-sm leading-relaxed whitespace-pre-wrap text-[var(--text-primary)]">
+                  {selectedEmail.Contenu ? cleanContent(selectedEmail.Contenu) : '—'}
                 </div>
-
-                {/* 3 Suggestions de réponse */}
-                <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Sparkles className="w-3.5 h-3.5 text-[#7b5ea7]" />
-                    <span className="text-xs font-bold text-[var(--text-primary)]">Suggestions de réponse — dans ton style</span>
-                  </div>
-
-                  {hasSuggestions(selectedEmail) ? (
-                    <div className="space-y-3">
-                      {[
-                        { label: 'Réponse 1 — Directe & concise', key: 'Réponse 1' as keyof Email, color: '#c9a84c' },
-                        { label: 'Réponse 2 — Développée', key: 'Réponse 2' as keyof Email, color: '#4caf7d' },
-                        { label: 'Réponse 3 — Chaleureuse & spirituelle', key: 'Réponse 3' as keyof Email, color: '#7b5ea7' },
-                      ].filter(s => selectedEmail[s.key]).map((s, i) => (
-                        <div key={i} className="rounded-xl border p-4 transition-all hover:border-opacity-60"
-                          style={{ borderColor: s.color + '30', background: s.color + '08' }}>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: s.color }}>
-                              {s.label}
-                            </span>
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => copySuggestion(`${selectedEmail.id}-${s.key}`, toSafeText(selectedEmail[s.key]))}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                              >
-                                <Copy className="w-3 h-3" />
-                                {copiedSuggestionKey === `${selectedEmail.id}-${s.key}` ? 'Copié' : 'Copier'}
-                              </button>
-                              <button onClick={() => {
-                                setReplySeedText(toSafeText(selectedEmail[s.key]));
-                                setReplyMode(true);
-                              }}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all"
-                                style={{ background: s.color + '20', border: `1px solid ${s.color}40`, color: s.color }}>
-                                Utiliser <ChevronRight className="w-3 h-3" />
-                              </button>
-                            </div>
-                          </div>
-                          <p className="text-xs leading-relaxed whitespace-pre-wrap text-[var(--text-primary)]">
-                            {selectedEmail[s.key] as string}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-[var(--text-muted)] italic">Aucune suggestion pour cet email.</p>
-                  )}
-                </div>
-
-                {/* Contenu */}
-                {selectedEmail.Contenu && (
-                  <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border)] p-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-3.5 h-3.5 text-[#a0a0c0]" />
-                        <span className="text-xs font-bold text-[var(--text-primary)]">Contenu</span>
-                      </div>
-                      <button onClick={() => setShowFullContent(!showFullContent)}
-                        className="text-xs text-[#a0a0c0] hover:text-[var(--text-primary)] flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[var(--border)] hover:border-[#c9a84c]/30 transition-all">
-                        {showFullContent ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                        {showFullContent ? 'Réduire' : 'Voir tout'}
-                      </button>
-                    </div>
-                    <div
-                      className={`text-sm leading-relaxed whitespace-pre-wrap ${!showFullContent ? 'line-clamp-5' : ''}`}
-                      style={{ color: 'var(--text-secondary)' }}
-                    >
-                      {cleanContent(selectedEmail.Contenu)}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
             </>
