@@ -88,6 +88,69 @@ export const listTaskRows = async (): Promise<LegacyTaskRow[]> => {
   return (data || []).map(legacyTaskFromRow);
 };
 
+/** Tâches non terminées dont l'échéance est aujourd'hui ou dépassée. */
+export const countDueTasksTodayOrOverdue = async () => {
+  const today = new Date().toISOString().split('T')[0];
+  const { count, error } = await supabase
+    .from('tasks')
+    .select('id', { count: 'exact', head: true })
+    .neq('status', 'Fait')
+    .eq('done', false)
+    .lte('due_date', today);
+  if (error) throw error;
+  return count ?? 0;
+};
+
+/** Recrée les occurrences des tâches récurrentes terminées dont l'échéance est due. */
+export const processDueRecurringTasks = async () => {
+  const today = new Date().toISOString().split('T')[0];
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('done', true)
+    .neq('recurrence', 'Aucune')
+    .not('due_date', 'is', null);
+
+  if (error) throw error;
+
+  for (const task of data || []) {
+    const lastDate = new Date(String(task.due_date));
+    if (Number.isNaN(lastDate.getTime())) continue;
+
+    const nextDate = new Date(lastDate);
+    if (task.recurrence === 'Quotidienne') nextDate.setDate(lastDate.getDate() + 1);
+    if (task.recurrence === 'Hebdomadaire') nextDate.setDate(lastDate.getDate() + 7);
+    if (task.recurrence === 'Mensuelle') nextDate.setMonth(lastDate.getMonth() + 1);
+
+    const nextDateStr = nextDate.toISOString().split('T')[0];
+    if (nextDateStr > today) continue;
+
+    const { count, error: dupErr } = await supabase
+      .from('tasks')
+      .select('id', { count: 'exact', head: true })
+      .eq('title', task.title)
+      .eq('due_date', nextDateStr)
+      .eq('done', false);
+
+    if (dupErr) throw dupErr;
+    if (count && count > 0) continue;
+
+    const { error: insertErr } = await supabase.from('tasks').insert({
+      title: task.title,
+      description: task.description,
+      project: task.project,
+      priority: task.priority,
+      status: 'À faire',
+      recurrence: task.recurrence,
+      done: false,
+      due_date: nextDateStr,
+    });
+
+    if (insertErr) throw insertErr;
+  }
+};
+
 export const createTaskLegacy = async (payload: LegacyPayload): Promise<LegacyTaskRow> => {
   const insert = {
     title: payload.Titre,

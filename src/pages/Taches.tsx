@@ -5,7 +5,13 @@ import {
   ChevronRight, X, ChevronDown, ChevronRight as ChevronR, Pencil, Trash2, Sparkles
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { createTaskLegacy, deleteTaskLegacy, listTaskRows, updateTaskLegacy } from '../data/supabaseApi';
+import {
+  createTaskLegacy,
+  deleteTaskLegacy,
+  listTaskRows,
+  processDueRecurringTasks,
+  updateTaskLegacy,
+} from '../data/supabaseApi';
 import { generateTaskPlan, type PlannedTask } from '../lib/taskPlannerService';
 
 const PROJETS = ['', 'Formation', 'Cours en ligne', 'Admin', 'Recrutement', 'Publications', 'Routines'];
@@ -896,6 +902,7 @@ export const Taches = () => {
   const loadTasks = useCallback(async () => {
     setLoading(true); setError('');
     try {
+      await processDueRecurringTasks();
       setTasks((await listTaskRows()) as unknown as Task[]);
     } catch (e: unknown) { setError(getErrorMessage(e)); }
     finally { setLoading(false); }
@@ -913,7 +920,6 @@ export const Taches = () => {
     }
     const target = tasks.find(t => t.id === targetId);
     if (target) {
-      setView('today');
       openEdit(target);
     }
     localStorage.removeItem('dashboard-open-task-id');

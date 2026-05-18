@@ -51,7 +51,12 @@ const THEMES = {
   },
 };
 
-type DashboardPage = 'overview' | 'agenda' | 'tasks' | 'poste' | 'finance' | 'contacts';
+/** Pages routées dans le shell — alignées sur PageKey (AuthContext). */
+type DashboardPage = Extract<
+  PageKey,
+  'overview' | 'agenda' | 'tasks' | 'poste' | 'finance' | 'contacts'
+>;
+
 const PAGE_ACCESS_MAP: Record<DashboardPage, PageKey> = {
   overview: 'overview',
   agenda: 'agenda',

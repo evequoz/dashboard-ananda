@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { LayoutDashboard, Mail, Users, DollarSign, Calendar, CheckSquare, LogOut, Sun, Moon } from 'lucide-react';
 import { useAuth, type PageKey } from '../contexts/AuthContext';
 import { useTheme } from '../App';
-import { refreshUntreatedEmailCount } from '../data/supabaseApi';
+import { countDueTasksTodayOrOverdue, refreshUntreatedEmailCount } from '../data/supabaseApi';
 import { UNTREATED_EMAIL_COUNT_EVENT } from '../lib/emailCountEvents';
 
 interface SidebarProps {
@@ -35,9 +35,10 @@ export const Sidebar = ({ currentPage, onPageChange }: SidebarProps) => {
   const roleLabel = user?.role === 'admin' ? 'Administrateur' : 'Assistante';
   const isDark = theme === 'dark';
   const [untreatedMailCount, setUntreatedMailCount] = useState(0);
+  const [dueTaskCount, setDueTaskCount] = useState(0);
 
   useEffect(() => {
-    const load = async () => {
+    const loadMailCount = async () => {
       try {
         const n = await refreshUntreatedEmailCount();
         setUntreatedMailCount(n);
@@ -45,16 +46,30 @@ export const Sidebar = ({ currentPage, onPageChange }: SidebarProps) => {
         // Ignore count fetch errors in sidebar.
       }
     };
+    const loadTaskCount = async () => {
+      try {
+        const n = await countDueTasksTodayOrOverdue();
+        setDueTaskCount(n);
+      } catch {
+        // Ignore count fetch errors in sidebar.
+      }
+    };
+    const load = () => {
+      void loadMailCount();
+      void loadTaskCount();
+    };
     load();
     const onCount = (evt: Event) => {
       const detail = (evt as CustomEvent<{ count?: number }>).detail;
       if (typeof detail?.count === 'number') setUntreatedMailCount(detail.count);
     };
     window.addEventListener(UNTREATED_EMAIL_COUNT_EVENT, onCount as EventListener);
-    const t = setInterval(load, 3 * 60 * 1000);
+    const mailInterval = setInterval(loadMailCount, 3 * 60 * 1000);
+    const taskInterval = setInterval(loadTaskCount, 2 * 60 * 1000);
     return () => {
       window.removeEventListener(UNTREATED_EMAIL_COUNT_EVENT, onCount as EventListener);
-      clearInterval(t);
+      clearInterval(mailInterval);
+      clearInterval(taskInterval);
     };
   }, []);
 
@@ -117,6 +132,25 @@ export const Sidebar = ({ currentPage, onPageChange }: SidebarProps) => {
                   }}
                 >
                   {untreatedMailCount > 99 ? '99+' : untreatedMailCount}
+                </span>
+              )}
+              {item.id === 'tasks' && dueTaskCount > 0 && (
+                <span
+                  style={{
+                    minWidth: 20,
+                    height: 20,
+                    padding: '0 6px',
+                    borderRadius: 99,
+                    background: '#d95555',
+                    color: '#fff',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {dueTaskCount > 99 ? '99+' : dueTaskCount}
                 </span>
               )}
             </button>
